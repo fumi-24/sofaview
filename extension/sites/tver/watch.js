@@ -31,6 +31,7 @@
       idle: 0, // 操作画面を自動で隠すタイマー
       pendingFs: false, // 全画面にしたい（ユーザー操作の窓の中で TVer の全画面ボタンを押す）
       leaving: false,
+      optIn: false, // 「先にページを見る」ページ（リアルタイム配信のチャンネル）で、視聴画面（劇場表示）に入ると決めた
       ui: null, // 覆い（#sv-watch-ui）の部品
       video: null, // イベントを付けている video
       loadTimer: 0,
@@ -50,8 +51,12 @@
     function wanted(p) {
       if (!p || !(o.isPlayerPage ? o.isPlayerPage() : true)) return false;
       if (p.host.getAttribute('data-mini-player') === 'true') return false;
+      // チャンネルのページ（リアルタイム配信）は、開いただけで再生が始まり、タブ（局）と番組表も使う。OK・全画面で入ったときだけ視聴画面にする
+      if (browseFirst() && !st.optIn && doc.fullscreenElement !== p.host) return false;
       return !!(p.ctl || (p.video && p.video.ended));
     }
+
+    const browseFirst = () => !!(o.browseFirst && o.browseFirst());
 
     function enter() {
       st.on = true;
@@ -94,8 +99,11 @@
     }
 
     function refreshFlags(p) {
-      const f = T.playerFlags(p.player, p.video);
+      const f = T.playerFlags(p.player, p.video, p.ctl);
       st.flags = f;
+      const pb = p.button('play');
+      const pl = pb && pb.querySelector('svg') && pb.querySelector('svg').getAttribute('aria-label');
+      st.core.noPause = pl === '停止'; // ライブの停止ボタン（押すと配信が終わる）は、進行バーの OK・メディアキーでは押さない
       const ended = !!(p.video && p.video.ended && !p.ctl);
       st.core.noSeek = f.ad || f.noSeek || f.live;
       st.core.ended = ended;
@@ -121,7 +129,7 @@
       // 静的な文字列だけ（外部の文字列は textContent で入れる）
       el.innerHTML =
         '<div class="sv-w-stage">' +
-        '<div class="sv-w-meta"><div class="sv-w-title"><span></span></div><div class="sv-w-sub"><span></span></div></div>' +
+        '<div class="sv-w-meta"><div class="sv-w-title"><b class="sv-w-livebadge">LIVE</b><span></span></div><div class="sv-w-sub"><span></span></div></div>' +
         '<div class="sv-w-progress">' +
         '<div class="sv-w-times"><span class="sv-w-cur"></span><span class="sv-w-dur"></span></div>' +
         '<div class="sv-w-track"><div class="sv-w-buf"></div><div class="sv-w-played"></div></div>' +
@@ -406,6 +414,15 @@
 
     /** 視聴画面から離れる: 全画面を終え、前のページへ戻る。戻った先で TVer が出すミニプレイヤーはすぐ閉じる（音が鳴り続けないように）。 */
     function leave() {
+      if (browseFirst() && st.optIn) {
+        // チャンネルのページ: 視聴画面（劇場表示・全画面）をやめて、ページに戻る（配信は続く。局の切り替え・番組表へ）
+        st.optIn = false;
+        exitFullscreen();
+        const p = parts();
+        sync();
+        if (p && p.ctl && p.ctl.focus) p.ctl.focus({ preventScroll: true });
+        return;
+      }
       if (st.leaving) return;
       st.leaving = true;
       html.classList.add('sv-leaving');
@@ -549,6 +566,17 @@
     return {
       sync,
       handleKey,
+      /** 視聴画面に入る（リアルタイム配信のチャンネルのページで、プレイヤーを OK で選んだとき）。 */
+      begin() {
+        if (st.on || !browseFirst()) return false;
+        st.optIn = true;
+        sync();
+        return st.on;
+      },
+      /** ページが変わった（次のページでは、また「先にページを見る」から）。 */
+      reset() {
+        st.optIn = false;
+      },
       active: () => st.on,
       leave,
       state: () => ({ on: st.on, ...st.core, scrub: st.scrub ? { ...st.scrub } : null, pendingFs: st.pendingFs, flags: { ...st.flags } }),

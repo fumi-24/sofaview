@@ -211,8 +211,8 @@
 | 種別 | コマンド | 結果 |
 |---|---|---|
 | 静的チェック | `npm run check` | 通過（JS 19、HTML 4、DNR ルール 4、権限 `declarativeNetRequest, storage`）|
-| 単体 | `npm run test:unit` | 110 件 通過（2026-10-19 時点）|
-| E2E | `npm run test:e2e` | 108 件 通過（2026-10-19 時点: hub 8、tver-nav 16、tver-spa 6、tver-osk 6、tver-watch 29、tver-resilience 10、tver-zoom 4、tver-billboard 8、tver-billboard-bridge 5、tver-rows 3、tver-detail 5、pages 8）|
+| 単体 | `npm run test:unit` | 111 件 通過（2026-10-19 時点）|
+| E2E | `npm run test:e2e` | 114 件 通過（2026-10-19 時点: hub 8、tver-nav 16、tver-spa 6、tver-osk 6、tver-live 6、tver-watch 29、tver-resilience 10、tver-zoom 4、tver-billboard 8、tver-billboard-bridge 5、tver-rows 3、tver-detail 5、pages 8）|
 | ライブスモーク | `LIVE=1 npm run test:live` | 8 件 通過（YouTube /tv 起動・Home、TVer のホーム・さがす・カテゴリ・番組・エピソード・リアルタイム、実プレイヤー（再生 API だけ偽）での視聴画面）|
 | zip 化 | `npm run pack` | `dist/sofaview-0.1.0.zip` を生成 |
 
@@ -414,6 +414,14 @@ PR #1 の CI（GitHub Actions）で、同じコミットの 2 つの実行のう
 
 **実機で確認すること**（SPEC 9.5・本書 4 章 #7）：全画面中の Esc（Keyboard Lock）、約 5 秒の窓、広告（`strp-ad-module` は z-index 10000）、リモコンの `key`/`code`、DRM、初回のアンケート（文字入力が要る）。ライブ（`/live`）の視聴画面は、操作盤が未確認なので対象外。
 
+### 3.10b リアルタイム配信（/live）の視聴画面（2026-10-19）
+
+- **構造**（実サイト）：`/live` は `/live/<局>`（日テレ `ntv`・テレ朝 `ex`・TBS `tbs`・テレ東 `tx`・フジ `cx`）へ replace。`main > ChannelTabs（局のタブ）+ live-page-main_layout（player / info / sidebar の番組表 LiveTimeline）`。プレイヤーは 752x423 で**開いただけで自動再生**（ポスターなし）。番組表の `/live/simul/<id>` は番組のエピソードページ（`/episodes/…`）へ飛ぶ。
+- **操作盤は `LiveController`**（再生が始まってから読み込まれる別のチャンクなので、地域制限で再生できない環境では見えない。ビルドのチャンク一覧から直接取って読んだ）。`VodController` と同じ作り（`tabindex=0`・`data-fullscreen`・同じ 2.5 秒／30 秒の表示タイマー・document でなく**操作盤の `onKeyDown`**）で、クラス名だけ違う。ボタン：`LiveLabel`（LIVE）、「最初から見る」（DVR）、再生ボタン（**追っかけがない = DVR なしは「停止」= `player.dispose()`**）、音量、画質、全画面。進行バー（`LiveSeekBar`）は `!isChannel || isDvr` のときだけ。時間表示は DVR か広告のとき。キー：Space/Enter・← →（スキップ）は **DVR のときだけ**、↑ ↓ は音量、`f`、`m`。
+- **作り**：視聴画面の CSS は `:is([class*="VodController_x__"], [class*="LiveController_x__"])` で両方に当てる（`watchController` は `[data-fullscreen]` なので JS は元から両方）。ライブ判定は `LiveController_` のクラスを最優先（`vjs-live`・duration も従来どおり）。
+- **落とし穴**：(1) 以前は、チャンネルのページを開くだけで劇場表示になり、局のタブ・番組表に行けず、戻るは履歴を戻っていた。→ `browseFirst`（`/live/*` は OK・全画面で入ったときだけ視聴画面。戻るはページへ）。(2) プレイヤーは大きく、幾何だけではタブからの ↓ が説明のボタンへ飛ぶ → `retargetRow` でタブ ↓・説明 ↑ はプレイヤーへ。(3) 停止ボタンを進行バーの OK・メディアキーで押すと配信が終わる → `noPause`。
+- **未確認（実機・日本国内）**：実際の `LiveController` の見た目（VOD と同じ CSS を当てた）、広告の入るライブ、番組表の自動スクロール。
+
 ### 3.11 ビルボード（注目作品）：ラグ・左で一周・連打でずれる（2026-10-19）
 
 ユーザーの要望：「ビルボードがラグい」「ビルボードで左にやる時に右に一周する」「連打するとカーソルが右にいっちゃう」。実サイトでフレームごとのログを取って調べた（実機の macOS Chrome ではなく、ソフトウェア描画のヘッドレス。時間は目安で、比は CPU 負荷の比として効く）。
@@ -559,3 +567,4 @@ Web 検索で見つけた資料。**公式資料ではないもの（コミュ�
 | 2026-10-19 | ユーザーの要望「ビルボードがラグい・左で一周・連打でずれる」に対応（3.11）。`:has()` をやめ、MAIN world の橋で keen-slider の `moveToIdx` を呼ぶ。「視聴画面が全然違う・既存の UI と干渉している（特に全画面）・元の CSS をいじって」に対応（3.10）。**自前の HUD・擬似フルスクリーンを廃止し、TVer 自身のプレイヤー・全画面を CSS で /tv の視聴画面に**（H/C/S・スクラブ・劇場表示）。実プレイヤー（再生 API だけ偽）で確認。再現ページを実サイトの構造に作り直し。設定から HUD 関連（シーク秒数・自動で隠す時間・自動全画面）を削除。テスト：単体 95、E2E 97、ライブ 8 |
 | 2026-10-19 | ユーザーの要望「YouTube TV と完全に同じ UI に」「TVer の元の詳細表示を使って」に対応。YouTube /tv を実測（3.9）して、TVer の寸法・色・フォーカス（サムネイル外側のリング）・レール（104/340 で内容を押し出す・アニメーションなし）・上部バー（検索ピル・ロゴ）・行の位置規則（見出し 15% 固定・2 枚目に保つ・別の行は覚えているカードへ）を合わせた（SPEC 9.2・9.4c・9.8）。TVer 標準の詳細ポップアップをフォーカスで出す（Linux の UA 対策つき。SPEC 9.4b）。再現ページを実サイトのグリッドに。テスト追加（単体 3、E2E 8、ライブ 1）|
 | 2026-10-19 | 視聴画面を実機（キーボード操作）で確認: 見た目・操作ともに良好、**Esc も受け取れている**（全画面中の Keyboard Lock ✔）。終了後の案内の「閉じる」が、実サイトでは自動再生を止めるだけでなくプレイヤーを最初のポスターへ戻し全画面も終えることを実測して、再現ページ・テスト・文書を直した。スクラブ中に離れても再生しない・メニューを閉じたあとに 5 秒で隠れる・広告中に隠れる、を修正。画面上のキーボード（OSK。SPEC 7.6）を追加: 検索ピルからキーワード検索（実サイトで確認）、入力欄（アンケート）に入力、入力欄から十字キーで出られる |
+| 2026-10-19 | リアルタイム配信（/live/局）に対応（3.10b）: LiveController を調べ、視聴画面の CSS を両方に適用、LIVE バッジ、停止ボタンの誤操作を防ぐ（noPause）、チャンネルのページは OK・全画面で入ったときだけ視聴画面にし、戻るはページへ、タブ ↓・説明 ↑ でプレイヤーへ。再現ページ（liveHtml）と E2E 6 件を追加 |

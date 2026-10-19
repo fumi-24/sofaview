@@ -11,6 +11,8 @@
 //  - 再生が終わると操作盤は消え、「次のエピソードまで N 秒...」の案内（閉じる・再生ボタン）。カウントダウンのあと遷移する。
 //    「閉じる」はカウントダウンを止め、プレイヤーを初期状態（ポスター）へ戻す（実サイトの実測: 全画面も終わる。cancelKeepsPanel で、案内が残る場合も再現できる）
 //  - 初回のアンケート（任意）: 回答するまで再生が始まらない
+//  - リアルタイム配信（live: true）: ポスターなしで自動再生。操作盤は LiveController（LIVE の表示・停止・音量・画質・全画面。追っかけ視聴 = DVR なし。
+//    進行バーも時間もない。Enter・Space・← → は何もしない。停止を押すとプレイヤーを破棄する）
 // 再現していないもの: 広告（クラスを付けて確かめる）・ライブの操作盤・DRM・実際のストリーミング。
 // テストからは window.__fx（log / navigations / state()）で、TVer 側で起きたことを観測できる。
 
@@ -96,6 +98,13 @@ const PLAYER_CSS = `
 .Modal_content__iSFyO { position: fixed; z-index: 51; top: 50%; left: 50%; width: 420px; padding: 24px; border-radius: 12px; background: #222; color: #fff; transform: translate(-50%, -50%); }
 `;
 
+// LiveController（リアルタイム配信）は VodController と同じ作り（クラス名だけ違う）。規則を同じ内容で複製する
+const LIVE_MAP = { container: 'container__4iOjO', active: 'active__pwr3w', hideCursor: 'hideCursor__mUNb8', buttons: 'buttons__BeJEz', spacer: 'spacer__VoiIa', fullscreen: 'fullscreen__OrAG0', timeLabel: 'timeLabel__YgQs_', menuMargin: 'menuMargin__qakXa' };
+const LIVE_CSS = PLAYER_CSS.split('\n')
+  .filter((l) => l.includes('VodController_'))
+  .map((l) => l.replace(/VodController_(\w+?)__\w+/g, (m, k) => (LIVE_MAP[k] ? 'LiveController_' + LIVE_MAP[k].replace(/__.*/, '') + '__' + LIVE_MAP[k].split('__')[1] : m)))
+  .join('\n');
+
 const SVG = {
   play: '<path d="M7 3l14 9-14 9z" fill="currentColor"/>',
   pause: '<path d="M5 3h5v18H5zM14 3h5v18h-5z" fill="currentColor"/>',
@@ -127,7 +136,7 @@ export function playerMarkup(o = {}) {
                         <div class="vjs-spinner"></div>
                         <div class="vjs-error-display vjs-modal-dialog vjs-hidden" role="dialog" aria-hidden="true"></div>
                       </div>
-                      <div class="PlayerThumbnail_wrapper__LoArZ"><button id="episode-play" type="button" class="PlayerThumbnail_playButton__7SrdI" aria-label="再生" autofocus>▶</button></div>
+                      ${o.live ? '' : '<div class="PlayerThumbnail_wrapper__LoArZ"><button id="episode-play" type="button" class="PlayerThumbnail_playButton__7SrdI" aria-label="再生" autofocus>▶</button></div>'}
                     </div>
                   </div>
                 </div>
@@ -142,7 +151,7 @@ export function playerMarkup(o = {}) {
 </div>`;
 }
 
-export const playerCss = PLAYER_CSS;
+export const playerCss = PLAYER_CSS + LIVE_CSS;
 
 /** 再現ページの挙動（ブラウザの中で動く。引数は JSON で渡す）。 */
 function runtime(O) {
@@ -163,6 +172,8 @@ function runtime(O) {
   const SV_ = JSON.parse(O.svg);
   const INTERACTIVE = 'button, a, select, textarea, input, [role="button"], [role="radio"], [role="slider"], [role="menuitem"]';
 
+  const ACTIVE = O.live ? 'LiveController_active__pwr3w' : 'VodController_active__Sjkyk';
+  const HIDE = O.live ? 'LiveController_hideCursor__mUNb8' : 'VodController_hideCursor__z__N4';
   let vod = null;
   let timer = 0;
   let isPlaying = false;
@@ -176,16 +187,16 @@ function runtime(O) {
   function activate(ms) {
     if (!vod) return;
     clearTimeout(timer);
-    vod.classList.add('VodController_active__Sjkyk');
-    vod.classList.remove('VodController_hideCursor__z__N4');
+    vod.classList.add(ACTIVE);
+    vod.classList.remove(HIDE);
     timer = setTimeout(deactivate, ms || NORMAL);
     log('ctl-active', { ms: ms || NORMAL });
   }
   function deactivate() {
     clearTimeout(timer);
     if (!vod) return;
-    vod.classList.remove('VodController_active__Sjkyk');
-    vod.classList.add('VodController_hideCursor__z__N4');
+    vod.classList.remove(ACTIVE);
+    vod.classList.add(HIDE);
     log('ctl-idle');
   }
 
@@ -202,11 +213,20 @@ function runtime(O) {
   function mountVod() {
     if (vod) return;
     vod = doc.createElement('div');
-    vod.className = 'VodController_container__jQU9B';
+    vod.className = O.live ? 'LiveController_container__4iOjO' : 'VodController_container__jQU9B';
     vod.setAttribute('data-fullscreen', String(!!doc.fullscreenElement));
     vod.tabIndex = 0;
     vod.setAttribute('style', '--seek-bar-color: var(--color-surface-accent-secondary);');
-    vod.innerHTML =
+    vod.innerHTML = O.live
+      ? '<div class="LiveController_buttons__BeJEz">' +
+        '<span class="LiveController_liveLabel__r1tMd" data-type="live"><span aria-hidden="true">●</span>LIVE</span>' +
+        wrapper('', iconBtn('Play_icon__SzljS', '停止', SV_.pause), '停止') +
+        wrapper('Volume_wrapper__272D_', iconBtn('Volume_icon__mqV_W', '音量 大', SV_.volume) + '<div class="Volume_slider__wdsGf"><input min="0" max="1" step="0.01" class="Volume_range__h1JkI" type="range" value="1"></div>', '音量', 'left') +
+        '<span class="LiveController_spacer__VoiIa"></span>' +
+        wrapper('', labelBtn('Quality_label__HYXyF', '画質を選択', quality || '画質'), '画質') +
+        wrapper('LiveController_fullscreen__OrAG0', iconBtn('Fullscreen_icon__VxBit', doc.fullscreenElement ? '全画面を終了' : '全画面', doc.fullscreenElement ? SV_.exit : SV_.fullscreen), '全画面', 'right') +
+        '</div>'
+      :
       '<div data-mini-player="false" class="SeekBar_container__mcvNv" aria-valuenow="0"><div class="SeekBar_bar__hOgEi SeekBar_backgroundBar__x7oUF"></div><div class="SeekBar_bar__hOgEi SeekBar_activeBar__FFaZC" style="width:0%"><div class="SeekBar_handleWrapper__uSORm"><div class="SeekBar_handle__hC5k9"></div></div></div></div>' +
       '<div class="VodController_buttons__iPB1l">' +
       wrapper('VodController_skipBack__x5bgs', iconBtn('Skip_icon__Y1xdS', '10秒戻る', SV_.back), '10秒戻る', 'left') +
@@ -244,6 +264,13 @@ function runtime(O) {
 
   function updateVod() {
     if (!vod) return;
+    if (O.live) {
+      const lf = $('[class*="Fullscreen_icon__"]', vod);
+      const ll = doc.fullscreenElement ? '全画面を終了' : '全画面';
+      if (lf.querySelector('svg').getAttribute('aria-label') !== ll) lf.querySelector('.Button_icon__gIg2t').innerHTML = svg(ll, doc.fullscreenElement ? SV_.exit : SV_.fullscreen);
+      vod.setAttribute('data-fullscreen', String(!!doc.fullscreenElement));
+      return;
+    }
     const d = video.duration || 0;
     const frac = d ? video.currentTime / d : 0;
     const bar = $('[class*="SeekBar_activeBar__"]', vod);
@@ -265,6 +292,13 @@ function runtime(O) {
     video.currentTime = Math.min(d, Math.max(0, video.currentTime + sec));
     log('skip', { sec });
   }
+  // ライブの停止: TVer はプレイヤーを破棄する（配信が終わる）
+  function disposeLive() {
+    log('dispose');
+    video.pause();
+    isPlaying = false;
+    unmountVod();
+  }
   function togglePlay() {
     if (video.paused) video.play().catch(() => {});
     else video.pause();
@@ -279,7 +313,7 @@ function runtime(O) {
     const b = e.target.closest('button');
     if (!b || !vod.contains(b)) return;
     if (b.matches('[class*="Skip_icon__"]')) skip(b.closest('[class*="VodController_skipBack__"]') ? -10 : 10);
-    else if (b.matches('[class*="Play_icon__"]')) togglePlay();
+    else if (b.matches('[class*="Play_icon__"]')) { if (O.live) disposeLive(); else togglePlay(); }
     else if (b.matches('[class*="Fullscreen_icon__"]')) toggleFullscreen();
     else if (b.matches('[class*="Volume_icon__"]')) video.muted = !video.muted;
     else if (b.matches('[class*="Speed_label__"]')) togglePopover('speed', b);
@@ -348,6 +382,7 @@ function runtime(O) {
     if (code === 'Escape' && vod.contains(t)) { vod.focus(); deactivate(); log('key', { code, act: 'esc-hide' }); return; }
     const interactive = !!(t.closest && t.closest(INTERACTIVE));
     let act = '';
+    if (O.live && (code === 'Space' || code === 'Enter' || code === 'ArrowRight' || code === 'ArrowLeft')) { log('key', { code, act: 'live-noop' }); activate(NORMAL); return; }
     if (code === 'Space' || code === 'Enter') {
       if (interactive) return;
       if (!e.repeat) { togglePlay(); act = 'toggle'; }
@@ -412,7 +447,7 @@ function runtime(O) {
     $('#episode-play').addEventListener('click', begin);
     $('#episode-play').focus(); // React の autoFocus
   };
-  bindPoster();
+  if ($('#episode-play')) bindPoster();
   if (O.autoplay) addEventListener('load', () => setTimeout(() => { video.muted = true; startPlayback(); }, O.autoplayDelay || 0));
 
   video.addEventListener('play', () => { isPlaying = true; vjs.classList.remove('vjs-paused'); vjs.classList.add('vjs-playing', 'vjs-has-started'); updateVod(); });
@@ -478,7 +513,7 @@ function runtime(O) {
 
   fx.state = () => ({
     view: vod ? 'vod' : mini ? 'mini' : next ? 'next' : $('#episode-play') ? 'poster' : 'none',
-    ctlActive: !!vod && vod.classList.contains('VodController_active__Sjkyk'),
+    ctlActive: !!vod && vod.classList.contains(ACTIVE),
     fullscreen: !!doc.fullscreenElement,
     fullscreenIsHost: doc.fullscreenElement === host,
     mini,
@@ -494,6 +529,6 @@ function runtime(O) {
 
 /** ページに差し込むスクリプト。 */
 export function playerScript(o = {}) {
-  const opts = { questionnaire: !!o.questionnaire, autoplay: !!o.autoplay, autoplayDelay: o.autoplayDelay || 0, nextEpisode: o.nextEpisode !== false, nextWait: o.nextWait == null ? 5 : o.nextWait, cancelKeepsPanel: !!o.cancelKeepsPanel, timers: o.timers || null, svg: JSON.stringify(SVG) };
+  const opts = { live: !!o.live, questionnaire: !!o.questionnaire, autoplay: !!o.autoplay || !!o.live, autoplayDelay: o.autoplayDelay || 0, nextEpisode: o.nextEpisode !== false, nextWait: o.nextWait == null ? 5 : o.nextWait, cancelKeepsPanel: !!o.cancelKeepsPanel, timers: o.timers || null, svg: JSON.stringify(SVG) };
   return `<script>(${runtime.toString()})(${JSON.stringify(opts)});</script>`;
 }

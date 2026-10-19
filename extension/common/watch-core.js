@@ -23,7 +23,7 @@
   const ACCEL_GAP_MS = 150;
 
   function initialState() {
-    return { ui: 'H', focus: 'row', noSeek: false, ended: false, popup: false };
+    return { ui: 'H', focus: 'row', noSeek: false, noPause: false, ended: false, popup: false };
   }
 
   /** m:ss（1 時間以上は h:mm:ss）。/tv の表示と同じで、分は 0 埋めしない（0:19, 47:55, 1:06:01）。 */
@@ -72,8 +72,9 @@
 
   /**
    * キー 1 回の処理。
-   * @param {{ui:string, focus:string, noSeek:boolean, ended:boolean, popup:boolean}} s
-   *   noSeek: シークできない（広告・ライブ・シーク不可の区間）。popup: 再生速度・画質のポップアップ（Radix）が開いている。ended: 再生が終わった。
+   * @param {{ui:string, focus:string, noSeek:boolean, noPause:boolean, ended:boolean, popup:boolean}} s
+   *   noSeek: シークできない（広告・ライブ・シーク不可の区間）。noPause: 再生ボタンが「停止」（ライブで追っかけ視聴がない。押すと配信が終わる）なので、
+   *   進行バーの OK・メディアキーでは押さない（ボタンに合わせた OK だけが押す）。popup: 再生速度・画質のポップアップ（Radix）が開いている。ended: 再生が終わった。
    * @param {string} action  論理アクション
    * @returns {{state:object, effects:Array<object>, consume:boolean}}
    *   effects: show / hide / focus('bar'|'row') / togglePause / pause / play / rowMove(dir) / activate / scrubStart / scrubStep(dir) / scrubCommit /
@@ -144,15 +145,15 @@
           break;
         case 'PLAY_PAUSE':
           show('row');
-          fx.push({ do: 'togglePause' });
+          if (!s.noPause) fx.push({ do: 'togglePause' });
           break;
         case 'PAUSE':
           show('row');
-          fx.push({ do: 'pause' });
+          if (!s.noPause) fx.push({ do: 'pause' });
           break;
         case 'PLAY':
           show('row');
-          fx.push({ do: 'play' });
+          if (!s.noPause) fx.push({ do: 'play' });
           break;
         case 'SEEK_BACK':
         case 'SEEK_FWD':
@@ -217,16 +218,21 @@
         fx.push({ do: 'scrubStart' });
         break;
       case 'OK':
-        fx.push(s.focus === 'bar' ? { do: 'togglePause' } : { do: 'activate' }, { do: 'touch' });
+        if (s.focus !== 'bar') fx.push({ do: 'activate' });
+        else if (!s.noPause) fx.push({ do: 'togglePause' });
+        fx.push({ do: 'touch' });
         break;
       case 'PLAY_PAUSE':
-        fx.push({ do: 'togglePause' }, { do: 'touch' });
+        if (!s.noPause) fx.push({ do: 'togglePause' });
+        fx.push({ do: 'touch' });
         break;
       case 'PAUSE':
-        fx.push({ do: 'pause' }, { do: 'touch' });
+        if (!s.noPause) fx.push({ do: 'pause' });
+        fx.push({ do: 'touch' });
         break;
       case 'PLAY':
-        fx.push({ do: 'play' }, { do: 'touch' });
+        if (!s.noPause) fx.push({ do: 'play' });
+        fx.push({ do: 'touch' });
         break;
       default:
         fx.push({ do: 'touch' });

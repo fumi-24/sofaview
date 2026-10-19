@@ -41,6 +41,9 @@
     miniClose: '[js-fullscreen-target][data-mini-player="true"] button[aria-label="閉じる"]', // ミニプレイヤーの「閉じる」（再生を止めて破棄する）
     dialog: '[role="dialog"], [role="alertdialog"], [role="menu"], [data-radix-popper-content-wrapper]',
     episodeTitle: '[class*="EpisodeDescription_title__"]',
+    timeline: '[class*="LiveTimeline_container__"]', // リアルタイム配信の番組表（右）
+    liveTitle: '[class*="LiveDescription_titleContent__"]', // リアルタイム配信のページ（/live/局）
+    liveDetail: '[class*="LiveDescription_detail__"]', // 局・放送時間
     seriesTitle: '[class*="EpisodeDescription_seriesTitle__"]',
     producer: '[class*="EpisodeDescription_producer__"]',
     broadcastDate: '[class*="EpisodeDescription_broadcastDateLabel__"]',
@@ -250,20 +253,21 @@
   }
 
   /** プレイヤーの状態（Video.js / Streaks がルート要素に付けるクラス）。広告中・シーク不可の区間・ライブはシークしない（広告のスキップは提供しない）。 */
-  function playerFlags(player, video) {
+  function playerFlags(player, video, ctl) {
     const has = (c) => !!player && player.classList.contains(c);
+    const liveCtl = !!ctl && /LiveController_/.test(String(ctl.className)); // リアルタイム配信の操作盤（LiveController）
     return {
       ad: has('vjs-ad-playing') || has('strp-adsactive') || has('strp-adbreaking'),
       noSeek: has('strp-no-seek'),
-      live: has('vjs-live') || (!!video && video.readyState > 0 && !Number.isFinite(video.duration)),
+      live: liveCtl || has('vjs-live') || (!!video && video.readyState > 0 && !Number.isFinite(video.duration)),
     };
   }
 
   /** 視聴画面に出すタイトルとサブタイトル（番組名 • 放送局 • 放送日。/tv の「チャンネル • 再生回数 • 日付」の位置）。 */
   function meta(doc) {
     const d = doc || root.document;
-    const title = text(d.querySelector(SEL.episodeTitle)) || String(d.title || '').split('|')[0].trim();
-    const parts = [text(d.querySelector(SEL.seriesTitle)), text(d.querySelector(SEL.producer)), text(d.querySelector(SEL.broadcastDate))].filter(Boolean);
+    const title = text(d.querySelector(SEL.episodeTitle)) || text(d.querySelector(SEL.liveTitle)) || String(d.title || '').split('|')[0].trim();
+    const parts = [text(d.querySelector(SEL.seriesTitle)), text(d.querySelector(SEL.producer)), text(d.querySelector(SEL.broadcastDate)), text(d.querySelector(SEL.liveDetail))].filter(Boolean);
     return { title, subtitle: parts.join(' • ') };
   }
 

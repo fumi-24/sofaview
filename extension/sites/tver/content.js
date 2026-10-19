@@ -120,6 +120,11 @@
 
   function onOk(e) {
     const a = document.activeElement;
+    // リアルタイム配信のチャンネルのページ: プレイヤー（操作盤）で OK → 視聴画面（劇場表示・全画面）へ。ボタンの上の OK は、そのボタンを押す
+    if (currentType() === 'live' && a && a.matches && (a.matches(T.SEL.watchHost) || a.matches(T.SEL.watchController)) && ctl.watch.begin()) {
+      SV.consume(e);
+      return;
+    }
     if (!ctl.nav.current()) {
       SV.consume(e);
       ctl.nav.focusInitial(T.initialPrefer(currentType()));
@@ -271,6 +276,16 @@
 
   function retargetRow(next, dir, from) {
     if (dir !== 'up' && dir !== 'down') return next;
+    // リアルタイム配信のチャンネルのページ: プレイヤーは大きく、幾何だけではタブからも説明の下からも飛ばされるので、上のタブ ↓・下の説明 ↑ はプレイヤーへ
+    if (currentType() === 'live') {
+      const pl = document.querySelector(T.SEL.watchController);
+      if (pl && pl !== from && !pl.contains(from)) {
+        const pr = pl.getBoundingClientRect();
+        const fr = from.getBoundingClientRect();
+        if (dir === 'down' && fr.bottom <= pr.top + 1) return pl;
+        if (dir === 'up' && fr.top >= pr.bottom - 1 && !from.closest(T.SEL.timeline)) return pl;
+      }
+    }
     // 検索ピル（固定の上部バー）へは、そこより上に別の候補がないときだけ。行が上へ流れて隠れたあとは、ピルが幾何的に一番近くなってしまい、
     // 前の行・ビルボードへ戻れなくなる。流れの中で上にある候補があれば、そちらを先に選ぶ。
     if (dir === 'up' && next.hasAttribute('data-sv-search')) {
@@ -623,6 +638,7 @@
     const next = location.pathname + location.search;
     if (next === ctl.routeKey) return;
     ctl.routeKey = next;
+    if (ctl.watch) ctl.watch.reset();
     ctl.hadFocus = false;
     ctl.userMoved = false;
     ctl.initialDone = false;
@@ -676,6 +692,7 @@
     ctl.osk = SV.osk.create({ document });
     ctl.watch = SV.watch.create({
       isPlayerPage: () => T.isPlayerPage(currentType()),
+      browseFirst: () => currentType() === 'live',
       nativeFullscreen: () => ctl.settings.tver.nativeFullscreen,
       goBack,
     });

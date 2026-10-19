@@ -67,7 +67,7 @@ html.sv-watch [class*="KeyAction_action__"] {
 /* ================================================================ 2. 操作盤（TVer の VodController）
    舞台（80 x 45）と同じ大きさ・位置に置き、中の要素を /tv の座標で並べる。見せる／隠すは拡張の状態（C だけ見える）。
    opacity で隠す（visibility だと focus() できない）。TVer 自身の表示タイマーは、ここで上書きして使わない。 */
-html.sv-watch [class*="VodController_container__"] {
+html.sv-watch :is([class*="VodController_container__"], [class*="LiveController_container__"]) {
   --seek-bar-color: #f1f1f1;
   position: fixed !important;
   z-index: 2; /* 覆い（1）の上。再生速度・画質のポップアップが、時間の表示の下に隠れないように */
@@ -85,16 +85,16 @@ html.sv-watch [class*="VodController_container__"] {
   font-family: var(--sv-font);
 }
 
-html.sv-watch[data-sv-ui="C"] [class*="VodController_container__"] {
+html.sv-watch[data-sv-ui="C"] :is([class*="VodController_container__"], [class*="LiveController_container__"]) {
   opacity: 1 !important;
 }
 
-html.sv-watch:not([data-sv-ui="C"]) [class*="VodController_container__"] {
+html.sv-watch:not([data-sv-ui="C"]) :is([class*="VodController_container__"], [class*="LiveController_container__"]) {
   opacity: 0 !important;
 }
 
 /* /tv に暗い帯（スクリム）はない。読みやすさは文字の黒い背景で確保する */
-html.sv-watch [class*="VodController_container__"]::before {
+html.sv-watch :is([class*="VodController_container__"], [class*="LiveController_container__"])::before {
   display: none !important;
 }
 
@@ -102,12 +102,12 @@ html.sv-watch [class*="VodController_container__"]::before {
 html.sv-watch [class*="SeekBar_container__"],
 html.sv-watch [class*="TimeLabel_label__"],
 html.sv-watch [class*="Volume_wrapper__"],
-html.sv-watch [class*="VodController_fullscreen__"] {
+html.sv-watch :is([class*="VodController_fullscreen__"], [class*="LiveController_fullscreen__"]) {
   display: none !important;
 }
 
 /* ボタン列: 舞台の x 4〜76・y 30.875（高さ 4）。中央の 3 つ（-10秒・再生・+10秒）が画面の真ん中、再生速度・画質は右端 */
-html.sv-watch [class*="VodController_buttons__"] {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"]) {
   position: absolute !important;
   left: calc(var(--wu) * 4);
   top: calc(var(--wu) * 30.875);
@@ -121,16 +121,16 @@ html.sv-watch [class*="VodController_buttons__"] {
 }
 
 /* 左の 30.25 の空き（/tv の左のグループの幅）。スペーサー（flex: 1）が余りを取り、右のボタンを右端へ押す */
-html.sv-watch [class*="VodController_buttons__"]::before {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"])::before {
   content: '';
   flex: 0 0 calc(var(--wu) * 30.25);
 }
 
-html.sv-watch [class*="VodController_buttons__"] > * {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"]) > * {
   margin: 0 !important;
 }
 
-html.sv-watch [class*="VodController_buttons__"] button {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"]) button {
   box-sizing: border-box;
   flex: none;
   padding: 0;
@@ -144,12 +144,12 @@ html.sv-watch [class*="VodController_buttons__"] button {
   transition: none !important;
 }
 
-html.sv-watch [class*="VodController_buttons__"] button::before {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"]) button::before {
   display: none !important; /* TVer 標準のホバーの重ね塗り */
 }
 
 /* フォーカス: /tv は白地・黒い文字（リング・拡大なし） */
-html.sv-watch [class*="VodController_buttons__"] button:focus {
+html.sv-watch :is([class*="VodController_buttons__"], [class*="LiveController_buttons__"]) button:focus {
   background: var(--sv-focus-bg, #f1f1f1);
   color: var(--sv-focus-fg, #0f0f0f);
 }
@@ -191,7 +191,7 @@ html.sv-watch [class*="Quality_label__"] {
   margin-left: calc(var(--wu) * 0.25) !important;
 }
 
-html.sv-watch [class*="VodController_spacer__"] {
+html.sv-watch :is([class*="VodController_spacer__"], [class*="LiveController_spacer__"]) {
   flex: 1 1 auto;
 }
 
@@ -486,4 +486,36 @@ html.sv-watch.sv-loading #sv-watch-ui .sv-w-loading {
 
 html.sv-watch.sv-loading[data-sv-ui="C"] #sv-watch-ui .sv-w-loading {
   top: calc(var(--wu) * 17.5);
+}
+
+/* ================================================================ 6. リアルタイム配信（TVer の LiveController）
+   操作盤は VodController と同じ作りなので、2 の規則をそのまま使う（:is()）。違いだけをここに書く。
+   ログインしていない（追っかけ視聴 = DVR なし）ときの操作盤は「LIVE の表示・停止・音量・画質・全画面」で、進行バーも時間もない。 */
+html.sv-watch [class*="LiveSeekBar_seekBar__"],
+html.sv-watch [class*="LiveController_liveLabel__"],
+html.sv-watch [class*="LiveController_pr__"] {
+  display: none !important; /* 進行バーは使わない（追っかけでもシークはしない）。LIVE の表示は覆いに描く */
+}
+
+/* 中央の 3 つ（-10秒・再生・+10秒）の代わりに、停止ボタンが 1 つ（左右に 0.75 の余白つきで 5.5 の幅）。画面の真ん中に置く（左の空きは 30.25 でなく 33.25） */
+html.sv-watch [class*="LiveController_buttons__"]::before {
+  flex: 0 0 calc(var(--wu) * 33.25);
+}
+
+/* LIVE のバッジ（タイトルの左）。ライブのときだけ */
+#sv-watch-ui .sv-w-livebadge {
+  display: none;
+}
+
+html.sv-watch.sv-live #sv-watch-ui .sv-w-livebadge {
+  display: inline-block;
+  margin-right: calc(var(--wu) * 0.75);
+  padding: 0 calc(var(--wu) * 0.75);
+  border-radius: calc(var(--wu) * 0.375);
+  background: #e62117;
+  color: #fff;
+  font-size: calc(var(--wu) * 1.125);
+  font-weight: 700;
+  line-height: calc(var(--wu) * 2);
+  vertical-align: middle;
 }

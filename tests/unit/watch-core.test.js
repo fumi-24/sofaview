@@ -234,3 +234,27 @@ test('通し: H → → で操作画面（バー）→ → でスクラブ → �
   assert.deepEqual(r.log[1].fx, ['scrubStart', 'scrubStep:1']);
   assert.deepEqual(r.log[3].fx, ['scrubCommit', 'hide']);
 });
+
+test('noPause（ライブの停止ボタン）: 進行バーの OK・メディアキーでは再生/停止を押さない。ボタンに合わせた OK は押す', () => {
+  const C = require('../../extension/common/watch-core.js');
+  const has = (r, d) => r.effects.some((e) => e.do === d);
+  const base = { ...C.initialState(), noPause: true, noSeek: true };
+  // 進行バー（C/bar）の OK・メディアキー
+  const bar = { ...base, ui: 'C', focus: 'bar' };
+  for (const a of ['OK', 'PLAY_PAUSE', 'PAUSE', 'PLAY']) {
+    const r = C.reduce(bar, a);
+    assert.equal(has(r, 'togglePause') || has(r, 'pause') || has(r, 'play'), false, a);
+    assert.equal(has(r, 'touch'), true, '操作画面の自動で隠すタイマーは延ばす: ' + a);
+  }
+  // 非表示（H）のメディアキーは、操作画面を出すだけ
+  for (const a of ['PLAY_PAUSE', 'PAUSE', 'PLAY']) {
+    const r = C.reduce({ ...base, ui: 'H' }, a);
+    assert.equal(r.state.ui, 'C');
+    assert.equal(has(r, 'togglePause') || has(r, 'pause') || has(r, 'play'), false, 'H ' + a);
+  }
+  // ボタン列（C/row）の OK は、フォーカス中のボタンを押す（停止ボタンなら TVer が配信を止める）
+  assert.equal(has(C.reduce({ ...base, ui: 'C', focus: 'row' }, 'OK'), 'activate'), true);
+  // noPause でなければ、これまでどおり
+  assert.equal(has(C.reduce({ ...C.initialState(), ui: 'C', focus: 'bar' }, 'OK'), 'togglePause'), true);
+  assert.equal(has(C.reduce({ ...C.initialState(), ui: 'H' }, 'PLAY_PAUSE'), 'togglePause'), true);
+});

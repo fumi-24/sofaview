@@ -47,6 +47,8 @@ test('playerFlags: 広告中・シーク不可の区間・ライブを、Video.j
   assert.equal(T.playerFlags(player('strp-no-seek'), null).noSeek, true);
   assert.equal(T.playerFlags(player('vjs-live'), null).live, true);
   assert.equal(T.playerFlags(null, null).ad, false, 'プレイヤーが見つからなくても例外にしない');
+  assert.equal(T.playerFlags(player(), null, { className: 'LiveController_container__4iOjO' }).live, true, 'リアルタイム配信の操作盤（LiveController）ならライブ');
+  assert.equal(T.playerFlags(player(), null, { className: 'VodController_container__jQU9B' }).live, false);
 });
 
 test('playerFlags: duration が有限でない（ライブ）ときは、メタデータの読み込み後だけライブ扱い', () => {

@@ -275,6 +275,29 @@ export function episodeHtml(o = {}) {
 }
 
 /**
+ * リアルタイム配信のチャンネルのページ（/live/局）。実サイトの構造を縮小: チャンネルのタブ → プレイヤー（開いただけで自動再生）+ 番組の説明 → 右に番組表。
+ * プレイヤーは LiveController（tver-player.mjs の live: true）。
+ */
+export function liveHtml(o = {}) {
+  const player = playerMarkup({ ...o, live: true });
+  const tabs = ['日テレ', 'テレ朝', 'TBS', 'テレ東', 'フジ'].map((n, i) => `<button type="button" class="Tabs_listItem__PbrkJ" data-id="tab${i}"><div class="Tabs_item__x">${n}</div></button>`).join('');
+  const items = range(8).map((i) => `<li><a class="LiveItem_container__fj2Pu" href="/live/simul/lv${i}" data-id="tl${i}"><span>番組${i}</span></a></li>`).join('');
+  const main = `<style>.live-page-main_layout__x { display: grid; grid-template-columns: 752px 360px; gap: 24px; } .live-page-main_player__x { min-width: 0; }</style>
+<div class="ChannelTabs_tabs__x"><div class="Tabs_tabs__x"><div class="Tabs_list__x"><div class="Tabs_track__x">${tabs}</div></div></div></div>
+<div class="live-page-main_layout__x">
+  <section class="live-page-main_player__x">${player}
+    <div class="live-page-main_info__x"><div class="LiveDescription_root__x">
+      <div class="LiveDescription_titleWrapper__x"><div class="LiveDescription_titleContent__x">テスト番組（リアルタイム）</div></div>
+      <div class="LiveDescription_detail__x">テスト放送局 10月20日(火) 21:00〜21:54</div>
+      <div class="LiveDescription_buttons__x"><a class="Button_button__ZKEys" href="/series/srtest" data-id="live-series">番組TOPへ</a></div>
+    </div></div>
+  </section>
+  <section class="live-page-main_sidebar__x"><div class="live-page-main_timeline__x"><div class="LiveTimeline_container__x"><div><div class="LiveTimeline_labelWrapper__x">今日</div><ul class="LiveTimeline_list__x">${items}</ul></div></div></div></section>
+</div>`;
+  return layout('TVer fixture – live', main, playerScript({ ...o, live: true }));
+}
+
+/**
  * 番組（シリーズ）ページ。エピソード一覧のカードは、TVer 標準の詳細ポップアップを持つ。
  * 実サイトと同じく、host（SeasonEpisodeListItem_popupContainer）に mouseover が来たら React がポップアップを作り、mouseout で消す。
  */

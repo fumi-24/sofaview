@@ -69,4 +69,5 @@ npm run pack                # dist/sofaview-<version>.zip
 - `PlayerLayout_jail` の `mask-image` は `position: fixed` の子孫まで切り取る。`isolation: isolate` の中の `z-index` は外に勝てない（覆い `#sv-watch-ui` は操作盤の直前に置く）。TVer の操作盤の表示は React の状態なので、クラスの書き換えは効かない（CSS の `opacity` で見え方だけ決める）。Radix のポップアップの矢印はフォーカス移動だけ（OK で拡張が `click()`）。
 - Playwright の `page.evaluate` はユーザー操作として扱われ、約 5 秒の窓ができる。「操作なしでは全画面にならない」は、その間 `evaluate` しないで確かめる。
 - 実プレイヤーの確認は、地域制限の再生 API（`playback.api.streaks.jp`）だけを偽の応答にして、実サイトの JS・Streaks SDK のまま再生させる（`tests/live/live.test.mjs` の `fakePlayback`）。偽装は検証用で拡張には入れない。
+- **リアルタイム配信（`/live/局`）の操作盤は `LiveController`**（VodController と同じ作り・クラス名だけ違う。再生が始まってから読み込まれる）。CSS は `:is([class*="VodController_x__"], [class*="LiveController_x__"])` で両方に当てる。チャンネルのページは開くだけで自動再生なので、**OK・全画面で入ったときだけ視聴画面**（`browseFirst`）で、戻るはページへ。ライブの再生ボタンは「停止」（押すと配信が終わる）なので `noPause`（SPEC 7.5、NOTES 3.10b）。
 - 実機（日本国内 IP・Widevine・リモコン）でしか確認できないことは docs/NOTES.md の実機チェックリストに集約している。
