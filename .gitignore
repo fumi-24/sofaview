@@ -1,0 +1,8 @@
+node_modules/
+test-results/
+dist/
+*.pem
+*.crx
+*.zip
+.DS_Store
+_metadata/

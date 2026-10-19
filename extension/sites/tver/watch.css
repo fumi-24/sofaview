@@ -1,0 +1,489 @@
+/*
+ * TVer の視聴画面（プレイヤー）を youtube.com/tv の視聴画面と同じ見た目にする（docs/SPEC.md 9.5、docs/NOTES.md 3.10）。
+ *
+ * 前提: sites/tver/watch.js が、TVer の操作盤（VodController）が出ている間 html.sv-watch を付け、状態を html[data-sv-ui] に写す。
+ *   data-sv-ui: H（非表示）/ C（操作画面）/ S（スクラブ）  data-sv-focus: bar（進行バー）/ row（ボタン列）
+ * 寸法は --wu（= min(画面幅 ÷ 80, 画面高さ ÷ 45)。1280x720 で 16px）の倍数。/tv の UI は画面の中央に置いた 80 x 45 の舞台に描かれる。
+ * /tv はアニメーションが一切ない: transition / animation は付けず、TVer 標準のものも切る。
+ * セレクタは CSS Modules のハッシュ部分を前提にしない（[class*="Name_part__"]）。動作（キー操作）はこの CSS が効かなくても成り立つ。
+ */
+
+html.sv-watch {
+  --wu: min(calc(100vw / 80), calc(100vh / 45));
+}
+
+/* ================================================================ 1. 劇場表示
+   TVer の :fullscreen の規則（PlayerLayout_*）と同じ配置を、全画面でなくても当てる（全画面は TVer 自身のボタンで別に入る。見た目は同じ）。
+   PlayerLayout_jail の mask-image（角丸のクリップ）は position: fixed の子孫まで切り取るので外す（全画面では TVer 自身が外す）。
+   ページはスクロールさせない（スクロールで TVer がミニプレイヤーを出すため）。 */
+html.sv-watch,
+html.sv-watch body {
+  overflow: hidden !important;
+}
+
+html.sv-watch main {
+  transform: none !important; /* レールの押し出し（transform）が position: fixed の基準を変えないように */
+}
+
+html.sv-watch [js-fullscreen-target] {
+  position: fixed !important;
+  inset: 0 !important;
+  z-index: calc(var(--ZIndex_Modal, 50) - 1) !important; /* TVer のヘッダー(40)・レール(35)・ミニプレイヤー(45)より上、モーダル(50)より下 */
+  display: flex !important;
+  justify-content: center;
+  align-items: center;
+  box-sizing: border-box;
+  width: 100vw !important;
+  height: 100vh !important;
+  max-width: none !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  background: #000;
+}
+
+html.sv-watch [class*="PlayerLayout_aspectRatioWrapper__"] {
+  width: min(100vw, 177.78vh) !important;
+  padding-top: min(56.25vw, 100vh) !important;
+}
+
+html.sv-watch [class*="PlayerLayout_jail__"] {
+  overflow: visible !important;
+  mask-image: none !important;
+  -webkit-mask-image: none !important;
+  border-radius: 0 !important;
+}
+
+/* 離れるとき、戻った先で TVer が出すミニプレイヤーを閉じるまでの間、見せない */
+html.sv-leaving [class*="MiniPlayerLayout_draggable__"][data-open="true"] {
+  display: none !important;
+}
+
+/* TVer 標準の読み込み表示（回る輪）と、キー操作の中央のアイコンは使わない（/tv は「読み込み中...」の文字だけ。一時停止の表示もない） */
+html.sv-watch .vjs-spinner,
+html.sv-watch [class*="KeyAction_action__"] {
+  display: none !important;
+}
+
+/* ================================================================ 2. 操作盤（TVer の VodController）
+   舞台（80 x 45）と同じ大きさ・位置に置き、中の要素を /tv の座標で並べる。見せる／隠すは拡張の状態（C だけ見える）。
+   opacity で隠す（visibility だと focus() できない）。TVer 自身の表示タイマーは、ここで上書きして使わない。 */
+html.sv-watch [class*="VodController_container__"] {
+  --seek-bar-color: #f1f1f1;
+  position: fixed !important;
+  z-index: 2; /* 覆い（1）の上。再生速度・画質のポップアップが、時間の表示の下に隠れないように */
+  left: calc((100vw - var(--wu) * 80) / 2) !important;
+  top: calc((100vh - var(--wu) * 45) / 2) !important;
+  bottom: auto !important;
+  display: block !important;
+  box-sizing: border-box;
+  width: calc(var(--wu) * 80) !important;
+  height: calc(var(--wu) * 45) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  outline: none !important;
+  transition: none !important;
+  font-family: var(--sv-font);
+}
+
+html.sv-watch[data-sv-ui="C"] [class*="VodController_container__"] {
+  opacity: 1 !important;
+}
+
+html.sv-watch:not([data-sv-ui="C"]) [class*="VodController_container__"] {
+  opacity: 0 !important;
+}
+
+/* /tv に暗い帯（スクリム）はない。読みやすさは文字の黒い背景で確保する */
+html.sv-watch [class*="VodController_container__"]::before {
+  display: none !important;
+}
+
+/* TVer の進行バーと時間は、覆い（#sv-watch-ui）に描き直すので使わない。音量・全画面・広告の PR 表示などは /tv にない */
+html.sv-watch [class*="SeekBar_container__"],
+html.sv-watch [class*="TimeLabel_label__"],
+html.sv-watch [class*="Volume_wrapper__"],
+html.sv-watch [class*="VodController_fullscreen__"] {
+  display: none !important;
+}
+
+/* ボタン列: 舞台の x 4〜76・y 30.875（高さ 4）。中央の 3 つ（-10秒・再生・+10秒）が画面の真ん中、再生速度・画質は右端 */
+html.sv-watch [class*="VodController_buttons__"] {
+  position: absolute !important;
+  left: calc(var(--wu) * 4);
+  top: calc(var(--wu) * 30.875);
+  display: flex !important;
+  align-items: center;
+  box-sizing: border-box;
+  width: calc(var(--wu) * 72);
+  height: calc(var(--wu) * 4) !important;
+  margin: 0 !important;
+  padding: 0 !important;
+}
+
+/* 左の 30.25 の空き（/tv の左のグループの幅）。スペーサー（flex: 1）が余りを取り、右のボタンを右端へ押す */
+html.sv-watch [class*="VodController_buttons__"]::before {
+  content: '';
+  flex: 0 0 calc(var(--wu) * 30.25);
+}
+
+html.sv-watch [class*="VodController_buttons__"] > * {
+  margin: 0 !important;
+}
+
+html.sv-watch [class*="VodController_buttons__"] button {
+  box-sizing: border-box;
+  flex: none;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  outline: none !important;
+  box-shadow: none;
+  background: var(--sv-surface, #373737);
+  color: #f1f1f1;
+  font-family: var(--sv-font);
+  transition: none !important;
+}
+
+html.sv-watch [class*="VodController_buttons__"] button::before {
+  display: none !important; /* TVer 標準のホバーの重ね塗り */
+}
+
+/* フォーカス: /tv は白地・黒い文字（リング・拡大なし） */
+html.sv-watch [class*="VodController_buttons__"] button:focus {
+  background: var(--sv-focus-bg, #f1f1f1);
+  color: var(--sv-focus-fg, #0f0f0f);
+}
+
+html.sv-watch [class*="Skip_icon__"] {
+  width: calc(var(--wu) * 3);
+  height: calc(var(--wu) * 3);
+}
+
+html.sv-watch [class*="Play_icon__"] {
+  width: calc(var(--wu) * 4);
+  height: calc(var(--wu) * 4);
+  margin: 0 calc(var(--wu) * 0.75) !important; /* 再生ボタンの左右 0.75（中央の 3 つの幅は 3 + 0.75 + 4 + 0.75 + 3 = 11.5） */
+}
+
+html.sv-watch [class*="Skip_icon__"] svg,
+html.sv-watch [class*="Play_icon__"] svg {
+  width: calc(var(--wu) * 1.5);
+  height: calc(var(--wu) * 1.5);
+}
+
+/* 再生速度・画質: 右側の丸いピル（高さ 3・文字 + 3 の幅・文字は 500 の 1） */
+html.sv-watch [class*="Speed_label__"],
+html.sv-watch [class*="Quality_label__"] {
+  width: auto;
+  min-width: calc(var(--wu) * 3);
+  height: calc(var(--wu) * 3);
+  padding: 0 calc(var(--wu) * 1.5);
+  font-size: var(--wu);
+  font-weight: 500;
+  line-height: calc(var(--wu) * 1.375);
+}
+
+html.sv-watch [class*="Speed_label__"] {
+  margin-right: calc(var(--wu) * 0.25) !important;
+}
+
+html.sv-watch [class*="Quality_label__"] {
+  margin-left: calc(var(--wu) * 0.25) !important;
+}
+
+html.sv-watch [class*="VodController_spacer__"] {
+  flex: 1 1 auto;
+}
+
+/* ツールチップ: /tv は、アイコンだけのボタンにフォーカスしたとき、ボタンの下に出す（ピルと再生ボタンには出ない） */
+html.sv-watch [class*="Tooltip_tooltip__"] {
+  display: none !important;
+}
+
+html.sv-watch [class*="Tooltip_wrapper__"]:focus-within > [class*="Tooltip_tooltip__"]:not([hidden]) {
+  display: block !important;
+  top: 100% !important;
+  left: 50% !important;
+  right: auto !important;
+  box-sizing: border-box;
+  margin: calc(var(--wu) * 0.5) 0 0 !important;
+  padding: 0 calc(var(--wu) * 0.25) !important;
+  border-radius: 0;
+  background: var(--sv-surface, #373737);
+  color: #f1f1f1;
+  font-family: var(--sv-font);
+  font-size: var(--wu);
+  font-weight: 500;
+  line-height: calc(var(--wu) * 1.375);
+  transform: translateX(-50%) !important;
+  pointer-events: none;
+}
+
+html.sv-watch [class*="Tooltip_wrapper__"]:focus-within > [class*="Play_icon__"] ~ [class*="Tooltip_tooltip__"],
+html.sv-watch [class*="Tooltip_wrapper__"]:focus-within > [class*="Speed_label__"] ~ [class*="Tooltip_tooltip__"],
+html.sv-watch [class*="Tooltip_wrapper__"]:focus-within > [class*="Quality_label__"] ~ [class*="Tooltip_tooltip__"] {
+  display: none !important; /* ポップアップを開くと、ボタンとツールチップの間にポップアップが入る（~ で兄弟全体を見る） */
+}
+
+/* ================================================================ 3. 再生速度・画質のポップアップ（Radix Popover + RadioGroup）
+   再生速度は 2 列のグリッド（DOM 順 = 2.0, 1.75 / 1.5, 1.25 / 1.0 ...）。Radix の ↑↓ は「DOM 順の前後」なので、見た目と食い違わないよう 1 列にする。
+   項目のフォーカスは /tv と同じ白地・黒い文字。TVer 標準の開閉アニメーションは切る。 */
+html.sv-watch [class*="Speed_menu__"],
+html.sv-watch [class*="Quality_menu__"] {
+  animation: none !important;
+  font-size: var(--wu);
+  font-family: var(--sv-font);
+}
+
+html.sv-watch [class*="Speed_radio__"] {
+  grid-template-columns: 1fr !important;
+}
+
+html.sv-watch [class*="Speed_item__"],
+html.sv-watch [class*="Quality_item__"] {
+  height: calc(var(--wu) * 3);
+  min-width: calc(var(--wu) * 9);
+}
+
+html.sv-watch [class*="Speed_item__"]:focus-within,
+html.sv-watch [class*="Quality_item__"]:focus-within {
+  background: var(--sv-focus-bg, #f1f1f1) !important;
+  color: var(--sv-focus-fg, #0f0f0f);
+}
+
+html.sv-watch [class*="Speed_item__"]:focus-within *,
+html.sv-watch [class*="Quality_item__"]:focus-within * {
+  color: var(--sv-focus-fg, #0f0f0f);
+}
+
+html.sv-watch [role="radio"]:focus {
+  outline: none !important;
+}
+
+/* ================================================================ 4. 覆い（#sv-watch-ui）: タイトル・進行バー・時間・スクラブの時刻
+   操作盤（VodController）の直前に置く（同じ重なりの層）。クリックもフォーカスも受けない。host の中なので、全画面（top layer）でも見える。 */
+#sv-watch-ui {
+  display: none;
+}
+
+html.sv-watch #sv-watch-ui {
+  display: block;
+  position: absolute;
+  inset: 0;
+  z-index: 1; /* 操作盤（2）の下。広告の表示（Streaks が 10000）の下でもある */
+  overflow: hidden;
+  pointer-events: none;
+  color: #f1f1f1;
+  font-family: var(--sv-font);
+}
+
+html.sv-watch.sv-ended #sv-watch-ui .sv-w-meta,
+html.sv-watch.sv-ended #sv-watch-ui .sv-w-progress {
+  display: none;
+}
+
+#sv-watch-ui .sv-w-stage {
+  position: absolute;
+  left: calc((100% - var(--wu) * 80) / 2);
+  top: calc((100% - var(--wu) * 45) / 2);
+  width: calc(var(--wu) * 80);
+  height: calc(var(--wu) * 45);
+}
+
+/* 非表示（H）: 何も出ない（一時停止中でも）。スクラブ（S）: タイトルは隠れ、進行バーとスクラブの時刻だけ */
+html.sv-watch[data-sv-ui="H"] #sv-watch-ui .sv-w-meta,
+html.sv-watch[data-sv-ui="H"] #sv-watch-ui .sv-w-progress,
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-meta,
+html.sv-watch.sv-ad #sv-watch-ui .sv-w-meta,
+html.sv-watch.sv-ad #sv-watch-ui .sv-w-progress,
+html.sv-watch.sv-live #sv-watch-ui .sv-w-progress {
+  display: none;
+}
+
+/* ---- タイトル（C）: 左上 x4 y4・幅 48。文字の背景は黒（行ごとの帯） */
+#sv-watch-ui .sv-w-meta {
+  position: absolute;
+  left: calc(var(--wu) * 4);
+  top: calc(var(--wu) * 4);
+  width: calc(var(--wu) * 48);
+}
+
+#sv-watch-ui .sv-w-title {
+  margin: 0 0 calc(var(--wu) * 0.5);
+  font-size: calc(var(--wu) * 1.75);
+  font-weight: 900;
+  line-height: calc(var(--wu) * 2.375);
+  word-break: break-all;
+}
+
+#sv-watch-ui .sv-w-sub {
+  overflow: hidden;
+  font-size: var(--wu);
+  font-weight: 400;
+  line-height: calc(var(--wu) * 1.375);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+#sv-watch-ui .sv-w-title span,
+#sv-watch-ui .sv-w-sub span {
+  display: inline;
+  background: #000;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* ---- 進行バー（C・S）: x4 y26.625・幅 72・高さ 4.25 */
+#sv-watch-ui .sv-w-progress {
+  position: absolute;
+  left: calc(var(--wu) * 4);
+  top: calc(var(--wu) * 26.625);
+  width: calc(var(--wu) * 72);
+  height: calc(var(--wu) * 4.25);
+}
+
+#sv-watch-ui .sv-w-track {
+  position: absolute;
+  left: 0;
+  top: calc(var(--wu) * 2.9375);
+  width: 100%;
+  height: calc(var(--wu) * 0.375);
+  overflow: hidden;
+  background: #606060;
+}
+
+#sv-watch-ui .sv-w-buf,
+#sv-watch-ui .sv-w-played {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+}
+
+#sv-watch-ui .sv-w-buf {
+  width: calc(var(--sv-b, 0) * 100%);
+  background: #373737;
+}
+
+#sv-watch-ui .sv-w-played {
+  width: calc(var(--sv-p, 0) * 100%);
+  background: #f1f1f1;
+}
+
+/* 進行バーにフォーカスがあるとき（と、スクラブ中）: 太くなり、再生済みが赤のグラデーション、つまみが出る */
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-track,
+html.sv-watch[data-sv-ui="C"][data-sv-focus="bar"] #sv-watch-ui .sv-w-track {
+  top: calc(var(--wu) * 3);
+  height: calc(var(--wu) * 0.25);
+  transform: scaleY(2);
+}
+
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-played,
+html.sv-watch[data-sv-ui="C"][data-sv-focus="bar"] #sv-watch-ui .sv-w-played {
+  background: linear-gradient(to right, #ff0033 80%, #ff2791 100%);
+}
+
+#sv-watch-ui .sv-w-knob {
+  display: none;
+  position: absolute;
+  left: calc(var(--sv-p, 0) * var(--wu) * 72 - var(--wu) * 0.749);
+  top: calc(var(--wu) * 2.125);
+  width: calc(var(--wu) * 2);
+  height: calc(var(--wu) * 2);
+}
+
+#sv-watch-ui .sv-w-knob::after {
+  content: '';
+  position: absolute;
+  left: calc(var(--wu) * 0.5);
+  top: calc(var(--wu) * 0.5);
+  width: var(--wu);
+  height: var(--wu);
+  border-radius: 50%;
+  background: #f1f1f1;
+  transform: scale(1.25);
+}
+
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-knob,
+html.sv-watch[data-sv-ui="C"][data-sv-focus="bar"] #sv-watch-ui .sv-w-knob {
+  display: block;
+}
+
+/* 時間（C のみ。スクラブ中は隠れる）: 左に経過、右に全体。黒い背景 */
+#sv-watch-ui .sv-w-times {
+  position: absolute;
+  left: 0;
+  bottom: calc(var(--wu) * 2);
+  width: 100%;
+  height: calc(var(--wu) * 1.25);
+  font-size: calc(var(--wu) * 0.875);
+  font-weight: 500;
+  line-height: calc(var(--wu) * 1.25);
+}
+
+#sv-watch-ui .sv-w-times span {
+  position: absolute;
+  top: 0;
+  background: #000;
+}
+
+#sv-watch-ui .sv-w-cur {
+  left: 0;
+  color: #b7b7b7;
+}
+
+#sv-watch-ui .sv-w-dur {
+  right: 0;
+  color: #aaaaaa;
+}
+
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-times {
+  display: none;
+}
+
+/* ---- スクラブの時刻（S）: 再生済みの端の上。幅 14・サムネイルの 7.875 の下に 700 の 1 で時刻（TVer にはサムネイルの画像がないので時刻だけ） */
+#sv-watch-ui .sv-w-preview {
+  display: none;
+  position: absolute;
+  bottom: calc(var(--wu) * 3.25);
+  left: clamp(0px, calc(var(--sv-p, 0) * var(--wu) * 72 - var(--wu) * 7), calc(var(--wu) * 58));
+  width: calc(var(--wu) * 14);
+  height: calc(var(--wu) * 9.775);
+}
+
+html.sv-watch[data-sv-ui="S"] #sv-watch-ui .sv-w-preview {
+  display: block;
+}
+
+#sv-watch-ui .sv-w-ptime {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  padding-top: calc(var(--wu) * 0.525);
+  font-size: var(--wu);
+  font-weight: 700;
+  line-height: calc(var(--wu) * 1.375);
+  text-align: center;
+}
+
+/* ---- 読み込み中（800ms 以上止まったときだけ）: 文字だけ。回る輪はない */
+#sv-watch-ui .sv-w-loading {
+  display: none;
+  position: absolute;
+  left: calc(var(--wu) * 36);
+  top: calc(var(--wu) * 21.3125);
+  color: #909090;
+  font-size: calc(var(--wu) * 2);
+  font-weight: 300;
+  line-height: calc(var(--wu) * 2.375);
+  white-space: nowrap;
+}
+
+html.sv-watch.sv-loading #sv-watch-ui .sv-w-loading {
+  display: block;
+}
+
+html.sv-watch.sv-loading[data-sv-ui="C"] #sv-watch-ui .sv-w-loading {
+  top: calc(var(--wu) * 17.5);
+}

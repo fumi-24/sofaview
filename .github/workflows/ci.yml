@@ -1,0 +1,31 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: 静的チェック（manifest の参照・構文・権限・バージョン）
+        run: npm run check
+      - name: 単体テスト
+        run: npm run test:unit
+      - name: Chromium のインストール（Playwright）
+        run: npx playwright install --with-deps chromium
+      - name: E2E（拡張機能を読み込んだ Chromium。ネットワーク不要）
+        run: npm run test:e2e
+      - name: 拡張機能のパッケージ化
+        run: npm run pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sofaview-extension
+          path: dist/*.zip

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="ja" class="sv-hub" data-page="sub">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SofaView – キー割り当て</title>
+  <link rel="stylesheet" href="../common/tokens.css">
+  <link rel="stylesheet" href="../common/base.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <main class="main" data-sv-region="content" style="margin-left: var(--sv-safe)">
+    <header class="top"><h1>キー割り当て</h1></header>
+    <div class="panel">
+      <p class="note">既定のキーはそのまま使えます。リモコンのキーが効かないときは、動作を選んで Enter → 割り当てたいリモコンのボタンを押してください。<br>
+        キー名は「キー診断」で確認できます。Esc / Home で設定に戻ります。</p>
+      <div id="rows" role="list"></div>
+    </div>
+  </main>
+  <div class="capture" id="capture" data-on="false" role="alertdialog"><div id="capture-text"></div></div>
+  <script src="../common/sv.js"></script>
+  <script src="../common/settings.js"></script>
+  <script src="../common/keys.js"></script>
+  <script src="../common/spatial-nav.js"></script>
+  <script src="keyconfig.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

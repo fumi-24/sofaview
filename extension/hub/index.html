@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="ja" class="sv-hub" data-page="root">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SofaView</title>
+  <link rel="stylesheet" href="../common/tokens.css">
+  <link rel="stylesheet" href="../common/base.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <nav class="rail" aria-label="メニュー" data-sv-region="rail">
+    <a class="rail-item" href="index.html" aria-current="page" data-id="home">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2 12h3v8h5v-6h4v6h5v-8h3z"/></svg><span>ホーム</span>
+    </a>
+    <a class="rail-item" href="https://www.youtube.com/tv" data-id="youtube">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg><span>YouTube</span>
+    </a>
+    <a class="rail-item" href="https://tver.jp/" data-id="tver">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 6h-5.6l2.3-2.3-.7-.7L12 6 7.4 3l-.7.7L8.6 6H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zm-1 12H4V8h16z"/></svg><span>TVer</span>
+    </a>
+    <div class="rail-sep"></div>
+    <a class="rail-item" href="diag.html" data-id="diag">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 5H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zM11 8h2v2h-2zm0 3h2v2h-2zM8 8h2v2H8zm0 3h2v2H8zM7 17H5v-2h2zm0-4H5v-2h2zm0-3H5V8h2zm9 7H8v-2h8zm0-4h-2v-2h2zm0-3h-2V8h2zm3 7h-2v-2h2zm0-4h-2v-2h2zm0-3h-2V8h2z"/></svg><span>キー診断</span>
+    </a>
+    <a class="rail-item" href="settings.html" data-id="settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.14 12.94a7.07 7.07 0 0 0 .06-.94 7.07 7.07 0 0 0-.06-.94l2.03-1.58a.5.5 0 0 0 .12-.64l-1.92-3.32a.5.5 0 0 0-.61-.22l-2.39.96a7.03 7.03 0 0 0-1.62-.94l-.36-2.54a.5.5 0 0 0-.5-.42h-3.84a.5.5 0 0 0-.5.42l-.36 2.54c-.59.24-1.13.56-1.62.94l-2.39-.96a.5.5 0 0 0-.61.22L2.7 8.84a.5.5 0 0 0 .12.64l2.03 1.58a7.07 7.07 0 0 0-.06.94c0 .32.02.63.06.94L2.82 14.52a.5.5 0 0 0-.12.64l1.92 3.32c.13.22.39.31.61.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.04.24.25.42.5.42h3.84c.25 0 .46-.18.5-.42l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.09.48 0 .61-.22l1.92-3.32a.5.5 0 0 0-.12-.64zM12 15.5A3.5 3.5 0 1 1 12 8.5a3.5 3.5 0 0 1 0 7z"/></svg><span>設定</span>
+    </a>
+  </nav>
+
+  <main class="main" data-sv-region="content">
+    <header class="top">
+      <h1>SofaView</h1>
+      <div class="clock"><div class="time" id="clock-time"></div><div class="date" id="clock-date"></div></div>
+    </header>
+
+    <section class="tiles" aria-label="サービス">
+      <a class="tile tile-yt" href="https://www.youtube.com/tv" data-id="youtube">
+        <div class="art"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg></div>
+        <strong>YouTube</strong><span>TV 向け UI（公式 /tv）</span>
+      </a>
+      <a class="tile tile-tver" href="https://tver.jp/" data-id="tver">
+        <div class="art"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 6h-5.6l2.3-2.3-.7-.7L12 6 7.4 3l-.7.7L8.6 6H3a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h18a1 1 0 0 0 1-1V7a1 1 0 0 0-1-1zm-1 12H4V8h16z"/></svg></div>
+        <strong>TVer</strong><span>見逃し配信</span>
+      </a>
+    </section>
+
+    <section class="tiles small" aria-label="ツール">
+      <a class="tile" href="diag.html" data-id="diag"><strong>キー診断</strong><span>キーを確認</span></a>
+      <a class="tile" href="settings.html" data-id="settings"><strong>設定</strong><span>倍率・キー割り当て</span></a>
+    </section>
+
+    <footer class="hints">↑ ↓ ← →　移動　／　Enter　決定　／　Esc　戻る　／　Home　ホーム（どの画面でもここへ戻ります）</footer>
+  </main>
+
+  <script src="../common/sv.js"></script>
+  <script src="../common/settings.js"></script>
+  <script src="../common/keys.js"></script>
+  <script src="../common/spatial-nav.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

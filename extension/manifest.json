@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "SofaView",
+  "version": "0.1.0",
+  "description": "テレビのリモコン（十字キー・Enter・Esc・Home）だけで YouTube と TVer を操作する。",
+  "minimum_chrome_version": "111",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn8tmfL6J/KVMBqaxdmcKfuoMtn9brllt403Qp7dpdp/aX1yuqD/QsxHP4jQj/ecdkrZG39jaQAralhTppvIsAnPdPqab+nvcRClEW4Wt+dtr/gl477z6G5VLzslHdieRDF2zSWMtbP3Q36ghY3ciUuWt9vCwaLjv6TfgqK6cXCUcrcv3xQTzjQjMzs4L9IOlDaRKbvTH7tbor73CxybNS16Ik86zY2EbA7ALF3nyFhOAIbotZblSiTcNGO+8BJuz6iVzGhlDGwBqr0hbs6q56ZpPUuiC0FUhePaEsTPXvULtqkMx7XHrpuih+ThD6nW0TElFmhJnp3o3weMaiThK7wIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": ["declarativeNetRequest", "storage"],
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://youtube.com/*",
+    "https://youtu.be/*",
+    "https://tver.jp/*"
+  ],
+  "background": {
+    "service_worker": "background/service-worker.js"
+  },
+  "options_page": "hub/settings.html",
+  "declarative_net_request": {
+    "rule_resources": [
+      { "id": "yt-ua", "enabled": true, "path": "rules/youtube-ua.json" },
+      { "id": "yt-redirect", "enabled": false, "path": "rules/youtube-redirect.json" }
+    ]
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://www.youtube.com/tv*"],
+      "js": ["sites/youtube/ua-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.youtube.com/tv*"],
+      "css": ["common/tokens.css", "common/base.css", "sites/youtube/youtube.css"],
+      "js": [
+        "common/sv.js",
+        "common/settings.js",
+        "common/keys.js",
+        "sites/youtube/content.js"
+      ],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://tver.jp/*"],
+      "js": ["sites/tver/ua-main.js", "sites/tver/billboard-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://tver.jp/*"],
+      "css": ["common/tokens.css", "common/base.css", "common/osk.css", "sites/tver/tver.css", "sites/tver/watch.css"],
+      "js": [
+        "common/sv.js",
+        "common/settings.js",
+        "common/keys.js",
+        "common/zoom.js",
+        "common/spatial-nav.js",
+        "common/rows.js",
+        "common/watch-core.js",
+        "common/osk.js",
+        "sites/tver/selectors.js",
+        "sites/tver/watch.js",
+        "sites/tver/content.js"
+      ],
+      "run_at": "document_start"
+    }
+  ]
+}

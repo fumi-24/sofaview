@@ -1,0 +1,442 @@
+/*
+ * TVer を youtube.com/tv と同じ見た目・位置・寸法に再スキンする（CSS 優先）。
+ *
+ * 寸法は youtube.com/tv の実測（docs/NOTES.md）。単位 --sv-u（= 画面高さ ÷ 45。拡張が画面倍率で高さ 720px にするので 16px）で書く:
+ *   レール 6.5u（折りたたみ）/ 21.25u（展開）、カード幅 22u・間隔 1.5u、リング 0.375u、行の見出し 20px、カードの題名 24px 太字…
+ * /tv は CSS のアニメーション・トランジションが一切ない（フォーカス移動・レールの開閉・スクロールはすべて 1 フレーム）。
+ * ここでもカード・レール・行にはトランジションを付けない。
+ *
+ * 前提:
+ *  - ダークテーマは TVer 標準（html.dark）。JS が localStorage.appearanceMode='dark' を設定する。
+ *  - TVer 標準のフォーカスリング（--color-state-focused）は透明にし、下の共通リングに統一する。
+ *
+ * セレクタは CSS Modules のハッシュ部分を前提にしない（[class*="Name_part__"]）。
+ */
+
+html.sv-tv {
+  /* TVer 標準のフォーカス色を無効化 → 共通リング（下）だけが見える */
+  --color-state-focused: transparent;
+  --sv-ring: calc(var(--sv-u) * 0.375);
+  --sv-card-w: calc(var(--sv-u) * 22);
+  --sv-card-h: calc(var(--sv-u) * 20.5);
+  --sv-card-gap: calc(var(--sv-u) * 1.5);
+  --sv-radius-thumb: calc(var(--sv-u) * 0.75);
+  --sv-radius-ring: calc(var(--sv-u) * 1.1);
+  --sv-text-dim: #aaaaaa;
+  --sv-title-dim: #b7b7b7;
+  /* 展開したレールが内容を押し出す量（展開幅 − 折りたたみ幅 + 1u の余白。/tv は 252px） */
+  --sv-push: calc(var(--sv-rail-w) - var(--sv-rail-w-collapsed) + var(--sv-u));
+  --sv-topbar-h: calc(var(--sv-u) * 6.75);
+  font-family: var(--sv-font);
+}
+
+/* 左の列（レール）の幅はサイトの変数。折りたたみ幅（6.5u）にして、内容の左端を /tv に合わせる */
+html.sv-tv [class*="AppLayout_app__"],
+html.sv-tv main {
+  --side-column-width: var(--sv-rail-w-collapsed) !important;
+  --page-padding-left: 0px !important; /* 見出し・ビルボード・カードの左端をそろえる（/tv は 6.5u の 1 本の線） */
+  --page-padding-right: calc(var(--sv-u) * 2) !important; /* 右は詳細ポップアップ（カードより 28px 外側まで広がる）が収まる分 */
+}
+
+/* 番組ページの 2 列（情報 | エピソード一覧）: 右の列が内容の幅で押し広げられて画面からはみ出さないようにする */
+html.sv-tv [class*="Series_main__"] {
+  grid-template-columns: 40% minmax(0, 1fr) !important;
+}
+
+/* ---- 背景: TVer のダークテーマ(#0d0d0d)は /tv(#0f0f0f)とほぼ同じ。念のため揃える ---- */
+html.sv-tv.dark,
+html.sv-tv.dark body {
+  background-color: var(--sv-bg, #0f0f0f);
+}
+
+html.sv-tv body {
+  font-family: var(--sv-font);
+}
+
+/* ---- 非表示 ---- */
+html.sv-tv [class*="AppBanner_"],
+html.sv-tv [class*="Carousel_control"] {
+  display: none !important;
+}
+
+/* ヘッダー: 検索・設定・ハンバーガーを隠す（文字入力やログインはリモコンでは扱えない）。ロゴは /tv と同じ右上へ */
+html.sv-tv.sv-hide-header [class*="AppLayout_actions__"],
+html.sv-tv.sv-hide-header [class*="AppLayout_icon__"],
+html.sv-tv.sv-hide-header header button[aria-label="メニューを閉じる"],
+html.sv-tv.sv-hide-header header button[aria-label="メニューを開く"] {
+  display: none !important;
+}
+
+html.sv-tv.sv-hide-header [class*="AppLayout_title__"] {
+  position: fixed;
+  left: auto !important;
+  right: calc(var(--sv-u) * 3.5) !important;
+  top: calc(var(--sv-u) * 2.5) !important;
+  width: auto !important;
+  height: auto !important;
+  padding: 0 !important;
+}
+
+html.sv-tv.sv-hide-header [class*="AppLayout_homeLink__"] {
+  width: calc(var(--sv-u) * 5) !important;
+  height: calc(var(--sv-u) * 3.5) !important;
+}
+
+/* 「アプリで視聴する」（アプリストア誘導。外部リンクのためフォーカスもできない） */
+html.sv-tv.sv-hide-app-cta #episode-app-link,
+html.sv-tv.sv-hide-app-cta [class*="WatchOnApp_"] {
+  display: none !important;
+}
+
+/* フッター（規約・SNS）は目立たせない */
+html.sv-tv footer {
+  opacity: 0.45;
+}
+
+/* ---- フォーカス: 共通の白いリング（既定。下で要素ごとに /tv の形にする） ---- */
+html.sv-tv :where(a, button, summary, [tabindex], [role="tab"], [role="button"], [role="link"], [role="menuitem"]):focus {
+  outline: var(--sv-ring) solid var(--sv-focus-bg, #f1f1f1) !important;
+  outline-offset: 2px !important;
+}
+
+/* ================================================================ 左レール（/tv の「ガイド」）
+   普段はアイコンだけの細い列（6.5u）。フォーカスが入ると 21.25u に広がり、内容を押し出す（背景は #0f0f0f・影なし）。
+   /tv は切り替えが 1 フレーム。サイトの状態は触らず :focus-within だけで切り替えるので、カクつかない。
+   サイトは「展開」状態（項目が横並び）のまま使い、幅を詰めて隠す。 */
+html.sv-tv nav {
+  flex: none;
+  box-sizing: border-box;
+  width: var(--sv-rail-w-collapsed) !important;
+  height: 100vh !important;
+  top: 0 !important;
+  margin-top: 0 !important;
+  padding: calc(var(--sv-u) * 2.625) 0 0 !important;
+  overflow: hidden !important;
+  white-space: nowrap;
+  transition: none !important;
+  font-family: var(--sv-font);
+}
+
+html.sv-tv nav:focus-within {
+  width: var(--sv-rail-w) !important;
+  margin-right: calc(var(--sv-rail-w-collapsed) - var(--sv-rail-w)); /* 場所は折りたたみ幅のまま。広がった分は内容を押し出す */
+  background: var(--sv-bg, #0f0f0f);
+  z-index: 100 !important;
+}
+
+/* 内容を押し出す（transform なので再レイアウトなし・即時） */
+html.sv-tv nav:focus-within ~ main,
+html.sv-tv nav:focus-within ~ #sv-topbar {
+  transform: translateX(var(--sv-push));
+}
+
+html.sv-tv nav ul {
+  padding: 0 !important;
+  margin: 0 !important;
+}
+
+html.sv-tv nav li > a,
+html.sv-tv nav li > button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--sv-u) * 1.125);
+  width: calc(100% - var(--sv-u) * 2.75) !important;
+  height: calc(var(--sv-u) * 3.25) !important;
+  margin: 0 calc(var(--sv-u) * 1.375) !important;
+  padding: 0 0 0 calc(var(--sv-u) * 1.125) !important;
+  overflow: hidden;
+  transition: none !important;
+  background: transparent !important;
+  color: var(--sv-title-dim) !important; /* 折りたたみ中のアイコンは #b7b7b7。現在のページは #f1f1f1（下） */
+  font-size: calc(var(--sv-u) * 1.25) !important;
+  font-weight: 500 !important;
+  line-height: 1.2 !important;
+}
+
+html.sv-tv nav li[class*="Navigation_selected__"] > a,
+html.sv-tv nav li[class*="Navigation_selected__"] > button {
+  color: var(--sv-focus-bg, #f1f1f1) !important;
+}
+
+html.sv-tv nav li > a svg,
+html.sv-tv nav li > button svg {
+  flex: none;
+  width: calc(var(--sv-u) * 1.5) !important;
+  height: calc(var(--sv-u) * 1.5) !important;
+}
+
+/* 折りたたみ中はアイコンだけ（/tv と同じ）。文字とカテゴリ一覧は、展開したときだけ見える */
+html.sv-tv nav:not(:focus-within) li > a,
+html.sv-tv nav:not(:focus-within) li > button {
+  width: calc(var(--sv-u) * 3.5) !important;
+}
+
+html.sv-tv nav:not(:focus-within) li > a > span,
+html.sv-tv nav:not(:focus-within) li > button > span,
+html.sv-tv nav:not(:focus-within) h2,
+html.sv-tv nav:not(:focus-within) [class*="Navigation_category__"] {
+  display: none !important;
+}
+
+/* グループの区切り（/tv の 2px・#3f3f3f の線） */
+html.sv-tv nav h2 {
+  margin: calc(var(--sv-u) * 0.75) calc(var(--sv-u) * 1.375) calc(var(--sv-u) * 0.5) !important;
+  padding: calc(var(--sv-u) * 1.5) 0 0 calc(var(--sv-u) * 1.125) !important;
+  border-top: 2px solid #3f3f3f;
+  font-size: calc(var(--sv-u) * 1) !important;
+  font-weight: 400 !important;
+  color: var(--sv-text-dim) !important;
+}
+
+/* 左レール: /tv の「白いピル」（角丸 0.75u） */
+html.sv-tv nav a:focus,
+html.sv-tv nav button:focus {
+  background: var(--sv-focus-bg, #f1f1f1) !important;
+  color: var(--sv-focus-fg, #0f0f0f) !important;
+  outline: none !important;
+  border-radius: var(--sv-radius-item, 12px) !important;
+  transform: none !important;
+}
+
+html.sv-tv nav a:focus *,
+html.sv-tv nav button:focus * {
+  color: var(--sv-focus-fg, #0f0f0f) !important;
+  fill: var(--sv-focus-fg, #0f0f0f) !important;
+}
+
+/* ================================================================ 上部バー（検索ピル。JS が #sv-topbar を作る）
+   /tv は「検索」のピルが左上に固定され、行はその下で止まる（上へ流れた行は隠れる）。 */
+#sv-topbar {
+  display: none;
+}
+
+html.sv-tv #sv-topbar {
+  display: block;
+  position: fixed;
+  top: 0;
+  left: var(--sv-rail-w-collapsed);
+  right: 0;
+  height: var(--sv-topbar-h);
+  z-index: 38; /* サイトのビルボード(36)の上、固定ヘッダー(40。ロゴがある)の下 */
+  background: var(--sv-bg, #0f0f0f);
+}
+
+html.sv-tv #sv-topbar .sv-search {
+  position: absolute;
+  top: calc(var(--sv-u) * 2.75);
+  left: 0;
+  box-sizing: border-box;
+  width: calc(var(--sv-u) * 30);
+  height: calc(var(--sv-u) * 3);
+  padding: 0 calc(var(--sv-u) * 1.375);
+  border-radius: calc(var(--sv-u) * 7.5);
+  background: var(--sv-surface, #373737);
+  color: var(--sv-title-dim);
+  font-family: var(--sv-font);
+  font-size: calc(var(--sv-u) * 1.5);
+  font-weight: 700;
+  line-height: calc(var(--sv-u) * 3);
+  text-decoration: none;
+}
+
+html.sv-tv #sv-topbar .sv-search:focus {
+  background: var(--sv-focus-bg, #f1f1f1);
+  color: var(--sv-focus-fg, #0f0f0f);
+  outline: none !important;
+}
+
+/* 再生ページ（プレイヤー）には出さない（/tv の再生画面にもロゴ・検索はない） */
+html.sv-tv[data-sv-page="episode"] #sv-topbar,
+html.sv-tv[data-sv-page="live"] #sv-topbar,
+html.sv-tv.sv-hide-header[data-sv-page="episode"] [class*="AppLayout_title__"],
+html.sv-tv.sv-hide-header[data-sv-page="live"] [class*="AppLayout_title__"] {
+  display: none;
+}
+
+/* ================================================================ 内容の位置
+   左端は折りたたみレールの幅（6.5u）。最初の行・ビルボードは上部バーの下（7.75u = 124px）から始まる。 */
+html.sv-tv main {
+  box-sizing: border-box;
+  padding-top: calc(var(--sv-u) * 7.75) !important;
+}
+
+html.sv-tv[data-sv-page="episode"] main,
+html.sv-tv[data-sv-page="live"] main {
+  padding-top: calc(var(--sv-u) * 1) !important;
+}
+
+/* ================================================================ 行（棚）とカード */
+
+/* 行の見出し: 20px・500。フォーカス中の行は #f1f1f1、ほかは #b7b7b7（/tv と同じ）。高さ 2.625u + 下 0.75u、行の間隔 1.5u */
+html.sv-tv [class*="ComponentCaption_caption__"] {
+  display: flex;
+  align-items: center;
+  box-sizing: border-box;
+  height: calc(var(--sv-u) * 2.625);
+  margin: calc(var(--sv-u) * 1.5) 0 calc(var(--sv-u) * 0.75);
+  padding: 0 !important;
+}
+
+html.sv-tv [class*="ComponentCaption_title__"] {
+  font-size: calc(var(--sv-u) * 1.25) !important;
+  font-weight: 500 !important;
+  line-height: calc(var(--sv-u) * 1.75) !important;
+  color: var(--sv-title-dim) !important;
+}
+
+html.sv-tv [class*="ComponentCaption_caption__"]:has(+ [class*="Carousel_carousel__"]:focus-within) [class*="ComponentCaption_title__"] {
+  color: var(--sv-focus-bg, #f1f1f1) !important;
+}
+
+html.sv-tv [class*="ComponentCaption_more__"] {
+  font-size: calc(var(--sv-u) * 1) !important;
+  font-weight: 400 !important;
+  color: var(--sv-text-dim) !important;
+}
+
+/* 行: 余白（リングが切れない分）は内側に足して、外側のマージンで相殺する。カードの間隔は 1.5u */
+html.sv-tv [class*="Carousel_list__"] {
+  gap: var(--sv-card-gap) !important;
+  padding: calc(var(--sv-u) * 1) !important;
+  margin: calc(var(--sv-u) * -1) !important;
+}
+
+/* カード: 22u（352px）の 16:9 サムネイル + 題名・メタ。高さは 20.5u（328px）で固定 */
+html.sv-tv [class*="Carousel_item__"]:has(> [class*="ContentCard_root__"][data-direction="vertical"]) {
+  width: var(--sv-card-w) !important;
+}
+
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] {
+  box-sizing: border-box;
+  width: 100% !important;
+  height: var(--sv-card-h);
+  gap: 0 !important;
+  transition: none !important;
+}
+
+html.sv-tv [class*="ContentCard_head__"] {
+  position: relative;
+}
+
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="ContentCard_head__"] [class*="Thumbnail_thumbnail__"] {
+  border-radius: var(--sv-radius-thumb) !important;
+}
+
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="ContentCard_body__"] {
+  padding-top: calc(var(--sv-u) * 1);
+}
+
+/* 文字: 題名 24px 太字（2 行まで）・メタ 16px の灰色（1 行）。フォーカスしていないカードの題名は #aaa、フォーカス中は #f1f1f1 */
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="Title_root__"] {
+  font-size: calc(var(--sv-u) * 1.5) !important;
+  font-weight: 700 !important;
+  line-height: calc(var(--sv-u) * 2) !important;
+  color: var(--sv-text-dim) !important;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="SubTitle_root__"],
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="SubInfo_root__"] {
+  margin-top: calc(var(--sv-u) * 0.1875);
+  font-size: calc(var(--sv-u) * 1) !important;
+  font-weight: 400 !important;
+  line-height: calc(var(--sv-u) * 1.375) !important;
+  color: var(--sv-text-dim) !important;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  overflow: hidden;
+}
+
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"]:focus [class*="Title_root__"] {
+  color: var(--sv-focus-bg, #f1f1f1) !important;
+}
+
+/* 時間のバッジ: #060606 地・#f1f1f1・16px 太字・角丸 4px */
+html.sv-tv [class*="ContentCard_root__"][data-direction="vertical"] [class*="Duration_duration__"] {
+  border-radius: calc(var(--sv-u) * 0.25) !important;
+  background: #060606 !important;
+  color: var(--sv-focus-bg, #f1f1f1) !important;
+  font-size: calc(var(--sv-u) * 1) !important;
+  font-weight: 700 !important;
+}
+
+/* カードのフォーカス: サムネイルの外側に白いリング（拡大しない・アニメーションなし）。リングは題名を囲まない */
+html.sv-tv [class*="ContentCard_root__"]:focus,
+html.sv-tv [class*="LiveItem_container__"]:focus {
+  outline: none !important;
+  transform: none;
+}
+
+html.sv-tv [class*="ContentCard_root__"]:focus [class*="ContentCard_head__"]::after,
+html.sv-tv [class*="LiveItem_container__"]:focus [class*="LiveItem_thumbnail__"]::after {
+  content: '';
+  position: absolute;
+  z-index: 3;
+  inset: calc(var(--sv-u) * -0.35);
+  border: var(--sv-ring) solid var(--sv-focus-bg, #f1f1f1);
+  border-radius: var(--sv-radius-ring);
+  pointer-events: none;
+}
+
+/* ビルボード（注目作品）: スライダーは先頭のスライドを 16px 内側から置く。行の左端（6.5u）にそろえる */
+html.sv-tv [class*="BillboardList_billboard__"] {
+  margin-left: -16px !important;
+}
+
+html.sv-tv [class*="BillboardList_info__"] {
+  margin-left: 16px;
+}
+
+/* ビルボード（注目作品）: リンクの outline は、中の画像（子要素）に上から隠れて見えない。
+   サイト自身がリング用に持っている a::after（画像の上に重なる。トークン --color-state-focused が透明なので見えない）を、ここで描く。
+   li:has(a:focus)::after にすると、フォーカスを動かすたびにページ全体のスタイル再計算が 100〜200ms かかる。 */
+html.sv-tv [class*="BillboardList_link__"]:focus {
+  outline: none !important;
+}
+
+html.sv-tv [class*="BillboardList_link__"]:focus::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  border-radius: 12px;
+  /* 白いリングの内側に暗い縁を足す（白っぽいサムネイルでもリングが見えるように） */
+  box-shadow: inset 0 0 0 var(--sv-ring) var(--sv-focus-bg, #f1f1f1), inset 0 0 0 calc(var(--sv-ring) + 3px) rgba(15, 15, 15, 0.55);
+}
+
+/* ボタン類（ピル）: /tv は白地・黒文字（「ログイン」など） */
+html.sv-tv [class*="Button_button__"]:focus,
+html.sv-tv [class*="PurposeSearchSection_button__"]:focus {
+  background: var(--sv-focus-bg, #f1f1f1) !important;
+  color: var(--sv-focus-fg, #0f0f0f) !important;
+  outline: none !important;
+}
+
+/* ================================================================ 詳細ポップアップ（TVer 標準）
+   ポップアップを出している間: カードはポップアップの下に隠し、リングはポップアップに付ける */
+html.sv-tv [class*="SeasonEpisodeListItem_popupContainer__"]:has([class*="SeasonEpisodeListItem_popup__"]) [class*="ContentCard_root__"]:focus {
+  z-index: 1;
+  transform: none;
+  outline: none !important;
+}
+
+html.sv-tv [class*="SeasonEpisodeListItem_popupContainer__"]:has([class*="SeasonEpisodeListItem_popup__"]) [class*="ContentCard_root__"]:focus [class*="ContentCard_head__"]::after {
+  content: none;
+}
+
+html.sv-tv [class*="SeasonEpisodeListItem_popupContainer__"]:has([class*="ContentCard_root__"]:focus) [class*="SeasonEpisodeListItem_popup__"] > div {
+  outline: var(--sv-ring) solid var(--sv-focus-bg, #f1f1f1);
+  outline-offset: 0;
+}
+
+/* TVer 標準は 0.2 秒待ってから 0.1 秒でフェードイン。/tv と同じく 1 フレームで出す */
+html.sv-tv [class*="SeasonEpisodeListItem_popup__"] {
+  animation: none !important;
+  opacity: 1 !important;
+}

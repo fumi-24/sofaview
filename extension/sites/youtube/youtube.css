@@ -1,0 +1,5 @@
+/* YouTube /tv は公式の TV 向け UI。拡張は見た目に手を入れず、マウスカーソルを隠すだけ。 */
+html.sv-yt,
+html.sv-yt * {
+  cursor: none !important;
+}

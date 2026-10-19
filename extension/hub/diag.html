@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="ja" class="sv-hub" data-page="sub">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SofaView – キー診断</title>
+  <link rel="stylesheet" href="../common/tokens.css">
+  <link rel="stylesheet" href="../common/base.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <main class="main" data-sv-region="content" style="margin-left: var(--sv-safe)">
+    <header class="top"><h1>キー診断</h1></header>
+    <div class="panel">
+      <p class="note">リモコンのボタンを押すと、ブラウザに届いたキーの名前を表示します。未割り当てのキーは「設定 → キー割り当て」で追加できます。<br>
+        <strong>戻る または ホームを 3 回続けて押す</strong>と、ハブに戻ります。</p>
+      <div class="keybox" id="key-main" data-key="">キーを押してください</div>
+      <dl class="kv">
+        <dt>key</dt><dd id="d-key">–</dd>
+        <dt>code</dt><dd id="d-code">–</dd>
+        <dt>keyCode</dt><dd id="d-keycode">–</dd>
+        <dt>location</dt><dd id="d-location">–</dd>
+        <dt>repeat</dt><dd id="d-repeat">–</dd>
+        <dt>前回から</dt><dd id="d-delta">–</dd>
+        <dt>割り当て</dt><dd id="d-action">–</dd>
+      </dl>
+      <div class="section-title">履歴（新しい順）</div>
+      <ul class="hist" id="hist"></ul>
+      <div class="section-title">環境</div>
+      <dl class="kv" id="env"></dl>
+    </div>
+  </main>
+  <script src="../common/sv.js"></script>
+  <script src="../common/settings.js"></script>
+  <script src="../common/keys.js"></script>
+  <script src="../common/spatial-nav.js"></script>
+  <script src="diag.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

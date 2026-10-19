@@ -1,0 +1,322 @@
+/* SofaView ハブ（共通ホーム）・診断・設定。youtube.com/tv の実測値（tokens.css）を基準にした 10 フィート UI。 */
+html.sv-hub,
+html.sv-hub body {
+  margin: 0;
+  height: 100%;
+  background: var(--sv-bg);
+  color: var(--sv-fg);
+  font-family: var(--sv-font);
+  font-size: var(--sv-fs-body);
+  overflow: hidden;
+}
+
+/* ---- 左レール（アイコンのみ → フォーカスで展開。/tv のガイドと同じ） ---- */
+.rail {
+  position: fixed;
+  z-index: 10;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--sv-rail-w-collapsed);
+  box-sizing: border-box;
+  padding: calc(var(--sv-u) * 2.6) calc(var(--sv-u) * 1.375);
+  background: var(--sv-bg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  transition: width 180ms ease;
+}
+
+.rail:focus-within {
+  width: var(--sv-rail-w);
+  box-shadow: 0 0 calc(var(--sv-u) * 3) rgba(0, 0, 0, 0.7);
+}
+
+.rail-item {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--sv-u) * 1.4);
+  height: calc(var(--sv-u) * 3.25);
+  padding: 0 calc(var(--sv-u) * 1.3);
+  border-radius: var(--sv-radius-item);
+  color: var(--sv-fg);
+  text-decoration: none;
+  white-space: nowrap;
+  outline: none;
+}
+
+.rail-item svg {
+  flex: none;
+  width: calc(var(--sv-u) * 1.6);
+  height: calc(var(--sv-u) * 1.6);
+  fill: currentColor;
+}
+
+.rail-item span {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.rail:focus-within .rail-item span {
+  opacity: 1;
+}
+
+.rail-item:focus {
+  background: var(--sv-focus-bg);
+  color: var(--sv-focus-fg);
+}
+
+.rail-sep {
+  flex: none;
+  height: 1px;
+  margin: calc(var(--sv-u) * 0.9) calc(var(--sv-u) * 0.8);
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* ---- メイン ---- */
+.main {
+  box-sizing: border-box;
+  height: 100vh;
+  /* コンテンツの左端は /tv と同じ（レール折りたたみ幅）。フォーカスリングが切れないよう左に余白を持たせる */
+  margin-left: calc(var(--sv-rail-w-collapsed) - var(--sv-u));
+  padding: calc(var(--sv-u) * 2.75) var(--sv-safe) calc(var(--sv-u) * 2) var(--sv-u);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: calc(var(--sv-u) * 3);
+  margin-bottom: calc(var(--sv-u) * 2.2);
+}
+
+.top h1 {
+  margin: 0;
+  font-size: var(--sv-fs-title);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.clock {
+  text-align: right;
+  line-height: 1.2;
+}
+
+.clock .time {
+  font-size: var(--sv-fs-search);
+  font-weight: 700;
+}
+
+.clock .date {
+  font-size: calc(var(--sv-u) * 0.9);
+  color: var(--sv-fg-dim);
+}
+
+/* ---- タイル ---- */
+.tiles {
+  flex: none;
+  display: flex;
+  gap: calc(var(--sv-u) * 1.5);
+  padding: calc(var(--sv-u) * 0.8);
+  margin: calc(var(--sv-u) * -0.8) calc(var(--sv-u) * -0.8) calc(var(--sv-u) * 1.2);
+}
+
+.tile {
+  position: relative;
+  box-sizing: border-box;
+  flex: none;
+  width: calc(var(--sv-u) * 21);
+  height: calc(var(--sv-u) * 12.5);
+  padding: calc(var(--sv-u) * 1.4);
+  border-radius: var(--sv-radius-hero);
+  overflow: hidden;
+  color: #fff;
+  text-decoration: none;
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  transition: transform 150ms ease-out, box-shadow 150ms ease-out;
+}
+
+.tile:focus {
+  transform: scale(var(--sv-focus-scale));
+  box-shadow: 0 0 0 var(--sv-focus-ring) var(--sv-focus-bg), 0 calc(var(--sv-u) * 0.8) calc(var(--sv-u) * 2) rgba(0, 0, 0, 0.5);
+}
+
+.tile-yt {
+  background: linear-gradient(135deg, #ff1744 0%, #a8001a 100%);
+}
+
+.tile-tver {
+  background: linear-gradient(135deg, #1a73e8 0%, #00b4d8 100%);
+}
+
+.tile .art {
+  position: absolute;
+  top: calc(var(--sv-u) * 1.2);
+  right: calc(var(--sv-u) * 1.4);
+  opacity: 0.92;
+}
+
+.tile .art svg {
+  width: calc(var(--sv-u) * 4.5);
+  height: calc(var(--sv-u) * 4.5);
+  fill: #fff;
+}
+
+.tile strong {
+  font-size: calc(var(--sv-u) * 2);
+  line-height: 1.2;
+}
+
+.tile span {
+  font-size: calc(var(--sv-u) * 0.9);
+  opacity: 0.92;
+}
+
+.tiles.small .tile {
+  width: calc(var(--sv-u) * 13);
+  height: calc(var(--sv-u) * 6);
+  border-radius: calc(var(--sv-u) * 1.4);
+  background: var(--sv-surface-2);
+}
+
+.tiles.small .tile strong {
+  font-size: calc(var(--sv-u) * 1.2);
+}
+
+.hints {
+  margin-top: auto;
+  padding-top: calc(var(--sv-u) * 1.5);
+  font-size: calc(var(--sv-u) * 0.85);
+  color: var(--sv-fg-dim);
+}
+
+/* ---- 設定・診断・キー割り当て ---- */
+.panel {
+  max-width: calc(var(--sv-u) * 44);
+}
+
+.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--sv-u) * 1);
+  box-sizing: border-box;
+  width: 100%;
+  min-height: calc(var(--sv-u) * 3.25);
+  margin: 0 0 calc(var(--sv-u) * 0.5);
+  padding: 0 calc(var(--sv-u) * 1.5);
+  border: 0;
+  border-radius: var(--sv-radius-item);
+  background: var(--sv-surface-2);
+  color: var(--sv-fg);
+  font: inherit;
+  font-size: var(--sv-fs-body);
+  text-align: left;
+  outline: none;
+}
+
+.row:focus {
+  background: var(--sv-focus-bg);
+  color: var(--sv-focus-fg);
+}
+
+.row .value {
+  font-weight: 700;
+  opacity: 0.9;
+}
+
+.row .sub {
+  display: block;
+  font-size: calc(var(--sv-u) * 0.75);
+  opacity: 0.65;
+}
+
+.section-title {
+  margin: calc(var(--sv-u) * 1.2) 0 calc(var(--sv-u) * 0.6);
+  font-size: calc(var(--sv-u) * 0.9);
+  color: var(--sv-fg-dim);
+}
+
+.note {
+  margin: 0 0 calc(var(--sv-u) * 1);
+  font-size: calc(var(--sv-u) * 0.85);
+  color: var(--sv-fg-dim);
+  line-height: 1.5;
+}
+
+/* ---- キー診断 ---- */
+.keybox {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(var(--sv-u) * 7);
+  margin-bottom: calc(var(--sv-u) * 1);
+  border-radius: var(--sv-radius-item);
+  background: var(--sv-surface);
+  font-size: calc(var(--sv-u) * 2.6);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.kv {
+  display: grid;
+  grid-template-columns: calc(var(--sv-u) * 7) 1fr;
+  gap: calc(var(--sv-u) * 0.3) calc(var(--sv-u) * 1);
+  margin: 0 0 calc(var(--sv-u) * 1);
+  font-size: calc(var(--sv-u) * 0.95);
+}
+
+.kv dt {
+  color: var(--sv-fg-dim);
+}
+
+.kv dd {
+  margin: 0;
+  font-weight: 700;
+  word-break: break-all;
+}
+
+.hist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: calc(var(--sv-u) * 0.8);
+  color: var(--sv-fg-dim);
+  line-height: 1.6;
+}
+
+.badge-un {
+  color: #ffb300;
+}
+
+/* ---- キー割り当ての入力待ちオーバーレイ ---- */
+.capture {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.82);
+  text-align: center;
+  font-size: calc(var(--sv-u) * 1.4);
+  line-height: 1.6;
+}
+
+.capture[data-on="true"] {
+  display: flex;
+}
+
+.capture small {
+  display: block;
+  font-size: calc(var(--sv-u) * 0.9);
+  color: var(--sv-fg-dim);
+}

@@ -1,0 +1,30 @@
+/*
+ * SofaView デザイントークン（youtube.com/tv の実測値を基準。1080p のとき --sv-u = 24px）。
+ * 単位 --sv-u（= 画面高さ ÷ 45）で表すと、解像度に追従する。TVer はズーム後の CSS 高さ(720px)で 16px になる。
+ */
+:root {
+  --sv-u: calc(100vh / 45);
+
+  --sv-bg: #0f0f0f;
+  --sv-bg-black: #000000;
+  --sv-fg: #ffffff;
+  --sv-fg-dim: rgba(255, 255, 255, 0.7);
+  --sv-surface: #373737;
+  --sv-surface-2: #212121;
+
+  --sv-focus-bg: #f1f1f1;
+  --sv-focus-fg: #0f0f0f;
+  --sv-focus-scale: 1.05;
+  --sv-focus-ring: calc(var(--sv-u) * 0.25);
+
+  --sv-radius-item: calc(var(--sv-u) * 0.75);
+  --sv-radius-hero: calc(var(--sv-u) * 2.25);
+  --sv-rail-w: calc(var(--sv-u) * 21.25);
+  --sv-rail-w-collapsed: calc(var(--sv-u) * 6.5);
+  --sv-safe: calc(var(--sv-u) * 4);
+
+  --sv-font: Roboto, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, system-ui, sans-serif;
+  --sv-fs-body: var(--sv-u);
+  --sv-fs-search: calc(var(--sv-u) * 1.5);
+  --sv-fs-title: calc(var(--sv-u) * 1.67);
+}

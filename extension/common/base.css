@@ -1,0 +1,27 @@
+/* SofaView 共通の土台: カーソル・スクロールバー・選択を TV 向けに無効化する。 */
+html.sv-tv,
+html.sv-hub,
+html.sv-yt {
+  color-scheme: dark;
+  scrollbar-width: none;
+}
+
+html.sv-tv *,
+html.sv-hub *,
+html.sv-yt * {
+  cursor: none !important;
+}
+
+html.sv-tv ::-webkit-scrollbar,
+html.sv-hub ::-webkit-scrollbar,
+html.sv-yt ::-webkit-scrollbar {
+  display: none;
+}
+
+html.sv-tv *,
+html.sv-hub * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-user-drag: none;
+  -webkit-tap-highlight-color: transparent;
+}

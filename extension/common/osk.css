@@ -1,0 +1,129 @@
+/*
+ * 画面上のキーボード（common/osk.js）。/tv と同じ配色・単位（--sv-u）。アニメーションなし（/tv にはない）。
+ * 開いている間だけ DOM にある（#sv-osk）。キーは button、フォーカス中は白地・黒文字（/tv のフォーカスと同じ）。
+ */
+#sv-osk {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  background: var(--sv-bg, #0f0f0f);
+  color: var(--sv-fg, #fff);
+  font-family: var(--sv-font);
+}
+
+#sv-osk .sv-osk-panel {
+  box-sizing: border-box;
+  width: calc(var(--sv-u) * 64);
+  padding-top: calc(var(--sv-u) * 2.5);
+}
+
+#sv-osk .sv-osk-title {
+  margin-bottom: calc(var(--sv-u) * 1);
+  color: var(--sv-fg-dim, rgba(255, 255, 255, 0.7));
+  font-size: calc(var(--sv-u) * 1.25);
+  font-weight: 700;
+}
+
+#sv-osk .sv-osk-field {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: calc(var(--sv-u) * 4);
+  margin-bottom: calc(var(--sv-u) * 1.5);
+  padding: 0 calc(var(--sv-u) * 0.5) 0 calc(var(--sv-u) * 1.5);
+  border-radius: calc(var(--sv-u) * 7.5);
+  background: var(--sv-surface, #373737);
+  font-size: calc(var(--sv-u) * 1.75);
+  font-weight: 700;
+}
+
+/* 左詰め。長くなったら、JS が末尾までスクロールする */
+#sv-osk .sv-osk-input {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: flex-start;
+  min-width: 0;
+  overflow: hidden;
+  white-space: pre;
+}
+
+#sv-osk .sv-osk-text {
+  flex: none;
+}
+
+#sv-osk .sv-osk-ph {
+  flex: none;
+  margin-left: calc(var(--sv-u) * 0.5);
+  color: var(--sv-fg-dim, rgba(255, 255, 255, 0.7));
+}
+
+#sv-osk .sv-osk-ph[hidden] {
+  display: none;
+}
+
+#sv-osk .sv-osk-caret {
+  flex: none;
+  width: calc(var(--sv-u) * 0.125);
+  height: calc(var(--sv-u) * 2.25);
+  margin-left: calc(var(--sv-u) * 0.125);
+  background: var(--sv-fg, #fff);
+}
+
+/* 入力欄の右端の検索アイコン（押しても検索できる。リモコンでは最上段のキーから ↑） */
+#sv-osk .sv-osk-field .sv-osk-icon {
+  flex: none;
+  width: calc(var(--sv-u) * 3);
+  height: calc(var(--sv-u) * 3);
+  margin-left: calc(var(--sv-u) * 0.5);
+  border-radius: 50%;
+  background: transparent;
+  font-size: calc(var(--sv-u) * 2);
+  line-height: 0;
+}
+
+#sv-osk .sv-osk-field .sv-osk-icon svg {
+  width: 1em;
+  height: 1em;
+}
+
+#sv-osk .sv-osk-grid {
+  display: grid;
+  grid-template-columns: repeat(var(--sv-osk-cols, 10), 1fr);
+  gap: calc(var(--sv-u) * 0.5);
+}
+
+#sv-osk[data-mode="num"] .sv-osk-panel {
+  width: calc(var(--sv-u) * 30);
+}
+
+#sv-osk .sv-osk-key {
+  box-sizing: border-box;
+  height: calc(var(--sv-u) * 4.25);
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: calc(var(--sv-u) * 0.75);
+  background: var(--sv-surface, #373737);
+  color: var(--sv-fg, #fff);
+  font-family: inherit;
+  font-size: calc(var(--sv-u) * 1.75);
+  font-weight: 500;
+  line-height: calc(var(--sv-u) * 4.25);
+  text-align: center;
+}
+
+#sv-osk .sv-osk-key[data-fn] {
+  background: var(--sv-surface-2, #212121);
+  font-size: calc(var(--sv-u) * 1.5);
+}
+
+#sv-osk .sv-osk-key:focus {
+  background: var(--sv-focus-bg, #f1f1f1);
+  color: var(--sv-focus-fg, #0f0f0f);
+  outline: none;
+}
