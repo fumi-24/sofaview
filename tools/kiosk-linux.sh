@@ -66,6 +66,12 @@ echo "拡張機能: $EXT_DIR" >&2
 echo "プロファイル: $PROFILE" >&2
 [[ -f "$EXT_DIR/manifest.json" ]] || { echo "manifest.json が見つかりません: $EXT_DIR" >&2; exit 1; }
 
+# SOFAVIEW_DEBUG=1: 動作確認用。このパソコンの中（127.0.0.1）からだけ、開いているページを見られる
+#   curl -s http://127.0.0.1:9222/json/list
+if [[ "${SOFAVIEW_DEBUG:-0}" == 1 ]]; then
+  EXTRA_ARGS+=(--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1)
+fi
+
 exec "$BROWSER" \
   "${EXTRA_ARGS[@]}" \
   --kiosk \
@@ -73,6 +79,6 @@ exec "$BROWSER" \
   --load-extension="$EXT_DIR" \
   --autoplay-policy=no-user-gesture-required \
   --noerrdialogs --disable-infobars --no-first-run --no-default-browser-check \
-  --disable-session-crashed-bubble --disable-features=Translate \
+  --disable-session-crashed-bubble --disable-features=Translate,DisableLoadExtensionCommandLineSwitch \
   --password-store=basic \
   "chrome-extension://${EXT_ID}/hub/index.html"
