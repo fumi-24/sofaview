@@ -65,6 +65,7 @@ npm run pack             # dist/sofaview-<version>.zip
 | [docs/SPEC.md](docs/SPEC.md) | 仕様書（目標・設計方針・キー割当・UI・サイト別仕様・テスト・リスク・決定事項）|
 | [docs/NOTES.md](docs/NOTES.md) | 調査メモ・決定ログ・実装ログ・落とし穴・実機チェックリスト・参考リンク |
 | [docs/OPERATIONS.md](docs/OPERATIONS.md) | 導入・キオスク起動・リモコン設定・トラブルシュート |
+| [PRIVACY.md](PRIVACY.md) | プライバシーポリシー（データを収集・送信しません）|
 | [CLAUDE.md](CLAUDE.md) | 開発者向けの構成・コマンド・規約 |
 
 ## 方針
