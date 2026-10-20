@@ -22,9 +22,11 @@ body {
   font: 14px/1.45 system-ui, "Noto Sans JP", "Hiragino Kaku Gothic ProN", Meiryo, sans-serif;
 }
 
+/* 小窓の幅は中身で決まる。ブラウザの初期の幅（狭い）に縮められて文字が縦に割れないよう、幅は固定にする */
+html,
 body {
-  width: 380px;
-  max-width: 100vw;
+  width: 460px;
+  min-width: 460px;
 }
 
 button {
@@ -104,9 +106,17 @@ select:focus-visible {
 
 .label {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
   min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* 選択肢のある項目は、ラベルの下にボタンを縦に並べる */
+.row.stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
 }
 
 .sub {
@@ -145,18 +155,20 @@ select:focus-visible {
 
 .seg {
   display: flex;
-  flex: none;
+  flex-direction: column;
+  gap: 2px;
   padding: 2px;
   border-radius: 8px;
   background: #3a3a3a;
 }
 
 .seg button {
-  padding: 3px 9px;
+  padding: 8px 12px;
   border: 0;
   border-radius: 6px;
   background: transparent;
-  font-size: 12px;
+  font-size: 13px;
+  text-align: left;
 }
 
 .seg button[aria-pressed="true"] {
@@ -166,7 +178,7 @@ select:focus-visible {
 }
 
 select {
-  flex: none;
+  width: 100%;
   padding: 4px 8px;
   border: 1px solid var(--line);
   border-radius: 6px;

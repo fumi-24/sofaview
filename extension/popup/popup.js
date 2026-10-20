@@ -85,7 +85,7 @@
         continue;
       }
       if (row.visible && !row.visible(settings)) continue;
-      const r = el('div', 'row');
+      const r = el('div', row.type === 'switch' ? 'row' : 'row stack');
       r.dataset.id = row.id;
       const label = el('div', 'label');
       label.appendChild(el('span', null, row.label));
