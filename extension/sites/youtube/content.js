@@ -58,6 +58,11 @@
     if (/^#\/watch/.test(location.hash)) SV.sendMessage({ type: 'sv:wake' });
   };
   window.addEventListener('hashchange', wake);
+  // 診断用: /tv が受け取った命令の名前を、キー診断ページに出す
+  window.addEventListener('message', (m) => {
+    if (m.source !== window || !m.data || m.data.svLoungeSeen !== 1 || !Array.isArray(m.data.names)) return;
+    SV.sendMessage({ type: 'sv:loungeSeen', names: m.data.names.slice(0, 10).map(String) });
+  });
 
   // スマホのリモコン（YouTube アプリの「テレビで見る」）。/tv が受け取った十字キー・決定・戻るを、前面の TVer・ハブへ渡す。
   // 受け取り役のタブは裏に置かれるので、ブラウザに休止・破棄されないようにする（効果は実機で確認）

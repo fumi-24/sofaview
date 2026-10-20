@@ -50,6 +50,7 @@
       rows.push(['裏で /tv を開く設定', r.setting ? 'オン' : 'オフ（オフのときは、/tv を自分で別のタブに開いておく）']);
       const yt = r.yt.length ? r.yt.map((t) => (t.active ? '前面' : '裏') + (t.discarded ? '・破棄された' : '') + '・' + t.status).join(' / ') : 'なし';
       rows.push(['YouTube /tv のタブ', yt + (r.yt.length > 1 ? '（2 つ以上あると、あとから開いたほうだけが受け取る）' : '')]);
+      rows.push(['/tv が受け取った命令', r.lounge && r.lounge.length ? r.lounge.map((l) => l.n + '（' + Math.max(0, Math.round((r.now - l.at) / 1000)) + ' 秒前）').join(' / ') : 'まだありません（スマホをつなぐと、つないだ・押した命令の名前が出ます）']);
       if (r.last) {
         const ago = Math.max(0, Math.round((r.now - r.last.at) / 1000));
         rows.push(['最後に受け取ったキー', r.last.name + '（' + ago + ' 秒前）']);

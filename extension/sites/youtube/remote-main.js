@@ -13,4 +13,34 @@
     },
     true,
   );
+
+  // 診断用: スマホから /tv に届いた命令の名前（dpadCommand など）だけを知らせる。内容は読まない
+  const send = XMLHttpRequest.prototype.send;
+  const open = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    this.__svLounge = /\/api\/lounge\/bc\/bind/.test(String(url));
+    return open.apply(this, arguments);
+  };
+  XMLHttpRequest.prototype.send = function () {
+    if (this.__svLounge) {
+      let seen = 0;
+      const scan = () => {
+        try {
+          const t = this.responseText || '';
+          if (t.length <= seen) return;
+          const fresh = t.slice(seen);
+          seen = t.length;
+          const names = [];
+          fresh.replace(/\[\d+,\["([A-Za-z]{3,})"/g, (_, n) => names.push(n));
+          if (names.length) window.postMessage({ svLoungeSeen: 1, names }, location.origin);
+        } catch (e) {
+          /* responseType が text でないとき */
+        }
+      };
+      this.addEventListener('progress', scan);
+      this.addEventListener('readystatechange', scan);
+      this.addEventListener('load', scan);
+    }
+    return send.apply(this, arguments);
+  };
 })();

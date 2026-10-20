@@ -128,16 +128,28 @@ async function forwardRemote(sender, name) {
   return { ok: true, sent };
 }
 
+/** 診断ページ用: /tv がスマホから受け取った命令の名前（新しい順に最大 8 件）。 */
+async function recordLounge(names) {
+  if (!Array.isArray(names)) return { ok: false };
+  const { svLounge = [] } = await chrome.storage.session.get('svLounge');
+  const now = Date.now();
+  const list = [...names.reverse().map((n) => ({ n: String(n).slice(0, 40), at: now })), ...svLounge].slice(0, 8);
+  await chrome.storage.session.set({ svLounge: list });
+  return { ok: true };
+}
+
 /** 診断ページ用: スマホのリモコンの状態。 */
 async function remoteStatus() {
   const s = await SV.settings.load();
   const tabs = await ytTabs();
   const { svRemoteLast } = await chrome.storage.session.get('svRemoteLast');
+  const { svLounge = [] } = await chrome.storage.session.get('svLounge');
   return {
     ok: true,
     setting: !!s.youtube.receiver,
     yt: tabs.map((t) => ({ active: !!t.active, discarded: !!t.discarded, status: t.status })),
     last: svRemoteLast || null,
+    lounge: svLounge,
     now: Date.now(),
   };
 }
@@ -160,6 +172,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:wake':
       p = wake(sender);
+      break;
+    case 'sv:loungeSeen':
+      p = recordLounge(msg.names);
       break;
     case 'sv:remoteStatus':
       p = remoteStatus();
