@@ -320,3 +320,11 @@ html.sv-hub body {
   font-size: calc(var(--sv-u) * 0.9);
   color: var(--sv-fg-dim);
 }
+
+/* 作者の表記（各ページの一番下） */
+.credit {
+  margin: calc(var(--sv-u) * 2) 0 calc(var(--sv-u) * 1);
+  color: var(--sv-fg-dim, rgba(255, 255, 255, 0.7));
+  font-size: calc(var(--sv-u) * 1);
+  text-align: center;
+}

@@ -222,3 +222,12 @@ select {
   margin-left: auto;
   color: var(--danger);
 }
+
+.credit {
+  margin: 0;
+  padding: 0 16px 12px;
+  background: #2a2a2a;
+  color: var(--fg-dim);
+  font-size: 12px;
+  text-align: center;
+}
