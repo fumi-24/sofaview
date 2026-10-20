@@ -53,6 +53,12 @@
     SV.goHub();
   });
 
+  // スマホから YouTube を送られると、/tv は再生画面（#/watch）になる。裏のタブなら前面に出す（background が前面かどうか見る）
+  const wake = () => {
+    if (/^#\/watch/.test(location.hash)) SV.sendMessage({ type: 'sv:wake' });
+  };
+  window.addEventListener('hashchange', wake);
+
   // スマホのリモコン（YouTube アプリの「テレビで見る」）。/tv が受け取った十字キー・決定・戻るを、前面の TVer・ハブへ渡す。
   // 受け取り役のタブは裏に置かれるので、ブラウザに休止・破棄されないようにする（効果は実機で確認）
   if (SV.remote && SV.hasChrome()) {

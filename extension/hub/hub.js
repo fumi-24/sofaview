@@ -73,6 +73,21 @@
     true,
   );
 
+  // 裏で /tv を開いておく設定のとき: ここで開いておき、YouTube タイルは裏の /tv を前面に出す（もう 1 つ開かない）
+  SV.sendMessage({ type: 'sv:ensureReceiver' });
+  document.addEventListener(
+    'click',
+    (e) => {
+      const tile = e.target.closest && e.target.closest('a[data-id="youtube"]');
+      if (!tile || e.defaultPrevented) return;
+      e.preventDefault();
+      SV.sendMessage({ type: 'sv:openYoutube' }).then((r) => {
+        if (!(r && r.ok)) location.href = tile.href;
+      });
+    },
+    true,
+  );
+
   if (SV.remote) SV.remote.listen(); // スマホのリモコン（YouTube /tv が受け取ったキー）
 
   // 時計（ハブのみ）

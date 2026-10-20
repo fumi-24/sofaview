@@ -10,6 +10,51 @@ importScripts('../common/sv.js', '../common/settings.js', '../common/zoom.js');
 const SV = self.SV;
 const HUB_URL = chrome.runtime.getURL(SV.HUB_PATH);
 
+const YT_TV = 'https://www.youtube.com/tv';
+const ytTabs = () => chrome.tabs.query({ url: YT_TV + '*' });
+const isYt = (t) => !!t && (t.url || t.pendingUrl || '').startsWith(YT_TV);
+
+/** タブを前面に出す（ウィンドウも）。 */
+async function activate(tab) {
+  await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+}
+
+/**
+ * スマホのリモコン用に、YouTube /tv を裏のタブで開いておく（設定 youtube.receiver）。
+ * /tv は 1 つだけが受け取り役になれる（あとから開いたものが受け取る）ので、/tv のタブは常に 1 つだけにする。
+ * 作った直後（url がまだ入る前）に重ねて作らないよう、作った時刻を覚えておく。
+ */
+async function ensureReceiver() {
+  const s = await SV.settings.load();
+  if (!s.youtube.receiver) return { ok: true, on: false };
+  const { svReceiverAt } = await chrome.storage.session.get('svReceiverAt');
+  if (svReceiverAt && Date.now() - svReceiverAt < 15000) return { ok: true, on: true, created: false };
+  if ((await ytTabs()).length) return { ok: true, on: true, created: false };
+  await chrome.storage.session.set({ svReceiverAt: Date.now() });
+  const tab = await chrome.tabs.create({ url: YT_TV, active: false });
+  await chrome.storage.session.set({ svReceiverTab: tab.id });
+  return { ok: true, on: true, created: true };
+}
+
+/** ハブの YouTube タイル: 裏の /tv があれば、それを前面に出す（もう 1 つ /tv を開かない）。 */
+async function openYoutube() {
+  const s = await SV.settings.load();
+  if (!s.youtube.receiver) return { ok: false };
+  const tabs = await ytTabs();
+  if (tabs[0]) await activate(tabs[0]);
+  else await chrome.tabs.create({ url: YT_TV, active: true });
+  return { ok: true };
+}
+
+/** スマホから YouTube を送られた（/tv が再生画面になった）とき、裏のタブなら前面に出す。 */
+async function wake(sender) {
+  const s = await SV.settings.load();
+  if (!s.youtube.receiver || !sender.tab || sender.tab.active) return { ok: true, woke: false };
+  await activate(sender.tab);
+  return { ok: true, woke: true };
+}
+
 async function goHub(sender) {
   let tabId = sender && sender.tab ? sender.tab.id : undefined;
   if (tabId == null) {
@@ -17,7 +62,21 @@ async function goHub(sender) {
     tabId = tabs[0] && tabs[0].id;
   }
   if (tabId == null) return { ok: false, error: 'no-tab' };
+  // 裏で /tv を開いておく設定のときは、/tv のタブは動かさずに、もう片方（ハブ・TVer）を前面に出す。/tv は再読み込みして、再生を止める
+  if (sender && isYt(sender.tab)) {
+    const s = await SV.settings.load();
+    if (s.youtube.receiver) {
+      const others = (await chrome.tabs.query({ windowId: sender.tab.windowId })).filter((t) => t.id !== sender.tab.id && !isYt(t));
+      others.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+      if (others[0]) {
+        await activate(others[0]);
+        chrome.tabs.reload(sender.tab.id).catch(() => {});
+        return { ok: true, receiver: true };
+      }
+    }
+  }
   await chrome.tabs.update(tabId, { url: HUB_URL });
+  ensureReceiver().catch(() => {});
   return { ok: true };
 }
 
@@ -77,6 +136,15 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     case 'sv:zoom':
       p = applyZoom(sender, msg);
       break;
+    case 'sv:ensureReceiver':
+      p = ensureReceiver();
+      break;
+    case 'sv:openYoutube':
+      p = openYoutube();
+      break;
+    case 'sv:wake':
+      p = wake(sender);
+      break;
     case 'sv:remoteKeep':
       p = sender.tab && sender.tab.id != null ? chrome.tabs.update(sender.tab.id, { autoDiscardable: false }).then(() => ({ ok: true })) : Promise.resolve({ ok: false });
       break;
@@ -94,7 +162,23 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 });
 
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[SV.settings.KEY]) syncRulesets().catch(() => {});
+  if (area === 'local' && changes[SV.settings.KEY]) {
+    syncRulesets().catch(() => {});
+    ensureReceiver().catch(() => {});
+  }
 });
-chrome.runtime.onInstalled.addListener(() => syncRulesets().catch(() => {}));
-chrome.runtime.onStartup.addListener(() => syncRulesets().catch(() => {}));
+chrome.runtime.onInstalled.addListener(() => {
+  syncRulesets().catch(() => {});
+  ensureReceiver().catch(() => {});
+});
+chrome.runtime.onStartup.addListener(() => {
+  syncRulesets().catch(() => {});
+  ensureReceiver().catch(() => {});
+});
+// 裏の /tv を閉じてしまっても、少しあとに開き直す
+chrome.tabs.onRemoved.addListener(async (tabId) => {
+  const { svReceiverTab } = await chrome.storage.session.get('svReceiverTab');
+  if (tabId !== svReceiverTab) return;
+  await chrome.storage.session.remove(['svReceiverTab', 'svReceiverAt']);
+  setTimeout(() => ensureReceiver().catch(() => {}), 3000);
+});

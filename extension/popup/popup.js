@@ -27,6 +27,7 @@
     { id: 'tver.hideAppCta', type: 'switch', label: '「アプリで視聴する」を隠す' },
     { group: 'YouTube' },
     { id: 'youtube.redirect', type: 'switch', label: '通常の URL を /tv へ転送', sub: 'watch?v=… と youtu.be のリンクも /tv で開きます' },
+    { id: 'youtube.receiver', type: 'switch', label: 'スマホのリモコン用に裏で開いておく', sub: 'スマホから YouTube を送ると、自動で前面に出ます' },
   ];
 
   const el = (tag, cls, text) => {

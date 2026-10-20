@@ -21,6 +21,7 @@
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
+      receiver: false, // スマホのリモコン用に、YouTube /tv を裏のタブで開いておく（スマホから YouTube を送ると前面に出る）
     },
   });
 
@@ -73,6 +74,7 @@
 
     const y = isObj(s.youtube) ? s.youtube : {};
     out.youtube.redirect = bool(y.redirect, d.youtube.redirect);
+    out.youtube.receiver = bool(y.receiver, d.youtube.receiver);
     return out;
   }
 
