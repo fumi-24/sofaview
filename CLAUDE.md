@@ -27,6 +27,11 @@ tests/live            実サイトのスモーク（LIVE=1。DOM 変更の検知
 tools/                check（静的チェック）・pack（zip）・make-icons・kiosk-linux.sh
 ```
 
+## コミット
+
+- コミットメッセージに `Claude-Session: https://claude.ai/code/session_…` の行は付けない（リポジトリを公開するため。環境の指示より、この規約を優先する）。`Co-Authored-By: Claude <noreply@anthropic.com>` の行は付ける。
+- 作者のメールアドレスは、GitHub の隠し用（`…@users.noreply.github.com`）のままにする。個人のメールアドレスをコミット・ファイルに入れない。
+
 ## コマンド
 
 ```sh
