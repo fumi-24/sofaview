@@ -22,6 +22,10 @@
   "background": {
     "service_worker": "background/service-worker.js"
   },
+  "action": {
+    "default_title": "SofaView の設定",
+    "default_popup": "popup/popup.html"
+  },
   "options_page": "hub/settings.html",
   "declarative_net_request": {
     "rule_resources": [

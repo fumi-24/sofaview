@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SofaView</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <header class="head">
+    <img class="logo" src="../icons/icon48.png" alt="" width="32" height="32">
+    <div class="name"><span class="title">SofaView</span><span class="ver" id="ver"></span></div>
+    <button type="button" class="icon-btn" id="open-all" title="すべての設定を開く" aria-label="すべての設定を開く">
+      <svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" d="M12 15.5a3.5 3.5 0 1 0 0-7 3.5 3.5 0 0 0 0 7Zm7.4-3.5-.1-1.2 2-1.5-2-3.4-2.3.8a7 7 0 0 0-1-.6L15.6 4h-3.9l-.4 2.1a7 7 0 0 0-1 .6l-2.3-.8-2 3.4 2 1.5a7 7 0 0 0 0 1.2l-2 1.5 2 3.4 2.3-.8c.3.2.6.4 1 .6l.4 2.1h3.9l.4-2.1c.4-.2.7-.4 1-.6l2.3.8 2-3.4-2-1.5Z"/></svg>
+    </button>
+  </header>
+
+  <main id="rows" class="rows" aria-live="polite"></main>
+
+  <footer class="foot">
+    <button type="button" class="link" id="open-hub">ハブを開く</button>
+    <button type="button" class="link" id="open-keys">キー割り当て</button>
+    <button type="button" class="link" id="open-diag">キー診断</button>
+    <button type="button" class="link danger" id="reset">設定を初期化</button>
+  </footer>
+
+  <script src="../common/sv.js"></script>
+  <script src="../common/settings.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

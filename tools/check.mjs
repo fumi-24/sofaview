@@ -18,6 +18,8 @@ for (const cs of manifest.content_scripts || []) for (const f of [...(cs.js || [
 refs.add(manifest.background.service_worker);
 if (manifest.options_page) refs.add(manifest.options_page);
 Object.values(manifest.icons || {}).forEach((f) => refs.add(f));
+if (manifest.action?.default_popup) refs.add(manifest.action.default_popup);
+if (manifest.options_page) refs.add(manifest.options_page);
 for (const r of manifest.declarative_net_request?.rule_resources || []) refs.add(r.path);
 for (const f of refs) if (!exists(f)) err(`manifest が参照するファイルがありません: ${f}`);
 

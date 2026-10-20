@@ -210,9 +210,9 @@
 
 | 種別 | コマンド | 結果 |
 |---|---|---|
-| 静的チェック | `npm run check` | 通過（JS 19、HTML 4、DNR ルール 4、権限 `declarativeNetRequest, storage`）|
+| 静的チェック | `npm run check` | 通過（JS 21、HTML 5、DNR ルール 4、権限 `declarativeNetRequest, storage`）|
 | 単体 | `npm run test:unit` | 111 件 通過（2026-10-19 時点）|
-| E2E | `npm run test:e2e` | 114 件 通過（2026-10-19 時点: hub 8、tver-nav 16、tver-spa 6、tver-osk 6、tver-live 6、tver-watch 29、tver-resilience 10、tver-zoom 4、tver-billboard 8、tver-billboard-bridge 5、tver-rows 3、tver-detail 5、pages 8）|
+| E2E | `npm run test:e2e` | 119 件 通過（2026-10-20 時点: hub 8、tver-nav 16、tver-spa 6、tver-osk 6、tver-live 6、popup 5、tver-watch 29、tver-resilience 10、tver-zoom 4、tver-billboard 8、tver-billboard-bridge 5、tver-rows 3、tver-detail 5、pages 8）|
 | ライブスモーク | `LIVE=1 npm run test:live` | 8 件 通過（YouTube /tv 起動・Home、TVer のホーム・さがす・カテゴリ・番組・エピソード・リアルタイム、実プレイヤー（再生 API だけ偽）での視聴画面）|
 | zip 化 | `npm run pack` | `dist/sofaview-0.1.0.zip` を生成 |
 
@@ -578,3 +578,4 @@ Web 検索で見つけた資料。**公式資料ではないもの（コミュ�
 | 2026-10-19 | ユーザーの要望「YouTube TV と完全に同じ UI に」「TVer の元の詳細表示を使って」に対応。YouTube /tv を実測（3.9）して、TVer の寸法・色・フォーカス（サムネイル外側のリング）・レール（104/340 で内容を押し出す・アニメーションなし）・上部バー（検索ピル・ロゴ）・行の位置規則（見出し 15% 固定・2 枚目に保つ・別の行は覚えているカードへ）を合わせた（SPEC 9.2・9.4c・9.8）。TVer 標準の詳細ポップアップをフォーカスで出す（Linux の UA 対策つき。SPEC 9.4b）。再現ページを実サイトのグリッドに。テスト追加（単体 3、E2E 8、ライブ 1）|
 | 2026-10-19 | 視聴画面を実機（キーボード操作）で確認: 見た目・操作ともに良好、**Esc も受け取れている**（全画面中の Keyboard Lock ✔）。終了後の案内の「閉じる」が、実サイトでは自動再生を止めるだけでなくプレイヤーを最初のポスターへ戻し全画面も終えることを実測して、再現ページ・テスト・文書を直した。スクラブ中に離れても再生しない・メニューを閉じたあとに 5 秒で隠れる・広告中に隠れる、を修正。画面上のキーボード（OSK。SPEC 7.6）を追加: 検索ピルからキーワード検索（実サイトで確認）、入力欄（アンケート）に入力、入力欄から十字キーで出られる |
 | 2026-10-19 | リアルタイム配信（/live/局）に対応（3.10b）: LiveController を調べ、視聴画面の CSS を両方に適用、LIVE バッジ、停止ボタンの誤操作を防ぐ（noPause）、チャンネルのページは OK・全画面で入ったときだけ視聴画面にし、戻るはページへ、タブ ↓・説明 ↑ でプレイヤーへ。再現ページ（liveHtml）と E2E 6 件を追加 |
+| 2026-10-20 | ツールバーのアイコンで設定の小窓（popup）を出すようにした（以前はアイコンに何もなく、設定はハブか拡張の「オプション」のページだった）。マウス用。TVer 公式の Android TV アプリの見た目を、公式の紹介画像から読んで記録（3.10c） |
