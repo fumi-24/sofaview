@@ -28,9 +28,18 @@ async function activate(tab) {
 async function ensureReceiver() {
   const s = await SV.settings.load();
   if (!s.youtube.receiver) return { ok: true, on: false };
+  const existing = await ytTabs();
+  if (existing.length > 1) {
+    // /tv が 2 つ以上あると、あとから開いたほうだけが受け取る。前面のものを残し、残りは閉じて、再読み込みして登録し直す
+    const keep = existing.find((t) => t.active) || existing[0];
+    await chrome.tabs.remove(existing.filter((t) => t.id !== keep.id).map((t) => t.id)).catch(() => {});
+    await chrome.tabs.reload(keep.id).catch(() => {});
+    await chrome.storage.session.set({ svReceiverTab: keep.id });
+    return { ok: true, on: true, created: false, deduped: true };
+  }
+  if (existing.length) return { ok: true, on: true, created: false };
   const { svReceiverAt } = await chrome.storage.session.get('svReceiverAt');
   if (svReceiverAt && Date.now() - svReceiverAt < 15000) return { ok: true, on: true, created: false };
-  if ((await ytTabs()).length) return { ok: true, on: true, created: false };
   await chrome.storage.session.set({ svReceiverAt: Date.now() });
   const tab = await chrome.tabs.create({ url: YT_TV, active: false });
   await chrome.storage.session.set({ svReceiverTab: tab.id });
@@ -209,6 +218,13 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.runtime.onStartup.addListener(() => {
   syncRulesets().catch(() => {});
   ensureReceiver().catch(() => {});
+});
+// どこかのタブが別のページへ移ったとき（/tv から出て受け取り役がいなくなった、/tv が 2 つになった）も、少しあとに整える
+let tidy = 0;
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (info.url === undefined) return;
+  clearTimeout(tidy);
+  tidy = setTimeout(() => ensureReceiver().catch(() => {}), 3000);
 });
 // 裏の /tv を閉じてしまっても、少しあとに開き直す
 chrome.tabs.onRemoved.addListener(async (tabId) => {

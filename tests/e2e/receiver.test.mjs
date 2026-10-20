@@ -25,8 +25,7 @@ test('裏で開く設定: オンにすると /tv が裏のタブで 1 つだけ�
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
   await until(async () => (await ytTabs()).length === 1, { message: '裏の /tv が開く' });
   assert.equal((await ytTabs())[0].active, false, '前面を奪わない');
-  await until(() => hub.locator('#remote-line').isVisible(), { timeout: 8000, message: 'ハブにスマホのリモコンの状態の一行が出る' });
-  assert.match(await hub.locator('#remote-line').innerText(), /スマホのリモコン.*\/tv: 裏/);
+  await until(async () => /スマホのリモコン.*\/tv: 裏/.test(await hub.locator('#remote-line').innerText()), { timeout: 8000, message: 'ハブにスマホのリモコンの状態の一行が出る' });
   const yt0 = env.ctx.pages().find((p) => p.url().startsWith('https://www.youtube.com/tv'));
   assert.deepEqual(await yt0.evaluate(() => [document.hidden, document.visibilityState]), [false, 'visible'], '/tv には、いつも見えている扱いにする（裏で接続を切らない）');
   await hub.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'sv:ensureReceiver' }, r)));
@@ -64,6 +63,27 @@ test('裏で開く設定: /tv から Home でハブ（残っているタブ）�
   await yt.evaluate(() => { location.hash = '#/watch?v=def'; });
   await until(async () => (await activeUrl()).startsWith('https://www.youtube.com/tv'), { message: '再生画面になったら前面に出る' });
   await hub.close().catch(() => {});
+});
+
+test('裏で開く設定: /tv が 2 つになったら 1 つに整える。/tv しか開いていないタブからハブへ戻っても、少しあとに裏の /tv が開き直される（受け取り役が消えない）', async () => {
+  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
+  await until(async () => (await ytTabs()).length === 1, { message: '裏の /tv が 1 つ' });
+  // 自分で /tv をもう 1 つ開いた
+  const dup = await env.ctx.newPage();
+  await dup.goto('https://www.youtube.com/tv');
+  await until(async () => (await ytTabs()).length === 1, { timeout: 12000, message: '1 つに整う' });
+  // ほかのタブを全部閉じて、/tv だけにする
+  for (const p of env.ctx.pages()) if (p !== dup && !p.isClosed()) await p.close().catch(() => {});
+  await until(async () => (await tabsOf()).length === 1, { message: 'タブは /tv だけ' });
+  await dup.bringToFront();
+  await until(() => dup.evaluate(() => document.documentElement.classList.contains('sv-yt')), { message: '拡張が読み込まれる' });
+  const cdp = await env.ctx.newCDPSession(dup);
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
+  await dup.waitForURL(env.hubUrl, { timeout: 8000 });
+  await until(async () => (await ytTabs()).length === 1, { timeout: 12000, message: '裏の /tv が開き直される' });
+  assert.equal((await ytTabs())[0].active, false);
+  await dup.close().catch(() => {});
 });
 
 test('裏で開く設定がオフ（既定）のときは、何も開かず、タイルは今までどおり同じタブで開く', async () => {

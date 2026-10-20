@@ -93,8 +93,13 @@
   async function showRemote() {
     const r = await SV.sendMessage({ type: 'sv:remoteStatus' });
     if (!remoteLine) return;
-    if (!r || !r.ok || !r.setting) {
-      remoteLine.hidden = true;
+    remoteLine.hidden = false;
+    if (!r || !r.ok) {
+      remoteLine.textContent = 'スマホのリモコン　状態を取得できません（拡張機能を再読み込みしてください）';
+      return;
+    }
+    if (!r.setting) {
+      remoteLine.textContent = 'スマホのリモコン　「裏で YouTube を開いておく」設定がオフです';
       return;
     }
     const age = (t) => Math.max(0, Math.round((r.now - t) / 1000)) + ' 秒前';
@@ -102,7 +107,6 @@
     const cmd = r.lounge && r.lounge[0] ? '最後の命令: ' + r.lounge[0].n + '（' + age(r.lounge[0].at) + '）' : '命令: まだなし';
     const key = r.last ? '／ キー: ' + r.last.name + '（' + age(r.last.at) + '）' : '';
     remoteLine.textContent = 'スマホのリモコン　' + tab + ' ／ ' + cmd + key;
-    remoteLine.hidden = false;
   }
   if (remoteLine) {
     showRemote();
