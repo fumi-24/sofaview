@@ -101,8 +101,13 @@ for _ in $(seq 1 60); do
 done
 [[ $ready == 1 ]] && echo "拡張機能の登録を確認しました" >&2 || echo "拡張機能の登録を確認できませんでした（そのまま開きます）" >&2
 
-# ホームを新しいタブで開く（キオスクでは、あとから開いたタブが前面になる）
+# ホームを新しいタブで開く
 curl -fsS -X PUT "http://127.0.0.1:$PORT/json/new?$START_URL" >/dev/null 2>&1 \
   || "$BROWSER" --user-data-dir="$PROFILE" "$START_URL" >/dev/null 2>&1 || true
+
+# 最初の空白のタブは閉じる（ホームだけが残る）
+sleep 1
+BLANK_ID="$(curl -fsS "http://127.0.0.1:$PORT/json/list" 2>/dev/null | tr -d '\n ' | grep -o '{[^{}]*"url":"about:blank"[^{}]*}' | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4 || true)"
+[[ -n "$BLANK_ID" ]] && curl -fsS "http://127.0.0.1:$PORT/json/close/$BLANK_ID" >/dev/null 2>&1 || true
 
 wait "$BPID"
