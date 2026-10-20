@@ -68,6 +68,7 @@ chromium --kiosk \
 ```
 
 - **Ubuntu の `chromium` は snap 版**です。snap 版は、ホームの「`.` で始まる隠しフォルダ」に書けず、設定（プロファイル）が保存されなかったり、拡張機能が毎回消えたりします。`tools/kiosk-linux.sh` は snap を見つけると、プロファイルを `~/snap/chromium/common/sofaview-profile` に置きます。コマンドで書くときも、`--user-data-dir` を隠しフォルダにしないでください。
+- **ssh でつないで実行すると、`tools/kiosk-linux.sh` は、テレビにつないだパソコンの画面（`DISPLAY=:0`）に出します**（そのままだと、つなぎ元のパソコンの画面に出てしまいます）。ssh を切っても動き続けるよう、裏で起動し、ログは `/tmp/sofaview-kiosk.log` に出ます。画面の番号は `SOFAVIEW_DISPLAY` で変えられます。
 - **すでに Chromium が動いていると、新しく起動できません**（動いているほうにページを開くだけで、`--load-extension` も `--kiosk` も無視されます。拡張機能が読み込まれず、`chrome-extension://…` が「ブロック」になります）。先に `pkill -f chromium` で終了してください（スクリプトは、動いていると止まります）。
 - `--autoplay-policy=no-user-gesture-required`：TVer の再生をキー操作の直後でなくても自動で始めるため。
 - 自動起動は `systemd --user` のサービスやデスクトップ環境の autostart を使います。マウスカーソルは各ページの CSS で隠しますが、OS 側のカーソルも消したい場合は `unclutter` 等を併用します。
