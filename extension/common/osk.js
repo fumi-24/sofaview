@@ -342,7 +342,9 @@
       panel.append(head, st.grid);
       rootEl.appendChild(panel);
       st.root = rootEl;
-      (doc.body || doc.documentElement).appendChild(rootEl);
+      // host: モーダルのダイアログ（Radix）の中。ダイアログはフォーカスを中に閉じ込め、外のキーへ移したフォーカスを入力欄に戻してしまう
+      const host = o.host && o.host.isConnected ? o.host : doc.body || doc.documentElement;
+      host.appendChild(rootEl);
       doc.documentElement.classList.add('sv-osk-open');
       build(firstPosOf(st.state.mode));
       paintText();
@@ -421,6 +423,8 @@
       if (textChanged) {
         paintText();
         if (st.o.onChange) st.o.onChange(st.state.text);
+        // 欄が満ちるとサイトが次の欄へフォーカスを移すことがある。キーボードのフォーカスを取り戻す
+        if (st && !st.root.contains(doc.activeElement)) focusPos(st.pos);
       }
       if (modeChanged) {
         // 切り替えキー（種類・大文字小文字）は、切り替え後も同じキーにフォーカスを残す

@@ -235,11 +235,10 @@ test('入力欄: 文字がある間の ← → は、これまでどおりキャ
   await until(() => page.evaluate(() => document.activeElement?.name === 'birthYear'));
   await until(() => oskOpen(page), { message: '自動でキーボードが開く' });
   await press(page, 'Escape', 200); // 物理キーボードで直接打つので、閉じる
-  await page.keyboard.type('1990');
+  await page.keyboard.type('199'); // 4 桁だとサイトが誕生月へフォーカスを移す
   await page.keyboard.press('ArrowLeft');
   assert.equal(await page.evaluate(() => document.activeElement?.name), 'birthYear', '文字の中の ← はキャレット');
-  assert.equal(await page.evaluate(() => document.activeElement.selectionStart), 3);
-  await page.keyboard.press('ArrowLeft');
+  assert.equal(await page.evaluate(() => document.activeElement.selectionStart), 2);
   await page.keyboard.press('ArrowLeft');
   await page.keyboard.press('ArrowRight');
   assert.equal(await page.evaluate(() => document.activeElement.selectionStart), 2);

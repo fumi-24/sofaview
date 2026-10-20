@@ -442,6 +442,15 @@ function runtime(O) {
         '<label for="q-p">郵便番号（必須）</label><input id="q-p" name="postCode" maxlength="7" placeholder="1050004">' +
         '</form><button type="button" aria-label="閉じる">閉じる</button><button type="submit" form="questionnaire-_r_l_">回答する</button></div>'; // 実サイトは、ボタンがフォームの外（モーダルの下の段）
       doc.body.appendChild(m);
+      const content = $('[role="dialog"]', m);
+      let lastIn = null;
+      // 実サイト（Radix のモーダル）: ダイアログの外へ移したフォーカスは、中の最後の要素へ戻される。誕生年は 4 桁で誕生月へ自動で移る
+      doc.addEventListener('focusin', (e) => {
+        if (!m.isConnected) return;
+        if (content.contains(e.target)) lastIn = e.target;
+        else if (lastIn) lastIn.focus();
+      });
+      $('[name=birthYear]', m).addEventListener('input', (e) => { if (e.target.value.length >= 4) $('[name=birthMonth]', m).focus(); });
       $('input', m).focus();
       m.addEventListener('click', (e) => {
         const r = e.target.closest('[role="radio"]');

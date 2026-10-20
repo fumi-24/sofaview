@@ -225,6 +225,7 @@
       ...spec,
       title: x.title || QUEST_TITLES[el.name] || spec.title,
       value: el.value,
+      host: el.closest('[role="dialog"]'),
       doneLabel: '完了',
       onChange: (text) => setInputValue(el, text),
       onDone: () => {
@@ -272,7 +273,7 @@
   }
 
   function watchQuestionnaire() {
-    const form = document.querySelector(T.SEL.questionnaire);
+    const form = document.querySelector(T.SEL.questionnaire) || (document.querySelector('input[name="birthYear"]') || {}).form || null;
     if (!form) {
       ctl.questForm = null;
       return;

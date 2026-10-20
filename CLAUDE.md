@@ -76,5 +76,5 @@ npm run pack                # dist/sofaview-<version>.zip
 - Playwright の `page.evaluate` はユーザー操作として扱われ、約 5 秒の窓ができる。「操作なしでは全画面にならない」は、その間 `evaluate` しないで確かめる。
 - 実プレイヤーの確認は、地域制限の再生 API（`playback.api.streaks.jp`）だけを偽の応答にして、実サイトの JS・Streaks SDK のまま再生させる（`tests/live/live.test.mjs` の `fakePlayback`）。偽装は検証用で拡張には入れない。
 - **リアルタイム配信（`/live/局`）の操作盤は `LiveController`**（VodController と同じ作り・クラス名だけ違う。再生が始まってから読み込まれる）。CSS は `:is([class*="VodController_x__"], [class*="LiveController_x__"])` で両方に当てる。チャンネルのページは開くだけで自動再生なので、**OK・全画面で入ったときだけ視聴画面**（`browseFirst`）で、戻るはページへ。ライブの再生ボタンは「停止」（押すと配信が終わる）なので `noPause`（SPEC 7.5、NOTES 3.10b）。
-- TVer の初回アンケートは、出たら自動で画面上のキーボードを開く（`content.js` の `watchQuestionnaire`）。実サイトは、欄に `inputmode` がなく（例が数字だけ）、ラジオは Radix（Enter で選べない → OK でクリック）、「回答する」はフォームの外にある（NOTES 3.10d）。
+- TVer の初回アンケートは、出たら自動で画面上のキーボードを開く（`content.js` の `watchQuestionnaire`）。実サイトは、欄に `inputmode` がなく（例が数字だけ）、ラジオは Radix（Enter で選べない → OK でクリック）、「回答する」はフォームの外にある。**モーダル（Radix）はフォーカスを中に閉じ込める**ので、画面上のキーボードはダイアログの中に置く（`host`）。誕生年は 4 桁でサイトが誕生月へフォーカスを移す（キーボードがフォーカスを取り戻す）（NOTES 3.10d）。
 - 実機（日本国内 IP・Widevine・リモコン）でしか確認できないことは docs/NOTES.md の実機チェックリストに集約している。

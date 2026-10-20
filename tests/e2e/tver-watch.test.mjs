@@ -744,6 +744,40 @@ test('アンケート（サイトのモーダル）が出ている間は、視�
   await page.close();
 });
 
+test('アンケート: 誕生年を入れるとサイトが誕生月へフォーカスを移し、モーダルは外へのフォーカスを戻す。それでも画面上のキーボードは矢印・OKで操作できる（リモコン）', async () => {
+  const page = await openEpisode('/episodes/quest');
+  await page.evaluate(() => localStorage.removeItem('fx-questionnaire')); // 回答済みでも、毎回アンケートを出す
+  await page.keyboard.press('Enter');
+  await until(() => page.evaluate(() => !!document.getElementById('sv-osk')), { message: '自動で画面上のキーボードが開く' });
+  const inOsk = () => page.evaluate(() => !!document.activeElement.closest('#sv-osk'));
+  const keyAt = () => page.evaluate(() => document.activeElement.textContent.trim());
+  await until(inOsk, { message: 'キーボードにフォーカス' });
+  // 数字キーを矢印と OK で打つ（リモコンと同じ）: 1 → 9 → 9 → 0
+  const goTo = async (label) => {
+    for (let i = 0; i < 20 && (await keyAt()) !== label; i++) {
+      const d = await page.evaluate((label) => {
+        const t = Array.from(document.querySelectorAll('#sv-osk .sv-osk-key')).find((k) => k.textContent.trim() === label).getBoundingClientRect();
+        const a = document.activeElement.getBoundingClientRect();
+        return { dx: t.left - a.left, dy: t.top - a.top };
+      }, label);
+      await page.keyboard.press(Math.abs(d.dy) > 8 ? (d.dy > 0 ? 'ArrowDown' : 'ArrowUp') : d.dx > 0 ? 'ArrowRight' : 'ArrowLeft');
+    }
+    assert.equal(await keyAt(), label);
+  };
+  for (const c of '1990') {
+    await goTo(c);
+    await page.keyboard.press('Enter');
+  }
+  assert.equal(await page.evaluate(() => document.querySelector('input[name="birthYear"]').value), '1990');
+  assert.equal(await inOsk(), true, 'サイトが誕生月へフォーカスを移しても、キーボードのフォーカスは戻らない');
+  await goTo('完了');
+  await page.keyboard.press('Enter');
+  await until(() => page.evaluate(() => /誕生月/.test(document.querySelector('#sv-osk .sv-osk-title')?.textContent || '')), { message: '次の欄（誕生月）のキーボード' });
+  assert.equal(await inOsk(), true);
+  assert.deepEqual(page.__errors, []);
+  await page.close();
+});
+
 test('自動再生で始まる場合（ユーザー操作なし）: 視聴画面にはなるが、全画面は最初のキー操作で入る（拒否されて例外にならない）', async () => {
   const page = await env.ctx.newPage();
   page.__errors = [];
