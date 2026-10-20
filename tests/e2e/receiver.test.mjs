@@ -65,7 +65,7 @@ test('裏で開く設定: /tv から Home でハブ（残っているタブ）�
   await hub.close().catch(() => {});
 });
 
-test('裏で開く設定: /tv が 2 つになったら 1 つに整える。/tv しか開いていないタブからハブへ戻っても、少しあとに裏の /tv が開き直される（受け取り役が消えない）', async () => {
+test('裏で開く設定: /tv が 2 つになったら 1 つに整える。/tv しか開いていなくても、ハブへ戻るときは /tv のタブを動かさず、ハブを新しいタブで開く（受け取り役が一瞬もなくならない）', async () => {
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
   await until(async () => (await ytTabs()).length === 1, { message: '裏の /tv が 1 つ' });
   // 自分で /tv をもう 1 つ開いた
@@ -77,13 +77,18 @@ test('裏で開く設定: /tv が 2 つになったら 1 つに整える。/tv �
   await until(async () => (await tabsOf()).length === 1, { message: 'タブは /tv だけ' });
   await dup.bringToFront();
   await until(() => dup.evaluate(() => document.documentElement.classList.contains('sv-yt')), { message: '拡張が読み込まれる' });
+  const ytId = (await ytTabs())[0].id;
   const cdp = await env.ctx.newCDPSession(dup);
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
-  await dup.waitForURL(env.hubUrl, { timeout: 8000 });
-  await until(async () => (await ytTabs()).length === 1, { timeout: 12000, message: '裏の /tv が開き直される' });
-  assert.equal((await ytTabs())[0].active, false);
-  await dup.close().catch(() => {});
+  // /tv のタブは動かさず、ハブが新しいタブで開く（/tv が一瞬もなくならない）
+  await until(async () => (await tabsOf()).length === 2 && (await tabsOf()).some((t) => t.active && !t.url.startsWith('https://www.youtube.com/tv')), { message: 'ハブが新しいタブで前面に出る' });
+  const yts = await ytTabs();
+  assert.equal(yts.length, 1);
+  assert.equal(yts[0].id, ytId, '/tv は同じタブのまま');
+  assert.equal(yts[0].active, false);
+  assert.equal(dup.url().startsWith('https://www.youtube.com/tv'), true, '/tv のページは遷移していない');
+  for (const p of env.ctx.pages()) await p.close().catch(() => {});
 });
 
 test('裏で開く設定がオフ（既定）のときは、何も開かず、タイルは今までどおり同じタブで開く', async () => {

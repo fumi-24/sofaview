@@ -77,12 +77,12 @@ async function goHub(sender) {
     if (s.youtube.receiver) {
       const others = (await chrome.tabs.query({ windowId: sender.tab.windowId })).filter((t) => t.id !== sender.tab.id && !isYt(t));
       others.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
-      if (others[0]) {
-        await activate(others[0]);
-        // 再読み込みはしない（スマホとの接続が切れる）。再生を止めて、ホームに戻すだけ
-        chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:ytReset' }, () => void chrome.runtime.lastError);
-        return { ok: true, receiver: true };
-      }
+      // /tv のタブは動かさない（遷移・再読み込みをすると、受け取り役がいなくなる）。ほかのタブがなければ、ハブを新しいタブで開く
+      if (others[0]) await activate(others[0]);
+      else await chrome.tabs.create({ url: HUB_URL, active: true, windowId: sender.tab.windowId });
+      // 再生を止めて、ホームの画面に戻すだけ
+      chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:ytReset' }, () => void chrome.runtime.lastError);
+      return { ok: true, receiver: true };
     }
   }
   await chrome.tabs.update(tabId, { url: HUB_URL });
