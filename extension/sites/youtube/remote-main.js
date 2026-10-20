@@ -14,6 +14,17 @@
     true,
   );
 
+  // 裏のタブになったとき、/tv が「画面が見えなくなった」と判断して、スマホとの接続を切ることがある。いつも見えている扱いにする
+  const fixed = { hidden: false, visibilityState: 'visible', webkitHidden: false, webkitVisibilityState: 'visible' };
+  for (const k of Object.keys(fixed)) {
+    try {
+      Object.defineProperty(Document.prototype, k, { configurable: true, get: () => fixed[k] });
+    } catch (e) {
+      /* 差し替えられない環境では何もしない */
+    }
+  }
+  document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);
+
   // 診断用: スマホから /tv に届いた命令の名前（dpadCommand など）だけを知らせる。内容は読まない
   const send = XMLHttpRequest.prototype.send;
   const open = XMLHttpRequest.prototype.open;

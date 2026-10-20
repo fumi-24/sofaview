@@ -25,6 +25,10 @@ test('裏で開く設定: オンにすると /tv が裏のタブで 1 つだけ�
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
   await until(async () => (await ytTabs()).length === 1, { message: '裏の /tv が開く' });
   assert.equal((await ytTabs())[0].active, false, '前面を奪わない');
+  await until(() => hub.locator('#remote-line').isVisible(), { timeout: 8000, message: 'ハブにスマホのリモコンの状態の一行が出る' });
+  assert.match(await hub.locator('#remote-line').innerText(), /スマホのリモコン.*\/tv: 裏/);
+  const yt0 = env.ctx.pages().find((p) => p.url().startsWith('https://www.youtube.com/tv'));
+  assert.deepEqual(await yt0.evaluate(() => [document.hidden, document.visibilityState]), [false, 'visible'], '/tv には、いつも見えている扱いにする（裏で接続を切らない）');
   await hub.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'sv:ensureReceiver' }, r)));
   await hub.waitForTimeout(500);
   assert.equal((await ytTabs()).length, 1, '何度頼んでも 1 つだけ');

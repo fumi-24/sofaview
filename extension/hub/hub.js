@@ -88,6 +88,27 @@
     true,
   );
 
+  // 裏で /tv を開いておく設定のとき、スマホのリモコンの状態を一行で出す（キー診断まで行かなくても分かる）
+  const remoteLine = document.getElementById('remote-line');
+  async function showRemote() {
+    const r = await SV.sendMessage({ type: 'sv:remoteStatus' });
+    if (!remoteLine) return;
+    if (!r || !r.ok || !r.setting) {
+      remoteLine.hidden = true;
+      return;
+    }
+    const age = (t) => Math.max(0, Math.round((r.now - t) / 1000)) + ' 秒前';
+    const tab = r.yt.length ? (r.yt[0].discarded ? '/tv: 破棄された' : '/tv: ' + (r.yt[0].active ? '前面' : '裏')) : '/tv: なし';
+    const cmd = r.lounge && r.lounge[0] ? '最後の命令: ' + r.lounge[0].n + '（' + age(r.lounge[0].at) + '）' : '命令: まだなし';
+    const key = r.last ? '／ キー: ' + r.last.name + '（' + age(r.last.at) + '）' : '';
+    remoteLine.textContent = 'スマホのリモコン　' + tab + ' ／ ' + cmd + key;
+    remoteLine.hidden = false;
+  }
+  if (remoteLine) {
+    showRemote();
+    setInterval(showRemote, 2000);
+  }
+
   if (SV.remote) SV.remote.listen(); // スマホのリモコン（YouTube /tv が受け取ったキー）
 
   // 時計（ハブのみ）
