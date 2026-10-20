@@ -434,10 +434,26 @@ function runtime(O) {
   function begin() {
     if (O.questionnaire && !localStorage.getItem('fx-questionnaire')) {
       const m = doc.createElement('div');
-      m.innerHTML = '<div class="Modal_overlay__zBMug"></div><div role="dialog" data-state="open" class="Modal_content__iSFyO" tabindex="-1"><form id="questionnaire-1"><label>誕生年 <input name="birthYear" inputmode="numeric"></label><button type="submit">回答する</button></form></div>';
+      // 実サイトのアンケート: 誕生年（4 桁・例 2000）・誕生月（2 桁・例 4）・性別（ラジオ 3 つ）・郵便番号（7 桁・例 1050004）。inputmode はない
+      m.innerHTML = '<div class="Modal_overlay__zBMug"></div><div role="dialog" data-state="open" class="Modal_content__iSFyO" tabindex="-1"><form id="questionnaire-_r_l_">' +
+        '<label for="q-y">誕生年（必須）</label><input id="q-y" name="birthYear" maxlength="4" placeholder="2000">' +
+        '<label for="q-m">誕生月（必須）</label><input id="q-m" name="birthMonth" maxlength="2" placeholder="4">' +
+        '<div role="radiogroup" aria-label="性別"><button type="button" role="radio" aria-checked="false" value="1">男性</button><button type="button" role="radio" aria-checked="false" value="2">女性</button><button type="button" role="radio" aria-checked="false" value="9">その他</button></div>' +
+        '<label for="q-p">郵便番号（必須）</label><input id="q-p" name="postCode" maxlength="7" placeholder="1050004">' +
+        '</form><button type="button" aria-label="閉じる">閉じる</button><button type="submit" form="questionnaire-_r_l_">回答する</button></div>'; // 実サイトは、ボタンがフォームの外（モーダルの下の段）
       doc.body.appendChild(m);
       $('input', m).focus();
-      $('form', m).addEventListener('submit', (e) => { e.preventDefault(); localStorage.setItem('fx-questionnaire', '1'); m.remove(); startPlayback(); });
+      m.addEventListener('click', (e) => {
+        const r = e.target.closest('[role="radio"]');
+        if (!r) return;
+        m.querySelectorAll('[role="radio"]').forEach((x) => x.setAttribute('aria-checked', String(x === r)));
+      });
+      $('form', m).addEventListener('submit', (e) => {
+        e.preventDefault();
+        const g = m.querySelector('[role="radio"][aria-checked="true"]');
+        log('questionnaire-submit', { values: { birthYear: $('[name=birthYear]', m).value, birthMonth: $('[name=birthMonth]', m).value, gender: g ? g.value : '', postCode: $('[name=postCode]', m).value } });
+        localStorage.setItem('fx-questionnaire', '1'); m.remove(); startPlayback();
+      });
       log('questionnaire');
       return;
     }

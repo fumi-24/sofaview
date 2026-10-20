@@ -45,6 +45,7 @@
       "css": ["common/tokens.css", "common/base.css", "sites/youtube/youtube.css"],
       "js": [
         "common/sv.js",
+        "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
         "sites/youtube/content.js"
@@ -62,6 +63,7 @@
       "css": ["common/tokens.css", "common/base.css", "common/osk.css", "sites/tver/tver.css", "sites/tver/watch.css"],
       "js": [
         "common/sv.js",
+        "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
         "common/zoom.js",

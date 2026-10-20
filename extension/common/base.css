@@ -6,9 +6,9 @@ html.sv-yt {
   scrollbar-width: none;
 }
 
-html.sv-tv *,
-html.sv-hub *,
-html.sv-yt * {
+/* マウスカーソル: 動かしていないときは隠す（common/cursor.js が html.sv-cursor-hidden を付け外しする。動かすと出て、3 秒で消える） */
+html.sv-cursor-hidden,
+html.sv-cursor-hidden * {
   cursor: none !important;
 }
 

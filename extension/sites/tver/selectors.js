@@ -30,6 +30,7 @@
     appCta: '#episode-app-link, [class*="WatchOnApp_"]',
     episodePage: '[data-episode-page="true"]',
     // ---- 視聴画面（プレイヤー）。動作に使うのは、TVer 自身が明示している属性と ARIA ラベルだけ（クラス名のハッシュ部分は見た目の CSS だけ）
+    questionnaire: 'form[id^="questionnaire-"]', // 初めて再生するときの必須アンケート（誕生年・誕生月・性別・郵便番号）
     searchInput: 'form input[name="keyword"], input[class*="SearchForm_keyword"]', // ヘッダーのキーワード検索（拡張のスキンでは隠れているが、DOM にはある）
     posterPlay: '#episode-play', // 再生前のサムネイルの再生ボタン（TVer が autoFocus する）
     watchHost: '[js-fullscreen-target]', // 全画面の対象（PlayerLayout_host）。TVer 自身の全画面ボタンがこれに requestFullscreen する

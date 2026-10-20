@@ -140,6 +140,11 @@ test('入力欄の判定: 数字だけの欄は数字キー。読み取り専用
   assert.equal(osk.inputSpec(el({ tag: 'DIV' })), null);
   assert.equal(osk.inputSpec(el({}, { maxLength: 7 })).maxLength, 7);
   assert.equal(osk.inputSpec(el({ placeholder: '郵便番号' })).title, '郵便番号');
+  // 例が数字だけの欄（TVer のアンケート: 誕生年 2000・誕生月 4・郵便番号 1050004）は数字キー。例は題名にしない
+  assert.equal(osk.inputSpec(el({ placeholder: '2000' }, { maxLength: 4 })).mode, 'num');
+  assert.deepEqual(osk.inputSpec(el({ placeholder: '1050004' }, { maxLength: 7 })).modes, ['num']);
+  assert.equal(osk.inputSpec(el({ placeholder: '2000' })).title, '文字入力');
+  assert.equal(osk.inputSpec(el({ placeholder: 'お名前' })).mode, 'hira');
   assert.equal(osk.inputSpec(el({ tag: 'TEXTAREA' })).mode, 'hira');
 });
 

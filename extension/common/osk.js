@@ -273,8 +273,10 @@
     const type = tag === 'TEXTAREA' ? 'text' : String(el.getAttribute('type') || 'text').toLowerCase();
     if (!TEXT_TYPES.includes(type)) return null;
     const im = String(el.getAttribute('inputmode') || '').toLowerCase();
-    const numeric = type === 'number' || type === 'tel' || im === 'numeric' || im === 'decimal' || im === 'tel' || /^\[0-9\]\*?$|^\\d\*?$/.test(String(el.getAttribute('pattern') || ''));
-    const label = el.getAttribute('aria-label') || el.getAttribute('placeholder') || (el.labels && el.labels[0] && el.labels[0].textContent) || '';
+    const ph = String(el.getAttribute('placeholder') || '');
+    // 数字だけの欄: type・inputmode・pattern、または、例が数字だけ（TVer のアンケートの「2000」「4」「1050004」）
+    const numeric = type === 'number' || type === 'tel' || im === 'numeric' || im === 'decimal' || im === 'tel' || /^\[0-9\]\*?$|^\\d\*?$/.test(String(el.getAttribute('pattern') || '')) || /^[0-9]+$/.test(ph);
+    const label = el.getAttribute('aria-label') || (el.labels && el.labels[0] && el.labels[0].textContent) || (/^[0-9]+$/.test(ph) ? '' : ph);
     return {
       mode: numeric ? 'num' : 'hira',
       modes: numeric ? ['num'] : ['hira', 'kata', 'abc'],
@@ -463,10 +465,16 @@
       SV.consume(e);
       const key = e.key;
       if (action === 'UP' || action === 'DOWN' || action === 'LEFT' || action === 'RIGHT') {
+        st.moved = true;
         focusPos(move(st.layout, st.pos, action.toLowerCase()));
         return true;
       }
       if (action === 'OK') {
+        // 物理キーボードで打ったあと、キーを動かさずに Enter ＝ 完了（開発・動作確認用。リモコンでは起きない）
+        if (key === 'Enter' && st.phys && !st.moved) {
+          finish(true);
+          return true;
+        }
         pressKey(st.layout.rows[st.pos.r][st.pos.i]);
         return true;
       }
@@ -482,7 +490,10 @@
       }
       if (!e.repeat || key.length === 1) {
         const t = key.length === 1 || chars(key).length === 1 ? typed(st.state, key, { maxLength: st.maxLength }) : null;
-        if (t != null) setState({ text: t, mode: st.state.mode, upper: st.state.upper });
+        if (t != null) {
+          st.phys = true;
+          setState({ text: t, mode: st.state.mode, upper: st.state.upper });
+        }
       }
       return true;
     }

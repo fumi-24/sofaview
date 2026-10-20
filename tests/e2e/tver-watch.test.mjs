@@ -732,9 +732,10 @@ test('アンケート（サイトのモーダル）が出ている間は、視�
   await page.keyboard.press('Enter');
   await until(() => page.evaluate(() => !!document.querySelector('[role="dialog"][data-state="open"] form')), { message: 'アンケート' });
   assert.equal(await page.evaluate(() => document.documentElement.classList.contains('sv-watch')), false);
-  await page.locator('input[name="birthYear"]').click();
+  await until(() => page.evaluate(() => !!document.getElementById('sv-osk')), { message: '自動で画面上のキーボードが開く' });
   await page.keyboard.type('1990');
   assert.equal(await page.evaluate(() => document.querySelector('input[name="birthYear"]').value), '1990', 'キー入力はモーダルへ');
+  await page.keyboard.press('Escape'); // キーボードを閉じる（入れた値は残る）
   await page.keyboard.press('ArrowLeft'); // モーダルの中の矢印は、視聴画面にも空間ナビにも奪われない
   await page.locator('button[type="submit"]').click();
   await until(() => page.evaluate(() => document.documentElement.classList.contains('sv-watch')), { message: '回答後に視聴画面' });

@@ -155,37 +155,71 @@ test('検索: 物理キーボード（開発用）でも入る。Backspace は 1
   await page.close();
 });
 
-test('入力欄（アンケート）: OK で数字キー。入れた数字はその場で欄に入る。Esc で閉じて欄に戻り、↓ で欄の外へ出られる', async () => {
+/** 初回のアンケートのページで、再生ボタンを押して、アンケートを出す。 */
+async function openQuestionnaire() {
   const page = await env.ctx.newPage();
   page.__errors = [];
   page.on('pageerror', (e) => page.__errors.push(e.message));
   await page.goto('https://tver.jp/episodes/quest');
   await tverReady(page);
   await until(() => page.evaluate(() => document.activeElement?.id === 'episode-play'));
+  await page.evaluate(() => localStorage.removeItem('fx-questionnaire')); // 回答済みでも、毎回アンケートを出す
   await page.keyboard.press('Enter');
-  await until(() => page.evaluate(() => document.activeElement?.name === 'birthYear'), { message: 'アンケートの欄にフォーカス' });
-  await press(page, 'Enter', 150); // OK: キーボードを開く（送信はしない）
-  assert.equal(await oskOpen(page), true);
-  assert.equal(await page.evaluate(() => document.getElementById('sv-osk').dataset.mode), 'num', '数字だけの欄は数字キー');
+  return page;
+}
+const oskTitle = (page) => page.evaluate(() => document.querySelector('#sv-osk .sv-osk-title')?.textContent);
+
+test('アンケート: 出たら自動でキーボードが開き、誕生年 → 誕生月 → 性別 → 郵便番号の順に入力して、最後に「回答する」へ（リモコンだけで回答できる）', async () => {
+  const page = await openQuestionnaire();
+  await until(() => oskOpen(page), { message: '自動でキーボードが開く' });
+  assert.equal(await oskTitle(page), '誕生年（西暦）');
+  assert.equal(await page.evaluate(() => document.getElementById('sv-osk').dataset.mode), 'num', '例が数字だけの欄は数字キー（inputmode がなくても）');
   assert.equal(await page.evaluate(() => !!document.querySelector('#sv-osk [data-fn="mode"]')), false, '種類の切り替えはない');
   for (const d of ['1', '9', '9', '5']) {
     await goKey(page, d);
     await press(page, 'Enter', 40);
   }
   assert.equal(await page.evaluate(() => document.querySelector('input[name="birthYear"]').value), '1995', '入れた数字はその場で欄に入る');
-  await goKey(page, '削除');
-  await press(page, 'Enter', 40);
-  await page.keyboard.type('0'); // 物理キーボード
-  assert.equal(await page.evaluate(() => document.querySelector('input[name="birthYear"]').value), '1990');
-  await page.keyboard.type('x'); // 数字欄に文字は入らない
-  assert.equal(await oskText(page), '1990');
+  await page.keyboard.type('7'); // 4 桁まで（欄の maxlength）
+  assert.equal(await oskText(page), '1995');
   await goKey(page, '完了');
-  await press(page, 'Enter', 150);
+  await press(page, 'Enter', 100);
+  await until(async () => (await oskTitle(page)) === '誕生月', { message: '次の欄（誕生月）のキーボードが自動で開く' });
+  await page.keyboard.type('4'); // 物理キーボード（開発用）
+  await page.keyboard.press('Enter'); // 打ったあとの Enter ＝ 完了
+  await until(async () => !(await oskOpen(page)), { message: '閉じる' });
+  await until(() => page.evaluate(() => document.activeElement?.getAttribute('role') === 'radio'), { message: '性別: 最初の選択肢にフォーカス（キーボードは開かない）' });
+  assert.equal(await oskOpen(page), false);
+  assert.equal(await page.evaluate(() => document.activeElement?.value), '1');
+  await press(page, 'ArrowRight', 150);
+  assert.equal(await page.evaluate(() => document.activeElement?.value), '2', '← → で選択肢を動かす');
+  await press(page, 'Enter', 100); // 選ぶ
+  await until(async () => (await oskTitle(page)) === '郵便番号（ハイフンなし）', { message: '選ぶと、次の欄（郵便番号）のキーボードが自動で開く' });
+  await page.keyboard.type('1050004');
+  await page.keyboard.press('Enter');
+  await until(async () => !(await oskOpen(page)), { message: '閉じる' });
+  await until(() => page.evaluate(() => document.activeElement?.textContent === '回答する'), { message: '最後は「回答する」にフォーカス' });
+  await page.keyboard.press('Enter');
+  await until(() => page.evaluate(() => window.__fx.log.some((l) => l.ev === 'questionnaire-submit')), { message: '回答が送られる' });
+  assert.deepEqual(await page.evaluate(() => window.__fx.log.find((l) => l.ev === 'questionnaire-submit').values), { birthYear: '1995', birthMonth: '4', gender: '2', postCode: '1050004' });
+  assert.deepEqual(page.__errors, []);
+  await page.close();
+});
+
+test('アンケート: 戻る（Esc）で自動の流れは止まる。欄で OK を押すと、またキーボードが開く。↓ で欄の外へ出られる', async () => {
+  const page = await openQuestionnaire();
+  await until(() => oskOpen(page), { message: '自動でキーボードが開く' });
+  await press(page, 'Escape', 200);
   assert.equal(await oskOpen(page), false);
   assert.equal(await page.evaluate(() => document.activeElement?.name), 'birthYear', '欄にフォーカスが戻る');
-  assert.equal(await page.evaluate(() => !!document.querySelector('[role="dialog"] form')), true, 'OK でアンケートを送信しない');
-  // 欄の外へ: ↓（単一行の欄は上下に動けるので、そのまま次の要素へ）
-  await press(page, 'ArrowDown', 200);
+  await page.waitForTimeout(900);
+  assert.equal(await oskOpen(page), false, '取り消したあとは、勝手に開き直さない');
+  assert.equal(await page.evaluate(() => !!document.querySelector('[role="dialog"] form')), true, 'アンケートは閉じない');
+  await press(page, 'Enter', 150); // OK: その欄のキーボードを開く（送信はしない）
+  assert.equal(await oskOpen(page), true);
+  assert.equal(await oskTitle(page), '誕生年（西暦）');
+  await press(page, 'Escape', 150);
+  await press(page, 'ArrowDown', 200); // 欄の外へ（単一行の欄は、↑ ↓ で出られる）
   assert.notEqual(await page.evaluate(() => document.activeElement?.name), 'birthYear', '↓ で欄から出られる');
   assert.equal(await page.evaluate(() => !!document.activeElement.closest('[role="dialog"]')), true, 'モーダルの中にとどまる');
   assert.deepEqual(page.__errors, []);
@@ -199,6 +233,8 @@ test('入力欄: 文字がある間の ← → は、これまでどおりキャ
   await until(() => page.evaluate(() => document.activeElement?.id === 'episode-play'));
   await page.keyboard.press('Enter');
   await until(() => page.evaluate(() => document.activeElement?.name === 'birthYear'));
+  await until(() => oskOpen(page), { message: '自動でキーボードが開く' });
+  await press(page, 'Escape', 200); // 物理キーボードで直接打つので、閉じる
   await page.keyboard.type('1990');
   await page.keyboard.press('ArrowLeft');
   assert.equal(await page.evaluate(() => document.activeElement?.name), 'birthYear', '文字の中の ← はキャレット');

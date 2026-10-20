@@ -255,6 +255,9 @@ async function fakePlayback(ctx) {
 async function answerQuestionnaire(page) {
   const dlg = page.locator('[role="dialog"]:has(form[id^="questionnaire-"])');
   if (!(await dlg.count())) return false;
+  // 拡張の画面上のキーボードが自動で開いている（アンケートの自動入力）。ここでは Playwright が直接入力するので閉じる
+  await page.locator('#sv-osk').waitFor({ state: 'attached', timeout: 3000 }).catch(() => {});
+  if (await page.locator('#sv-osk').count()) await page.keyboard.press('Escape');
   await dlg.locator('input[name="birthYear"]').fill('1990');
   await dlg.locator('input[name="birthMonth"]').fill('4');
   await dlg.locator('button[role="radio"][value="1"]').click();

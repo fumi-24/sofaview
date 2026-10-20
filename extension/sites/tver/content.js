@@ -21,6 +21,7 @@
     nav: null,
     watch: null,
     osk: null,
+    questForm: null, // 自動入力を始めたアンケートのフォーム
     routeKey: '',
     hadFocus: false,
     userMoved: false, // この遷移の後に十字キーなどで操作したか（初期フォーカスで操作を奪わないため）
@@ -125,6 +126,12 @@
       SV.consume(e);
       return;
     }
+    // ラジオボタン（Radix）は、Enter では選べない（Space とクリックだけ）。OK でクリックして選ぶ（アンケートの性別）
+    if (a && a.matches && a.matches('[role="radio"]')) {
+      SV.consume(e);
+      a.click();
+      return;
+    }
     if (!ctl.nav.current()) {
       SV.consume(e);
       ctl.nav.focusInitial(T.initialPrefer(currentType()));
@@ -186,16 +193,9 @@
     }
     if (!ctl.nav) return;
     if (action === 'OK') {
-      const spec = SV.osk.inputSpec(el);
-      if (!spec || e.repeat) return;
+      if (!SV.osk.inputSpec(el) || e.repeat) return;
       SV.consume(e);
-      ctl.osk.open({
-        ...spec,
-        value: el.value,
-        doneLabel: '完了',
-        onChange: (text) => setInputValue(el, text),
-        onDone: () => el.dispatchEvent(new Event('change', { bubbles: true })),
-      });
+      openOskFor(el);
       return;
     }
     if (!SV.keys.isDirection(action) || el.tagName === 'SELECT') return;
@@ -214,6 +214,72 @@
     SV.consume(e);
     ctl.userMoved = true;
     ctl.nav.move(DIR[action], { repeat: e.repeat });
+  }
+
+  /** 入力欄に、画面上のキーボードを開く。入れた文字はその場で欄に入る（React の input イベント）。 */
+  function openOskFor(el, extra) {
+    const spec = SV.osk.inputSpec(el);
+    if (!spec) return false;
+    const x = extra || {};
+    ctl.osk.open({
+      ...spec,
+      title: x.title || QUEST_TITLES[el.name] || spec.title,
+      value: el.value,
+      doneLabel: '完了',
+      onChange: (text) => setInputValue(el, text),
+      onDone: () => {
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        if (x.onDone) x.onDone();
+      },
+    });
+    return true;
+  }
+
+  // ---- 初回のアンケート（誕生年・誕生月・性別・郵便番号）: 出たら自動で画面上のキーボードを開き、順に入力する。
+  //  数字の欄は「完了」で次の欄へ（自動でキーボードが開く）。性別は、選ぶ（OK）と次の欄へ。最後は「回答する」にフォーカス。
+  //  戻る（取り消し）で自動の流れは止まる（あとは、欄で OK でキーボードを開ける）。
+  const QUEST_TITLES = { birthYear: '誕生年（西暦）', birthMonth: '誕生月', postCode: '郵便番号（ハイフンなし）' };
+
+  function questSteps(form) {
+    return Array.from(form.querySelectorAll('input:not([type="radio"]):not([type="checkbox"]):not([type="hidden"]), [role="radiogroup"]'));
+  }
+
+  function questStep(form, i) {
+    if (!form.isConnected || ctl.osk.isOpen()) return;
+    const steps = questSteps(form);
+    if (i >= steps.length) {
+      const box = form.closest('[role="dialog"]') || form; // 「回答する」は、フォームの外（モーダルの下の段）にある
+      const submit = box.querySelector('button[type="submit"]');
+      if (submit) submit.focus({ preventScroll: true });
+      return;
+    }
+    const step = steps[i];
+    if (step.getAttribute('role') === 'radiogroup') {
+      const radios = Array.from(step.querySelectorAll('[role="radio"]'));
+      if (radios.some((r) => r.getAttribute('aria-checked') === 'true')) return questStep(form, i + 1);
+      if (radios[0]) radios[0].focus({ preventScroll: true });
+      const onPick = (e) => {
+        if (!(e.target.closest && e.target.closest('[role="radio"]'))) return;
+        step.removeEventListener('click', onPick, true);
+        setTimeout(() => questStep(form, i + 1), 200);
+      };
+      step.addEventListener('click', onPick, true);
+      return;
+    }
+    if (step.value) return questStep(form, i + 1); // 入力済みはとばす
+    step.focus({ preventScroll: true });
+    openOskFor(step, { title: QUEST_TITLES[step.name], onDone: () => setTimeout(() => questStep(form, i + 1), 100) });
+  }
+
+  function watchQuestionnaire() {
+    const form = document.querySelector(T.SEL.questionnaire);
+    if (!form) {
+      ctl.questForm = null;
+      return;
+    }
+    if (form === ctl.questForm) return;
+    ctl.questForm = form;
+    setTimeout(() => questStep(form, 0), 400); // サイトが最初の欄にフォーカスを置くのを待つ
   }
 
   function runSearch(keyword) {
@@ -710,6 +776,7 @@
     // DOM が差し替わったとき: 視聴画面の開始・終了の検知、フォーカス喪失からの復帰
     const syncWatch = debounce(() => ctl.watch.sync(), 60);
     const onMutate = debounce(() => {
+      watchQuestionnaire();
       setupPage();
       if (!ctl.initialDone) {
         tryInitial();
