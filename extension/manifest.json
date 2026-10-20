@@ -42,7 +42,7 @@
     },
     {
       "matches": ["https://www.youtube.com/tv*"],
-      "js": ["sites/youtube/remote-main.js"],
+      "js": ["sites/youtube/remote-main.js", "sites/youtube/exit-main.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },

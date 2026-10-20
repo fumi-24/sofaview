@@ -79,4 +79,5 @@ npm run pack                # dist/sofaview-<version>.zip
 - **リアルタイム配信（`/live/局`）の操作盤は `LiveController`**（VodController と同じ作り・クラス名だけ違う。再生が始まってから読み込まれる）。CSS は `:is([class*="VodController_x__"], [class*="LiveController_x__"])` で両方に当てる。チャンネルのページは開くだけで自動再生なので、**OK・全画面で入ったときだけ視聴画面**（`browseFirst`）で、戻るはページへ。ライブの再生ボタンは「停止」（押すと配信が終わる）なので `noPause`（SPEC 7.5、NOTES 3.10b）。
 - TVer の初回アンケートは、出たら自動で画面上のキーボードを開く（`content.js` の `watchQuestionnaire`）。実サイトは、欄に `inputmode` がなく（例が数字だけ）、ラジオは Radix（Enter で選べない → OK でクリック）、「回答する」はフォームの外にある。**モーダル（Radix）はフォーカスを中に閉じ込める**ので、画面上のキーボードはダイアログの中に置く（`host`）。誕生年は 4 桁でサイトが誕生月へフォーカスを移す（キーボードがフォーカスを取り戻す）（NOTES 3.10d）。
 - **スマホのリモコンは YouTube /tv の仕組みを借りる**（SPEC 7.7、NOTES 3.12）。/tv が出す合成キーは `keyCode` をページ側で付けるので、読むのは MAIN world（`remote-main.js`）。合成イベントは `shouldIgnore` に弾かれるので、リモコンが作ったものだけ `SV.keys.allowSynthetic` で通す。ハブのタブは `tabs` 権限がないと `url` が `null`。
+- **YouTube /tv は、トップ画面の「戻る」で `window.close()` を呼ぶ**。キオスクでタブが 1 つだとブラウザごと終了するので、`exit-main.js`（MAIN world）で差し替えてハブへ戻す（NOTES 3.13）。
 - 実機（日本国内 IP・Widevine・リモコン）でしか確認できないことは docs/NOTES.md の実機チェックリストに集約している。

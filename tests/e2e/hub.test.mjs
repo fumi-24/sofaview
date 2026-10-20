@@ -128,6 +128,19 @@ test('YouTube: 戻るキー長押しでハブへ（設定で有効にした場�
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.remove('sv.settings', r)));
 });
 
+test('YouTube: /tv が「戻る」（Esc）で window.close() を呼んでも、ブラウザを閉じずにハブへ戻る（キオスクで Esc を押すと落ちていた）', async () => {
+  const page = await env.ctx.newPage();
+  // 実際の /tv は、トップ画面で Esc を押すと window.close() を呼ぶ
+  await page.route('https://www.youtube.com/tv**', (route) =>
+    route.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>yt</title><body><script>addEventListener("keydown",(e)=>{ if(e.key==="Escape") window.close(); });</script></body>' }),
+  );
+  await page.goto('https://www.youtube.com/tv');
+  await until(() => page.evaluate(() => document.documentElement.classList.contains('sv-yt')), { message: 'YouTube の拡張が読み込まれる' });
+  await page.keyboard.press('Escape');
+  await page.waitForURL(env.hubUrl, { timeout: 8000 });
+  await page.close();
+});
+
 test('YouTube: 通常 URL の転送は既定ではオフ。設定でオンにすると /tv へ転送される', async () => {
   const enabled = () => env.sw.evaluate(() => chrome.declarativeNetRequest.getEnabledRulesets());
   const rulesets = await enabled();
