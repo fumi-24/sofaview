@@ -58,6 +58,14 @@
     if (/^#\/watch/.test(location.hash)) SV.sendMessage({ type: 'sv:wake' });
   };
   window.addEventListener('hashchange', wake);
+  // ハブへ戻るとき（裏で /tv を開いておく設定）: /tv のタブは動かさない。再生を止めて、ホームの画面に戻す（再読み込みはスマホとの接続が切れる）
+  if (SV.hasChrome()) {
+    chrome.runtime.onMessage.addListener((msg) => {
+      if (!msg || msg.type !== 'sv:ytReset') return;
+      document.querySelectorAll('video').forEach((v) => v.pause());
+      if (/^#\/watch/.test(location.hash)) location.hash = '#/';
+    });
+  }
   // 診断用: /tv が受け取った命令の名前を、キー診断ページに出す
   window.addEventListener('message', (m) => {
     if (m.source !== window || !m.data || m.data.svLoungeSeen !== 1 || !Array.isArray(m.data.names)) return;

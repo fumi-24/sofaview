@@ -62,7 +62,7 @@ async function goHub(sender) {
     tabId = tabs[0] && tabs[0].id;
   }
   if (tabId == null) return { ok: false, error: 'no-tab' };
-  // 裏で /tv を開いておく設定のときは、/tv のタブは動かさずに、もう片方（ハブ・TVer）を前面に出す。/tv は再読み込みして、再生を止める
+  // 裏で /tv を開いておく設定のときは、/tv のタブは動かさずに、もう片方（ハブ・TVer）を前面に出す。/tv は再生を止めてホームに戻す
   if (sender && isYt(sender.tab)) {
     const s = await SV.settings.load();
     if (s.youtube.receiver) {
@@ -70,7 +70,8 @@ async function goHub(sender) {
       others.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
       if (others[0]) {
         await activate(others[0]);
-        chrome.tabs.reload(sender.tab.id).catch(() => {});
+        // 再読み込みはしない（スマホとの接続が切れる）。再生を止めて、ホームに戻すだけ
+        chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:ytReset' }, () => void chrome.runtime.lastError);
         return { ok: true, receiver: true };
       }
     }

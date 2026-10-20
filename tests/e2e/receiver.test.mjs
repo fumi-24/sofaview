@@ -46,17 +46,18 @@ test('裏で開く設定: /tv から Home でハブ（残っているタブ）�
   assert.ok(yt, '裏の /tv がある');
   await yt.bringToFront();
   assert.ok((await activeUrl()).startsWith('https://www.youtube.com/tv'));
+  await yt.evaluate(() => { window.__marker = 1; location.hash = '#/watch?v=abc'; }); // 再生画面（スマホから送られた状態）
   const cdp = await env.ctx.newCDPSession(yt);
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
   await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'BrowserHome', code: 'BrowserHome', windowsVirtualKeyCode: 172 });
   await until(async () => (await activeUrl()).startsWith('chrome-extension://') || (await activeUrl()) === '', { message: 'ハブが前面に出る' });
   assert.equal((await ytTabs()).length, 1, '/tv のタブは残る（受け取りが切れない）');
 
-  await yt.waitForLoadState('domcontentloaded'); // 再生を止めるために再読み込みされる
-  await until(() => yt.evaluate(() => document.documentElement.classList.contains('sv-yt')).catch(() => false), { message: '再読み込み後' });
+  // 再読み込みはしない（スマホとの接続が切れる）。再生画面だけホームに戻る
+  await until(async () => (await yt.evaluate(() => location.hash)) === '#/', { message: '再生画面からホームに戻る' });
+  assert.equal(await yt.evaluate(() => window.__marker), 1, '/tv のページは再読み込みされない');
   // スマホから YouTube を送られた（/tv が再生画面になった）
-  await yt.waitForTimeout(500);
-  await yt.evaluate(() => { location.hash = '#/watch?v=abc'; });
+  await yt.evaluate(() => { location.hash = '#/watch?v=def'; });
   await until(async () => (await activeUrl()).startsWith('https://www.youtube.com/tv'), { message: '再生画面になったら前面に出る' });
   await hub.close().catch(() => {});
 });

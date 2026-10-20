@@ -480,8 +480,8 @@ PR #1 の CI（GitHub Actions）で、同じコミットの 2 つの実行のう
 
 - **実測 1（受け取り役は 1 つだけ）**：/tv を 2 つ開いて、スマホの代わりに dpadCommand を送ると、**あとから開いたほうだけ**が受け取る。あとから開いたほうを閉じても、先のほうは受け取らない（再登録しない）。→ /tv のタブは常に 1 つだけにして、動かさない。ハブから YouTube へは「前面に出す」、戻るときは「ハブを前面に出す」。
 - **実測 2（キャスト）**：`setPlaylist`（videoId）を送ると、/tv は自分で `#/watch?v=…` に遷移して再生を始める（裏のタブでも）。→ `hashchange` が `#/watch` になったら、background が（そのタブが前面でなければ）前面に出す。
-- **実装**：設定 `youtube.receiver`（既定オフ）。background の `ensureReceiver`（起動時・インストール時・設定変更時・ハブを開いたとき・閉じられて 3 秒後）、`openYoutube`（ハブのタイル）、`wake`、`goHub`（/tv のタブからのときは、ほかのタブを前面に出して /tv を再読み込み）。重ねて作らないよう、作った時刻と tab id を `chrome.storage.session` に持つ。
-- **未確認（実機）**：本物のスマホのアプリでキャストしたとき自動で前面に出るか、再読み込みでスマホ側の接続が切れないか、起動時に `onStartup` が確実に呼ばれるか（ハブを開いたときの `sv:ensureReceiver` が保険）。
+- **実装**：設定 `youtube.receiver`（既定オフ）。background の `ensureReceiver`（起動時・インストール時・設定変更時・ハブを開いたとき・閉じられて 3 秒後）、`openYoutube`（ハブのタイル）、`wake`、`goHub`（/tv のタブからのときは、ほかのタブを前面に出して、/tv は再生を止めて `#/` に戻す。**再読み込みするとスマホとの接続が切れる**ので、しない。実測：pause + `location.hash='#/'` なら、そのあとの dpadCommand も届く）。重ねて作らないよう、作った時刻と tab id を `chrome.storage.session` に持つ。
+- **未確認（実機）**：本物のスマホのアプリでキャストしたとき自動で前面に出るか、起動時に `onStartup` が確実に呼ばれるか（ハブを開いたときの `sv:ensureReceiver` が保険）。
 
 ## 4. 実機チェックリスト
 
