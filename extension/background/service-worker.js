@@ -114,7 +114,7 @@ async function syncRulesets(s) {
 
 /** スマホのリモコンのキーを、前面の TVer・ハブのタブへ渡す（YouTube /tv のタブが受け取ったもの）。 */
 async function forwardRemote(sender, name) {
-  const tabs = await chrome.tabs.query({ active: true, windowType: 'normal' });
+  const tabs = await chrome.tabs.query({ active: true });
   let sent = 0;
   for (const t of tabs) {
     if (t.id == null || (sender.tab && t.id === sender.tab.id)) continue;
@@ -123,7 +123,23 @@ async function forwardRemote(sender, name) {
     chrome.tabs.sendMessage(t.id, { type: 'sv:remoteKey', name }, () => void chrome.runtime.lastError);
     sent++;
   }
+  // 診断ページ用の記録（届いたか・どこへ渡したか）
+  await chrome.storage.session.set({ svRemoteLast: { at: Date.now(), name, sent, fromActive: !!(sender.tab && sender.tab.active) } });
   return { ok: true, sent };
+}
+
+/** 診断ページ用: スマホのリモコンの状態。 */
+async function remoteStatus() {
+  const s = await SV.settings.load();
+  const tabs = await ytTabs();
+  const { svRemoteLast } = await chrome.storage.session.get('svRemoteLast');
+  return {
+    ok: true,
+    setting: !!s.youtube.receiver,
+    yt: tabs.map((t) => ({ active: !!t.active, discarded: !!t.discarded, status: t.status })),
+    last: svRemoteLast || null,
+    now: Date.now(),
+  };
 }
 
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
@@ -144,6 +160,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:wake':
       p = wake(sender);
+      break;
+    case 'sv:remoteStatus':
+      p = remoteStatus();
       break;
     case 'sv:remoteKeep':
       p = sender.tab && sender.tab.id != null ? chrome.tabs.update(sender.tab.id, { autoDiscardable: false }).then(() => ({ ok: true })) : Promise.resolve({ ok: false });

@@ -95,3 +95,18 @@ test('スマホのリモコン: ハブも動かせる', async () => {
   await hub.close();
   await yt.close();
 });
+
+test('キー診断ページ: スマホのリモコンの状態（設定・/tv のタブ・最後に受け取ったキー・渡した数）が見える', async () => {
+  const diag = await env.ctx.newPage();
+  await diag.goto(env.hubUrl.replace('index.html', 'diag.html'));
+  const yt = await env.ctx.newPage();
+  await yt.goto('https://www.youtube.com/tv');
+  await until(() => yt.evaluate(() => document.documentElement.classList.contains('sv-yt')), { message: 'YouTube の拡張が読み込まれる' });
+  await diag.bringToFront();
+  const text = () => diag.locator('#remote-status').innerText();
+  await until(async () => /YouTube \/tv のタブ\s*裏/.test(await text()), { message: '裏の /tv のタブが見える' });
+  await phoneKey(yt, DOWN);
+  await until(async () => /最後に受け取ったキー\s*DOWN/.test(await text()), { message: '受け取ったキーが見える' });
+  await diag.close();
+  await yt.close();
+});
