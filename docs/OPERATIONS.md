@@ -69,7 +69,8 @@ chromium --kiosk \
 
 - **Ubuntu の `chromium` は snap 版**です。snap 版は、ホームの「`.` で始まる隠しフォルダ」に書けず、設定（プロファイル）が保存されなかったり、拡張機能が毎回消えたりします。`tools/kiosk-linux.sh` は snap を見つけると、プロファイルを `~/snap/chromium/common/sofaview-profile` に置きます。コマンドで書くときも、`--user-data-dir` を隠しフォルダにしないでください。
 - **ssh でつないで実行すると、`tools/kiosk-linux.sh` は、テレビにつないだパソコンの画面（`DISPLAY=:0`）に出します**（そのままだと、つなぎ元のパソコンの画面に出てしまいます）。ssh を切っても動き続けるよう、裏で起動し、ログは `/tmp/sofaview-kiosk.log` に出ます。画面の番号は `SOFAVIEW_DISPLAY` で変えられます。
-- **新しい Chromium（137 以降）は、`--load-extension` を既定で無効にしている**ことがあります。スクリプトは `--disable-features=DisableLoadExtensionCommandLineSwitch` を付けて、有効に戻します。それでも読み込まれないときは、`SOFAVIEW_DEBUG=1 bash tools/kiosk-linux.sh` で起動して、別の ssh から `curl -s http://127.0.0.1:9222/json/list` を実行すると、開いているページの URL とタイトルが見られます（エラーページかどうかが分かります）。
+- **起動は「空白で起動 → 拡張機能の登録を確認 → ホームを開く」の順です**。`--load-extension` の拡張機能は起動の少しあとに登録されるため、最初からホームを開くと `ERR_BLOCKED_BY_CLIENT` になることがありました（F5 で直る）。スクリプトは 127.0.0.1 のデバッグ用ポート（既定 9222、`SOFAVIEW_PORT` で変更。外からはつながらない）で登録を確かめてから開きます。
+- **新しい Chromium（137 以降）は、`--load-extension` を既定で無効にしている**ことがあります。スクリプトは `--disable-features=DisableLoadExtensionCommandLineSwitch` を付けて、有効に戻します。それでも読み込まれないときは、`bash tools/kiosk-linux.sh` で起動して、別の ssh から `curl -s http://127.0.0.1:9222/json/list` を実行すると、開いているページの URL とタイトルが見られます（エラーページかどうかが分かります）。
 - **すでに Chromium が動いていると、新しく起動できません**（動いているほうにページを開くだけで、`--load-extension` も `--kiosk` も無視されます。拡張機能が読み込まれず、`chrome-extension://…` が「ブロック」になります）。先に `pkill -f chromium` で終了してください（スクリプトは、動いていると止まります）。
 - `--autoplay-policy=no-user-gesture-required`：TVer の再生をキー操作の直後でなくても自動で始めるため。
 - 自動起動は `systemd --user` のサービスやデスクトップ環境の autostart を使います。マウスカーソルは各ページの CSS で隠しますが、OS 側のカーソルも消したい場合は `unclutter` 等を併用します。
