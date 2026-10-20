@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# SofaView: Linux でキオスク起動する例（未検証。環境に合わせて調整してください）。
+# SofaView: Linux でキオスク起動する例（snap 版の Chromium に対応。環境に合わせて調整してください）。
 #
 #   使い方: tools/kiosk-linux.sh [chromium のコマンド名 または パス]
 #
@@ -11,8 +11,35 @@ set -euo pipefail
 BROWSER="${1:-chromium}"
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 EXT_DIR="${SOFAVIEW_EXT_DIR:-$HERE/extension}"
-PROFILE="${SOFAVIEW_PROFILE:-$HOME/.sofaview-profile}"
 EXT_ID="flbnighbcpldceamhclmdncdecjcefpc"
+
+# snap 版の Chromium（Ubuntu の `chromium` は snap）は、ホームの「.」で始まる隠しフォルダに書けない。
+# 書けないと、設定（プロファイル）が保存されず、読み込んだ拡張機能も毎回消える。snap のときは、snap が書ける場所に置く
+is_snap=0
+BIN="$(command -v "$BROWSER" 2>/dev/null || true)"
+if [[ -n "$BIN" && "$(readlink -f "$BIN")" == /snap/* ]] || { command -v snap >/dev/null 2>&1 && snap list chromium >/dev/null 2>&1 && [[ "$BROWSER" == chromium ]]; }; then
+  is_snap=1
+fi
+if [[ $is_snap == 1 ]]; then
+  PROFILE="${SOFAVIEW_PROFILE:-$HOME/snap/chromium/common/sofaview-profile}"
+else
+  PROFILE="${SOFAVIEW_PROFILE:-$HOME/.sofaview-profile}"
+fi
+mkdir -p "$PROFILE"
+
+# すでに同じプロファイルで Chromium が動いていると、新しく起動せず、動いているほうにページを開くだけになる
+# （--load-extension も --kiosk も無視され、拡張機能が読み込まれない）。先に終了させる
+if pgrep -f -- "--user-data-dir=$PROFILE" >/dev/null 2>&1 || { [[ $is_snap == 1 ]] && pgrep -x chromium >/dev/null 2>&1; }; then
+  if [[ "${SOFAVIEW_FORCE:-0}" != 1 ]]; then
+    echo "Chromium がすでに動いています。先に終了してください（例: pkill -f chromium）。そのまま続けるときは SOFAVIEW_FORCE=1 を付けて実行します。" >&2
+    exit 1
+  fi
+fi
+
+echo "ブラウザ: $BROWSER（snap: $is_snap）" >&2
+echo "拡張機能: $EXT_DIR" >&2
+echo "プロファイル: $PROFILE" >&2
+[[ -f "$EXT_DIR/manifest.json" ]] || { echo "manifest.json が見つかりません: $EXT_DIR" >&2; exit 1; }
 
 exec "$BROWSER" \
   --kiosk \
