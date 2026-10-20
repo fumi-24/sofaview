@@ -45,6 +45,24 @@
     true,
   );
 
+  // スマホのリモコン（YouTube アプリの「テレビで見る」）。/tv が受け取った十字キー・決定・戻るを、前面の TVer・ハブへ渡す。
+  // 受け取り役のタブは裏に置かれるので、ブラウザに休止・破棄されないようにする（効果は実機で確認）
+  if (SV.remote && SV.hasChrome()) {
+    try {
+      navigator.locks.request('sv-remote-keepalive', () => new Promise(() => {}));
+      chrome.runtime.sendMessage({ type: 'sv:remoteKeep' }, () => void chrome.runtime.lastError);
+    } catch (e) {
+      /* 使えない環境では何もしない */
+    }
+    SV.remote.watchYoutube(window, (name) => {
+      try {
+        chrome.runtime.sendMessage({ type: 'sv:remote', name }, () => void chrome.runtime.lastError);
+      } catch (e) {
+        /* 拡張が更新された直後など */
+      }
+    });
+  }
+
   window.addEventListener(
     'keyup',
     (e) => {

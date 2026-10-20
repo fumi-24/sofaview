@@ -42,12 +42,19 @@
     },
     {
       "matches": ["https://www.youtube.com/tv*"],
+      "js": ["sites/youtube/remote-main.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://www.youtube.com/tv*"],
       "css": ["common/tokens.css", "common/base.css", "sites/youtube/youtube.css"],
       "js": [
         "common/sv.js",
         "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
+        "common/remote.js",
         "sites/youtube/content.js"
       ],
       "run_at": "document_start"
@@ -66,6 +73,7 @@
         "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
+        "common/remote.js",
         "common/zoom.js",
         "common/spatial-nav.js",
         "common/rows.js",

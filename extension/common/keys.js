@@ -129,10 +129,17 @@
     return !!el.isContentEditable;
   }
 
+  // スマホのリモコン（common/remote.js）が自分で作ったイベント。合成イベントだが、リモコンの操作として扱う
+  const fromRemote = new WeakSet();
+  function allowSynthetic(ev) {
+    fromRemote.add(ev);
+    return ev;
+  }
+
   /** リモコン以外のイベント（合成イベント・修飾キー併用）は無視する。 */
   function shouldIgnore(ev) {
     if (!ev) return true;
-    if (ev.isTrusted === false) return true;
+    if (ev.isTrusted === false && !fromRemote.has(ev)) return true;
     if (ev.ctrlKey || ev.altKey || ev.metaKey) return true;
     if (ev.isComposing) return true;
     return false;
@@ -213,6 +220,7 @@
     describe,
     isEditable,
     shouldIgnore,
+    allowSynthetic,
     RepeatGate,
     HoldDetector,
   };

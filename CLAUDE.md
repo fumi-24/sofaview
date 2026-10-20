@@ -13,6 +13,7 @@ extension/            拡張機能本体（ビルド不要。このディレク�
     spatial-nav.js    空間ナビゲーション（幾何ロジック + DOM 連携）
     rows.js           横スクロールの行（棚）の位置の規則（純粋な計算。/tv の実測）
     osk.js osk.css    画面上のキーボード（TVer 用。配列・移動・濁点の変換は DOM に触らない純粋な部分）
+    remote.js         スマホのリモコン（YouTube /tv が受けたキーを前面の TVer・ハブへ。YouTube 側は sites/youtube/remote-main.js）
     cursor.js         マウスカーソルの自動非表示（動かすと出て 3 秒で消える。html.sv-cursor-hidden を付け外し）
     watch-core.js     視聴画面の操作ルール（H/C/S の状態遷移・スクラブの幅・時刻の書式。DOM に触らない。/tv の実測）
     settings.js zoom.js sv.js tokens.css base.css
@@ -77,4 +78,5 @@ npm run pack                # dist/sofaview-<version>.zip
 - 実プレイヤーの確認は、地域制限の再生 API（`playback.api.streaks.jp`）だけを偽の応答にして、実サイトの JS・Streaks SDK のまま再生させる（`tests/live/live.test.mjs` の `fakePlayback`）。偽装は検証用で拡張には入れない。
 - **リアルタイム配信（`/live/局`）の操作盤は `LiveController`**（VodController と同じ作り・クラス名だけ違う。再生が始まってから読み込まれる）。CSS は `:is([class*="VodController_x__"], [class*="LiveController_x__"])` で両方に当てる。チャンネルのページは開くだけで自動再生なので、**OK・全画面で入ったときだけ視聴画面**（`browseFirst`）で、戻るはページへ。ライブの再生ボタンは「停止」（押すと配信が終わる）なので `noPause`（SPEC 7.5、NOTES 3.10b）。
 - TVer の初回アンケートは、出たら自動で画面上のキーボードを開く（`content.js` の `watchQuestionnaire`）。実サイトは、欄に `inputmode` がなく（例が数字だけ）、ラジオは Radix（Enter で選べない → OK でクリック）、「回答する」はフォームの外にある。**モーダル（Radix）はフォーカスを中に閉じ込める**ので、画面上のキーボードはダイアログの中に置く（`host`）。誕生年は 4 桁でサイトが誕生月へフォーカスを移す（キーボードがフォーカスを取り戻す）（NOTES 3.10d）。
+- **スマホのリモコンは YouTube /tv の仕組みを借りる**（SPEC 7.7、NOTES 3.12）。/tv が出す合成キーは `keyCode` をページ側で付けるので、読むのは MAIN world（`remote-main.js`）。合成イベントは `shouldIgnore` に弾かれるので、リモコンが作ったものだけ `SV.keys.allowSynthetic` で通す。ハブのタブは `tabs` 権限がないと `url` が `null`。
 - 実機（日本国内 IP・Widevine・リモコン）でしか確認できないことは docs/NOTES.md の実機チェックリストに集約している。

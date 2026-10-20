@@ -73,6 +73,8 @@
     true,
   );
 
+  if (SV.remote) SV.remote.listen(); // スマホのリモコン（YouTube /tv が受け取ったキー）
+
   // 時計（ハブのみ）
   const timeEl = document.getElementById('clock-time');
   const dateEl = document.getElementById('clock-date');
