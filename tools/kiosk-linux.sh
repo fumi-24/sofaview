@@ -72,13 +72,18 @@ if [[ "${SOFAVIEW_DEBUG:-0}" == 1 ]]; then
   EXTRA_ARGS+=(--remote-debugging-port=9222 --remote-debugging-address=127.0.0.1)
 fi
 
+# 動作確認用: SOFAVIEW_KIOSK=0 で、普通の窓で開く。SOFAVIEW_URL で、最初に開くページを変える（例: chrome://extensions）
+if [[ "${SOFAVIEW_KIOSK:-1}" != 0 ]]; then
+  EXTRA_ARGS+=(--kiosk)
+fi
+START_URL="${SOFAVIEW_URL:-chrome-extension://${EXT_ID}/hub/index.html}"
+
 exec "$BROWSER" \
   "${EXTRA_ARGS[@]}" \
-  --kiosk \
   --user-data-dir="$PROFILE" \
   --load-extension="$EXT_DIR" \
   --autoplay-policy=no-user-gesture-required \
   --noerrdialogs --disable-infobars --no-first-run --no-default-browser-check \
   --disable-session-crashed-bubble --disable-features=Translate,DisableLoadExtensionCommandLineSwitch \
   --password-store=basic \
-  "chrome-extension://${EXT_ID}/hub/index.html"
+  "$START_URL"
