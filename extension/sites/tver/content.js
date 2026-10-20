@@ -541,7 +541,6 @@
 
   window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('keyup', onKeyUp, true);
-  if (SV.remote) SV.remote.listen(); // スマホのリモコン（YouTube /tv が受け取ったキー）
 
   // ------------------------------------------------------------------ 3. 遷移・初期化
 

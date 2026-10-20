@@ -1,4 +1,4 @@
-// 裏で YouTube /tv を開いておく設定（スマホのリモコンの受け取り役）。ネットワーク不要。
+// 裏で YouTube /tv を開いておく設定（キャスト待機: スマホから YouTube を送られたら前面に出す）。ネットワーク不要。
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { launch, until } from './helpers.mjs';
@@ -25,7 +25,7 @@ test('裏で開く設定: オンにすると /tv が裏のタブで 1 つだけ�
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
   await until(async () => (await ytTabs()).length === 1, { message: '裏の /tv が開く' });
   assert.equal((await ytTabs())[0].active, false, '前面を奪わない');
-  await until(async () => /スマホのリモコン.*\/tv: 裏/.test(await hub.locator('#remote-line').innerText()), { timeout: 8000, message: 'ハブにスマホのリモコンの状態の一行が出る' });
+  await until(async () => /キャスト待機.*\/tv: 裏/.test(await hub.locator('#remote-line').innerText()), { timeout: 8000, message: 'ハブにキャスト待機の状態の一行が出る' });
   const yt0 = env.ctx.pages().find((p) => p.url().startsWith('https://www.youtube.com/tv'));
   assert.deepEqual(await yt0.evaluate(() => [document.hidden, document.visibilityState]), [false, 'visible'], '/tv には、いつも見えている扱いにする（裏で接続を切らない）');
   await hub.evaluate(() => new Promise((r) => chrome.runtime.sendMessage({ type: 'sv:ensureReceiver' }, r)));
@@ -103,4 +103,15 @@ test('裏で開く設定がオフ（既定）のときは、何も開かず、�
   await hub.keyboard.press('Enter');
   await hub.waitForURL('https://www.youtube.com/tv', { timeout: 8000 });
   await hub.close();
+});
+
+test('キー診断ページ: キャスト待機の状態（設定・/tv のタブ）が見える', async () => {
+  await env.sw.evaluate(() => chrome.storage.session.remove('svReceiverAt')); // 直前のテストで作った直後の抑止を外す
+  const diag = await env.ctx.newPage(); // ウィンドウがないと、タブを作れない
+  await diag.goto(env.hubUrl.replace('index.html', 'diag.html'));
+  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: true } } }, r)));
+  await until(async () => (await ytTabs()).length === 1, { timeout: 12000, message: '裏の /tv が開く' });
+  await until(async () => /YouTube \/tv のタブ\s*裏/.test(await diag.locator('#remote-status').innerText()), { message: '裏の /tv のタブが見える' });
+  assert.match(await diag.locator('#remote-status').innerText(), /裏で \/tv を開く設定\s*オン/);
+  await diag.close();
 });

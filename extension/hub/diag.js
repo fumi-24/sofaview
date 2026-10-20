@@ -38,7 +38,7 @@
   renderEnv();
   window.addEventListener('resize', renderEnv);
 
-  // スマホのリモコンの状態: 設定・裏の /tv のタブ・最後に YouTube /tv が受け取ったキーと、渡した先の数
+  // キャスト待機の状態: 設定・裏の /tv のタブ・最後に YouTube /tv が受け取ったキーと、渡した先の数
   async function renderRemote() {
     const r = await SV.sendMessage({ type: 'sv:remoteStatus' });
     const box = $('remote-status');
@@ -50,14 +50,7 @@
       rows.push(['裏で /tv を開く設定', r.setting ? 'オン' : 'オフ（オフのときは、/tv を自分で別のタブに開いておく）']);
       const yt = r.yt.length ? r.yt.map((t) => (t.active ? '前面' : '裏') + (t.discarded ? '・破棄された' : '') + '・' + t.status).join(' / ') : 'なし';
       rows.push(['YouTube /tv のタブ', yt + (r.yt.length > 1 ? '（2 つ以上あると、あとから開いたほうだけが受け取る）' : '')]);
-      rows.push(['/tv が受け取った命令', r.lounge && r.lounge.length ? r.lounge.map((l) => l.n + '（' + Math.max(0, Math.round((r.now - l.at) / 1000)) + ' 秒前）').join(' / ') : 'まだありません（スマホをつなぐと、つないだ・押した命令の名前が出ます）']);
-      if (r.last) {
-        const ago = Math.max(0, Math.round((r.now - r.last.at) / 1000));
-        rows.push(['最後に受け取ったキー', r.last.name + '（' + ago + ' 秒前）']);
-        rows.push(['渡したタブの数', String(r.last.sent) + (r.last.fromActive ? '（/tv が前面だったので、/tv 自身が処理）' : '')]);
-      } else {
-        rows.push(['最後に受け取ったキー', 'まだありません（スマホのリモコンで十字キーを押してください）']);
-      }
+      rows.push(['/tv が受け取った命令', r.lounge && r.lounge.length ? r.lounge.map((l) => l.n + '（' + Math.max(0, Math.round((r.now - l.at) / 1000)) + ' 秒前）').join(' / ') : 'まだありません（スマホをつなぐと、つないだ・送った命令の名前が出ます）']);
     }
     box.innerHTML = '';
     for (const [k, v] of rows) {

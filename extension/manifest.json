@@ -42,7 +42,7 @@
     },
     {
       "matches": ["https://www.youtube.com/tv*"],
-      "js": ["sites/youtube/remote-main.js", "sites/youtube/exit-main.js"],
+      "js": ["sites/youtube/receiver-main.js", "sites/youtube/exit-main.js"],
       "run_at": "document_start",
       "world": "MAIN"
     },
@@ -54,7 +54,6 @@
         "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
-        "common/remote.js",
         "sites/youtube/content.js"
       ],
       "run_at": "document_start"
@@ -73,7 +72,6 @@
         "common/cursor.js",
         "common/settings.js",
         "common/keys.js",
-        "common/remote.js",
         "common/zoom.js",
         "common/spatial-nav.js",
         "common/rows.js",

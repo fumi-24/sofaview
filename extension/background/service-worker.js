@@ -126,22 +126,6 @@ async function syncRulesets(s) {
   });
 }
 
-/** スマホのリモコンのキーを、前面の TVer・ハブのタブへ渡す（YouTube /tv のタブが受け取ったもの）。 */
-async function forwardRemote(sender, name) {
-  const tabs = await chrome.tabs.query({ active: true });
-  let sent = 0;
-  for (const t of tabs) {
-    if (t.id == null || (sender.tab && t.id === sender.tab.id)) continue;
-    // 拡張自身のページ（ハブ）は、tabs 権限がないと url が見えない。url が分からないタブへは送る（受け取れるのは拡張のページだけ）
-    if (t.url && !t.url.startsWith('https://tver.jp/')) continue;
-    chrome.tabs.sendMessage(t.id, { type: 'sv:remoteKey', name }, () => void chrome.runtime.lastError);
-    sent++;
-  }
-  // 診断ページ用の記録（届いたか・どこへ渡したか）
-  await chrome.storage.session.set({ svRemoteLast: { at: Date.now(), name, sent, fromActive: !!(sender.tab && sender.tab.active) } });
-  return { ok: true, sent };
-}
-
 /** 診断ページ用: /tv がスマホから受け取った命令の名前（新しい順に最大 8 件）。 */
 async function recordLounge(names) {
   if (!Array.isArray(names)) return { ok: false };
@@ -164,14 +148,12 @@ async function recordYtLoaded() {
 async function remoteStatus() {
   const s = await SV.settings.load();
   const tabs = await ytTabs();
-  const { svRemoteLast } = await chrome.storage.session.get('svRemoteLast');
   const { svLounge = [] } = await chrome.storage.session.get('svLounge');
   const { svYtLoads, svOpenLast } = await chrome.storage.session.get(['svYtLoads', 'svOpenLast']);
   return {
     ok: true,
     setting: !!s.youtube.receiver,
     yt: tabs.map((t) => ({ active: !!t.active, discarded: !!t.discarded, status: t.status })),
-    last: svRemoteLast || null,
     lounge: svLounge,
     loads: svYtLoads || null,
     openLast: svOpenLast || null,
@@ -209,9 +191,6 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:remoteKeep':
       p = sender.tab && sender.tab.id != null ? chrome.tabs.update(sender.tab.id, { autoDiscardable: false }).then(() => ({ ok: true })) : Promise.resolve({ ok: false });
-      break;
-    case 'sv:remote':
-      p = forwardRemote(sender, msg.name);
       break;
     case 'sv:info':
       p = Promise.resolve({ ok: true, version: SV.VERSION, id: chrome.runtime.id });

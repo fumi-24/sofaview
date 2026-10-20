@@ -88,18 +88,18 @@
     true,
   );
 
-  // 裏で /tv を開いておく設定のとき、スマホのリモコンの状態を一行で出す（キー診断まで行かなくても分かる）
+  // 裏で /tv を開いておく設定（キャスト待機）の状態を一行で出す（キー診断まで行かなくても分かる）
   const remoteLine = document.getElementById('remote-line');
   async function showRemote() {
     const r = await SV.sendMessage({ type: 'sv:remoteStatus' });
     if (!remoteLine) return;
     remoteLine.hidden = false;
     if (!r || !r.ok) {
-      remoteLine.textContent = 'スマホのリモコン　状態を取得できません（拡張機能を再読み込みしてください）';
+      remoteLine.textContent = 'キャスト待機　状態を取得できません（拡張機能を再読み込みしてください）';
       return;
     }
     if (!r.setting) {
-      remoteLine.textContent = 'スマホのリモコン　「裏で YouTube を開いておく」設定がオフです';
+      remoteLine.textContent = 'キャスト待機　「裏で YouTube を開いておく」設定がオフです';
       return;
     }
     const age = (t) => Math.max(0, Math.round((r.now - t) / 1000)) + ' 秒前';
@@ -108,15 +108,13 @@
     const how = { activate: '前面に出した', create: '新しく開いた', off: '設定オフで普通に開いた' };
     const open = r.openLast ? ' ／ タイル: ' + (how[r.openLast.how] || r.openLast.how) + '（' + age(r.openLast.at) + '）' : '';
     const cmd = r.lounge && r.lounge[0] ? '最後の命令: ' + r.lounge[0].n + '（' + age(r.lounge[0].at) + '）' : '命令: まだなし';
-    const key = r.last ? '／ キー: ' + r.last.name + '（' + age(r.last.at) + '）' : '';
-    remoteLine.textContent = 'スマホのリモコン　' + tab + open + ' ／ ' + cmd + key;
+    remoteLine.textContent = 'キャスト待機　' + tab + open + ' ／ ' + cmd;
   }
   if (remoteLine) {
     showRemote();
     setInterval(showRemote, 2000);
   }
 
-  if (SV.remote) SV.remote.listen(); // スマホのリモコン（YouTube /tv が受け取ったキー）
 
   // 時計（ハブのみ）
   const timeEl = document.getElementById('clock-time');

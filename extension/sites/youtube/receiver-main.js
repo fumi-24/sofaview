@@ -1,20 +1,11 @@
 /*
- * YouTube /tv のページ側（MAIN world）。スマホのリモコン（dpadCommand）で /tv が出す合成キーイベントは、
- * keyCode をページ側で付けているため、拡張側（isolated world）からは読めない。ここで読んで、postMessage で渡す。
- * 判定は common/remote.js の nameFromYoutube（ここでは合成・key なしのものだけ絞って渡す）。
+ * YouTube /tv のページ側（MAIN world）。スマホからのキャスト待機のため:
+ *  - 裏のタブでも「見えている」扱いにする（見えなくなったと判断して接続を閉じるのを防ぐ）
+ *  - 診断用に、スマホから届いた命令の名前（remoteConnected・setPlaylist など）だけを知らせる
  */
 (function () {
   'use strict';
-  window.addEventListener(
-    'keydown',
-    (e) => {
-      if (e.isTrusted || e.key || !e.keyCode) return;
-      window.postMessage({ svRemoteKey: 1, ev: { isTrusted: false, key: '', keyCode: e.keyCode, ctrlKey: e.ctrlKey, altKey: e.altKey, metaKey: e.metaKey, shiftKey: e.shiftKey } }, location.origin);
-    },
-    true,
-  );
-
-  // 裏のタブになったとき、/tv が「画面が見えなくなった」と判断して、スマホとの接続を切ることがある。いつも見えている扱いにする
+  // 裏のタブになったとき、/tv が「画面が見えなくなった」と判断して、スマホとの接続を閉じることがある。いつも見えている扱いにする
   const fixed = { hidden: false, visibilityState: 'visible', webkitHidden: false, webkitVisibilityState: 'visible' };
   for (const k of Object.keys(fixed)) {
     try {
@@ -25,7 +16,7 @@
   }
   document.addEventListener('visibilitychange', (e) => e.stopImmediatePropagation(), true);
 
-  // 診断用: スマホから /tv に届いた命令の名前（dpadCommand など）だけを知らせる。内容は読まない
+  // 診断用: スマホから /tv に届いた命令の名前（setPlaylist など）だけを知らせる。内容は読まない
   const send = XMLHttpRequest.prototype.send;
   const open = XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open = function (method, url) {

@@ -53,12 +53,12 @@
     SV.goHub();
   });
 
-  // スマホから YouTube を送られると、/tv は再生画面（#/watch）になる。裏のタブなら前面に出す（background が前面かどうか見る）
+  // スマホから YouTube を送られる（キャスト）と、/tv は再生画面（#/watch）になる。裏のタブなら前面に出す（background が前面かどうか見る）
   const wake = () => {
     if (/^#\/watch/.test(location.hash)) SV.sendMessage({ type: 'sv:wake' });
   };
   window.addEventListener('hashchange', wake);
-  // ハブへ戻るとき（裏で /tv を開いておく設定）: /tv のタブは動かさない。再生を止めて、ホームの画面に戻す（再読み込みはスマホとの接続が切れる）
+  // ハブへ戻るとき（裏で /tv を開いておく設定）: /tv のタブは動かさない。再生を止めて、ホームの画面に戻す（遷移・再読み込みは受け取り役がいなくなる）
   if (SV.hasChrome()) {
     chrome.runtime.onMessage.addListener((msg) => {
       if (!msg || msg.type !== 'sv:ytReset') return;
@@ -72,23 +72,15 @@
     SV.sendMessage({ type: 'sv:loungeSeen', names: m.data.names.slice(0, 10).map(String) });
   });
 
-  // スマホのリモコン（YouTube アプリの「テレビで見る」）。/tv が受け取った十字キー・決定・戻るを、前面の TVer・ハブへ渡す。
-  // 受け取り役のタブは裏に置かれるので、ブラウザに休止・破棄されないようにする（効果は実機で確認）
-  if (SV.remote && SV.hasChrome()) {
+  // 裏で待機する /tv のタブは、ブラウザに休止・破棄されないようにする（効果は実機で確認）。読み込み回数は診断用
+  if (SV.hasChrome()) {
     try {
-      navigator.locks.request('sv-remote-keepalive', () => new Promise(() => {}));
+      navigator.locks.request('sv-receiver-keepalive', () => new Promise(() => {}));
       chrome.runtime.sendMessage({ type: 'sv:ytLoaded' }, () => void chrome.runtime.lastError);
       chrome.runtime.sendMessage({ type: 'sv:remoteKeep' }, () => void chrome.runtime.lastError);
     } catch (e) {
       /* 使えない環境では何もしない */
     }
-    SV.remote.watchYoutube(window, (name) => {
-      try {
-        chrome.runtime.sendMessage({ type: 'sv:remote', name }, () => void chrome.runtime.lastError);
-      } catch (e) {
-        /* 拡張が更新された直後など */
-      }
-    });
   }
 
   window.addEventListener(
