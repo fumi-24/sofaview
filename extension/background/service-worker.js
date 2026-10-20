@@ -49,10 +49,14 @@ async function ensureReceiver() {
 /** ハブの YouTube タイル: 裏の /tv があれば、それを前面に出す（もう 1 つ /tv を開かない）。 */
 async function openYoutube() {
   const s = await SV.settings.load();
-  if (!s.youtube.receiver) return { ok: false };
+  if (!s.youtube.receiver) {
+    await chrome.storage.session.set({ svOpenLast: { at: Date.now(), how: 'off' } });
+    return { ok: false };
+  }
   const tabs = await ytTabs();
   if (tabs[0]) await activate(tabs[0]);
   else await chrome.tabs.create({ url: YT_TV, active: true });
+  await chrome.storage.session.set({ svOpenLast: { at: Date.now(), how: tabs[0] ? 'activate' : 'create' } });
   return { ok: true };
 }
 
@@ -148,18 +152,29 @@ async function recordLounge(names) {
   return { ok: true };
 }
 
+/** 診断用: /tv のページが読み込まれた回数と時刻（開き直すたびに読み込み直されていないか見る）。 */
+async function recordYtLoaded() {
+  const { svYtLoads } = await chrome.storage.session.get('svYtLoads');
+  const n = ((svYtLoads && svYtLoads.n) || 0) + 1;
+  await chrome.storage.session.set({ svYtLoads: { n, at: Date.now() } });
+  return { ok: true, n };
+}
+
 /** 診断ページ用: スマホのリモコンの状態。 */
 async function remoteStatus() {
   const s = await SV.settings.load();
   const tabs = await ytTabs();
   const { svRemoteLast } = await chrome.storage.session.get('svRemoteLast');
   const { svLounge = [] } = await chrome.storage.session.get('svLounge');
+  const { svYtLoads, svOpenLast } = await chrome.storage.session.get(['svYtLoads', 'svOpenLast']);
   return {
     ok: true,
     setting: !!s.youtube.receiver,
     yt: tabs.map((t) => ({ active: !!t.active, discarded: !!t.discarded, status: t.status })),
     last: svRemoteLast || null,
     lounge: svLounge,
+    loads: svYtLoads || null,
+    openLast: svOpenLast || null,
     now: Date.now(),
   };
 }
@@ -185,6 +200,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:loungeSeen':
       p = recordLounge(msg.names);
+      break;
+    case 'sv:ytLoaded':
+      p = recordYtLoaded();
       break;
     case 'sv:remoteStatus':
       p = remoteStatus();

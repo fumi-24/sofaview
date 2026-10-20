@@ -103,10 +103,13 @@
       return;
     }
     const age = (t) => Math.max(0, Math.round((r.now - t) / 1000)) + ' 秒前';
-    const tab = r.yt.length ? (r.yt[0].discarded ? '/tv: 破棄された' : '/tv: ' + (r.yt[0].active ? '前面' : '裏')) : '/tv: なし';
+    const loads = r.loads ? '・読み込み ' + r.loads.n + ' 回（' + age(r.loads.at) + '）' : '';
+    const tab = r.yt.length ? (r.yt[0].discarded ? '/tv: 破棄された' : '/tv: ' + (r.yt[0].active ? '前面' : '裏')) + loads : '/tv: なし';
+    const how = { activate: '前面に出した', create: '新しく開いた', off: '設定オフで普通に開いた' };
+    const open = r.openLast ? ' ／ タイル: ' + (how[r.openLast.how] || r.openLast.how) + '（' + age(r.openLast.at) + '）' : '';
     const cmd = r.lounge && r.lounge[0] ? '最後の命令: ' + r.lounge[0].n + '（' + age(r.lounge[0].at) + '）' : '命令: まだなし';
     const key = r.last ? '／ キー: ' + r.last.name + '（' + age(r.last.at) + '）' : '';
-    remoteLine.textContent = 'スマホのリモコン　' + tab + ' ／ ' + cmd + key;
+    remoteLine.textContent = 'スマホのリモコン　' + tab + open + ' ／ ' + cmd + key;
   }
   if (remoteLine) {
     showRemote();

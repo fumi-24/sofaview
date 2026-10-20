@@ -77,6 +77,7 @@
   if (SV.remote && SV.hasChrome()) {
     try {
       navigator.locks.request('sv-remote-keepalive', () => new Promise(() => {}));
+      chrome.runtime.sendMessage({ type: 'sv:ytLoaded' }, () => void chrome.runtime.lastError);
       chrome.runtime.sendMessage({ type: 'sv:remoteKeep' }, () => void chrome.runtime.lastError);
     } catch (e) {
       /* 使えない環境では何もしない */
