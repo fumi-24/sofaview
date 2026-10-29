@@ -13,6 +13,8 @@ const HUB_URL = chrome.runtime.getURL(SV.HUB_PATH);
 const YT_TV = 'https://www.youtube.com/tv';
 const ytTabs = () => chrome.tabs.query({ url: YT_TV + '*' });
 const isYt = (t) => !!t && (t.url || t.pendingUrl || '').startsWith(YT_TV);
+const SPOTIFY = 'https://open.spotify.com/';
+const isSpotify = (t) => !!t && (t.url || t.pendingUrl || '').startsWith(SPOTIFY);
 
 /** タブを前面に出す（ウィンドウも）。 */
 async function activate(tab) {
@@ -60,6 +62,14 @@ async function openYoutube() {
   return { ok: true };
 }
 
+/** ハブの Spotify タイル: 開いている Spotify のタブがあれば、それを前面に出す（音楽を止めない）。なければ、ハブ側が同じタブで開く。 */
+async function openSpotify() {
+  const tabs = await chrome.tabs.query({ url: SPOTIFY + '*' });
+  if (!tabs[0]) return { ok: false };
+  await activate(tabs[0]);
+  return { ok: true };
+}
+
 /** スマホから YouTube を送られた（/tv が再生画面になった）とき、裏のタブなら前面に出す。 */
 async function wake(sender) {
   const s = await SV.settings.load();
@@ -79,7 +89,7 @@ async function goHub(sender) {
   if (sender && isYt(sender.tab)) {
     const s = await SV.settings.load();
     if (s.youtube.receiver) {
-      const others = (await chrome.tabs.query({ windowId: sender.tab.windowId })).filter((t) => t.id !== sender.tab.id && !isYt(t));
+      const others = (await chrome.tabs.query({ windowId: sender.tab.windowId })).filter((t) => t.id !== sender.tab.id && !isYt(t) && !isSpotify(t));
       others.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
       // /tv のタブは動かさない（遷移・再読み込みをすると、受け取り役がいなくなる）。ほかのタブがなければ、ハブを新しいタブで開く
       if (others[0]) await activate(others[0]);
@@ -88,6 +98,14 @@ async function goHub(sender) {
       chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:ytReset' }, () => void chrome.runtime.lastError);
       return { ok: true, receiver: true };
     }
+  }
+  // Spotify のタブは動かさない（遷移すると音楽が止まる）。ほかのタブ（ハブ・TVer）を前面に出す。なければハブを新しいタブで開く
+  if (sender && isSpotify(sender.tab)) {
+    const others = (await chrome.tabs.query({ windowId: sender.tab.windowId })).filter((t) => t.id !== sender.tab.id && !isYt(t) && !isSpotify(t));
+    others.sort((a, b) => (b.lastAccessed || 0) - (a.lastAccessed || 0));
+    if (others[0]) await activate(others[0]);
+    else await chrome.tabs.create({ url: HUB_URL, active: true, windowId: sender.tab.windowId });
+    return { ok: true, spotify: true };
   }
   await chrome.tabs.update(tabId, { url: HUB_URL });
   ensureReceiver().catch(() => {});
@@ -176,6 +194,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:openYoutube':
       p = openYoutube();
+      break;
+    case 'sv:openSpotify':
+      p = openSpotify();
       break;
     case 'sv:wake':
       p = wake(sender);

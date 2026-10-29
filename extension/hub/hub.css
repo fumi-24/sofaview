@@ -157,6 +157,10 @@ html.sv-hub body {
   background: linear-gradient(135deg, #1a73e8 0%, #00b4d8 100%);
 }
 
+.tile-sp {
+  background: linear-gradient(135deg, #1db954 0%, #0b6b2d 100%);
+}
+
 .tile .art {
   position: absolute;
   top: calc(var(--sv-u) * 1.2);

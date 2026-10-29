@@ -1,4 +1,4 @@
-// 実サイト（youtube.com/tv・tver.jp）に対するスモークテスト。DOM の変更を早く検知するためのもの。
+// 実サイト（youtube.com/tv・tver.jp・open.spotify.com）に対するスモークテスト。DOM の変更を早く検知するためのもの。
 // 実行: npm run test:live（LIVE=1 とネットワークが必要）。TVer の実際の再生は日本国内IP・DRM が要るため対象外。
 // ただし視聴画面は、地域制限で 403 になる再生 API（playback.api.streaks.jp）だけを偽の応答に差し替えれば、実サイトの JS・Streaks SDK のまま再生できるので、
 // 実 DOM での干渉（マスク・操作盤の表示・全画面・キー処理）をそれで確かめる（再生 API の偽装は検証用で、拡張には入っていない）。
@@ -379,6 +379,38 @@ test('実際の TVer のプレイヤー（再生 API だけ偽）で、視聴画
   assert.equal((await ui()).split('/')[0], 'H');
   await page.keyboard.press('Escape'); // 離れる
   await until(() => !page.url().includes('/episodes/'), { timeout: 15000, message: 'left the episode page' });
+  assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
+  await page.close();
+});
+
+test('Spotify（ログアウト状態の Web プレーヤー）: 初期フォーカスが内容のカードに入り、OK でカードを開き、戻るで戻ると、またカードにフォーカスが入る。十字キーで移動でき、別サイトのリンクには止まらない', opts, async () => {
+  const page = await env.ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const onCard = () => page.evaluate(() => !!document.activeElement && !!document.activeElement.closest('main') && document.activeElement.getAttribute('role') === 'row');
+  await page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await until(() => page.evaluate(() => document.documentElement.dataset.svReady === '1'), { timeout: 30000, message: 'sv ready' });
+  await until(onCard, { timeout: 30000, message: 'initial focus on a card' });
+  await shot(page, 'spotify-1-initial');
+  // OK でカードを開く → 戻るで戻る（戻った先でも、カードにフォーカスが入る）
+  await page.keyboard.press('Enter');
+  await until(() => page.evaluate(() => /\/(album|playlist|track|artist)\//.test(location.pathname)), { timeout: 15000, message: 'card opened' });
+  await shot(page, 'spotify-2-opened');
+  await page.keyboard.press('Escape');
+  await until(() => page.evaluate(() => /^\/(intl-[a-z-]+\/)?$/.test(location.pathname)), { timeout: 15000, message: 'back to home' });
+  await until(onCard, { timeout: 30000, message: 'focus on a card after going back' });
+  // 十字キーで移動できる
+  const first = await page.evaluate(() => document.activeElement.textContent);
+  await press(page, 'ArrowRight', 200);
+  assert.notEqual(await page.evaluate(() => document.activeElement.textContent), first, '右のカードへ');
+  await press(page, 'ArrowDown', 300);
+  assert.ok(await page.evaluate(() => !!document.activeElement.closest('main')), '下の棚へ');
+  const hrefs = new Set();
+  for (let i = 0; i < 12; i++) {
+    await press(page, i % 3 === 2 ? 'ArrowLeft' : 'ArrowUp', 150);
+    hrefs.add(await page.evaluate(() => document.activeElement.getAttribute('href') || ''));
+  }
+  for (const h of hrefs) assert.ok(!h || h.startsWith('/') || h.includes('open.spotify.com'), '別サイトのリンクには止まらない: ' + h);
   assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
   await page.close();
 });

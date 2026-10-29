@@ -1,0 +1,22 @@
+/*
+ * Spotify Web プレーヤー用: リモコンで使うための最小限の見た目。サイト本来の画面は変えない。
+ * フォーカスは実 DOM のフォーカス（:focus）。リングはサイトの配色の上でも見える白＋黒の二重線。
+ */
+html.sv-sp :focus {
+  outline: 3px solid #fff !important;
+  outline-offset: 2px !important;
+  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.85) !important;
+}
+
+html.sv-sp a:focus,
+html.sv-sp button:focus,
+html.sv-sp [role="row"]:focus {
+  z-index: 5;
+}
+
+/* 棚のカード・曲の行（role=row）は、親のスクロール領域に外側の線を切られるので、内側に描く */
+html.sv-sp [role="row"]:focus {
+  outline-offset: -3px !important;
+  box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.7) !important;
+  border-radius: 8px;
+}

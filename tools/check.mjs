@@ -79,7 +79,7 @@ if (manifest.version !== svVersion) err(`バージョン不一致: manifest ${ma
 // 6) 権限は最小限（想定外の追加を検知する）
 const allowedPerms = new Set(['declarativeNetRequest', 'storage']);
 for (const p of manifest.permissions || []) if (!allowedPerms.has(p)) err(`想定外の権限: ${p}（追加する場合は docs/SPEC.md の権限方針を更新してください）`);
-for (const h of manifest.host_permissions || []) if (!/^https:\/\/(www\.|m\.)?(youtube\.com|youtu\.be|tver\.jp)\//.test(h)) err(`想定外のホスト権限: ${h}`);
+for (const h of manifest.host_permissions || []) if (!/^https:\/\/(www\.|m\.)?(youtube\.com|youtu\.be|tver\.jp|open\.spotify\.com)\//.test(h)) err(`想定外のホスト権限: ${h}`);
 
 if (errors.length) {
   console.error('✗ チェックに失敗しました\n' + errors.map((e) => '  - ' + e).join('\n'));

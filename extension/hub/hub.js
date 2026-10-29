@@ -78,10 +78,11 @@
   document.addEventListener(
     'click',
     (e) => {
-      const tile = e.target.closest && e.target.closest('a[data-id="youtube"]');
+      const tile = e.target.closest && e.target.closest('a[data-id="youtube"], a[data-id="spotify"]');
       if (!tile || e.defaultPrevented) return;
       e.preventDefault();
-      SV.sendMessage({ type: 'sv:openYoutube' }).then((r) => {
+      // 開いているタブがあればそれを前面に出す（Spotify は音楽を止めない）。なければ、同じタブで開く
+      SV.sendMessage({ type: tile.dataset.id === 'spotify' ? 'sv:openSpotify' : 'sv:openYoutube' }).then((r) => {
         if (!(r && r.ok)) location.href = tile.href;
       });
     },

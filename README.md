@@ -1,14 +1,15 @@
 # SofaView
 
-テレビのリモコンだけで **YouTube** と **TVer** を操作できるようにする、Chromium 向けの拡張機能（Manifest V3）。
+テレビのリモコンだけで **YouTube**・**TVer**・**Spotify** を操作できるようにする、Chromium 向けの拡張機能（Manifest V3）。
 十字キー・Enter・Esc・Home だけで「ハブ → YouTube／TVer → 視聴 → Home でハブへ」が完結します。
 
-> **非公式のツールです。** YouTube（Google）・TVer（株式会社TVer）とは無関係で、各社の承認・提携を受けていません。YouTube・TVer は各社の商標・サービス名です。広告のブロック・スキップ、DRM や地域制限の回避はしません。TVer・YouTube の画面の変更で、動かなくなることがあります。
+> **非公式のツールです。** YouTube（Google）・TVer（株式会社TVer）・Spotify（Spotify AB）とは無関係で、各社の承認・提携を受けていません。YouTube・TVer・Spotify は各社の商標・サービス名です。広告のブロック・スキップ、DRM や地域制限の回避はしません。TVer・YouTube の画面の変更で、動かなくなることがあります。
 
 | 対象 | 方式 |
 |---|---|
 | **YouTube** | 公式の `youtube.com/tv`（TV 向け UI）をそのまま使う。拡張機能が TV 端末の User-Agent を与えて起動する |
 | **TVer** | 既存サイトを /tv と同じ寸法・色・動きに再スキン（ガイド・検索ピル・棚・カード・フォーカスのリング。違いは [SPEC 9.8](docs/SPEC.md#98-youtubecomtv-との違い意図した差と残る差)）。詳細は TVer 標準の表示を使う。見た目は CSS、リモコン操作（十字キー移動・視聴画面の操作・画面倍率）は JS。**視聴画面は、TVer 自身のプレイヤーを /tv の視聴画面と同じ見た目・操作にする**（[SPEC 7.5](docs/SPEC.md#75-視聴画面tver-向け)）|
+| **Spotify** | Web プレーヤー（`open.spotify.com`）の画面はそのまま。十字キー・OK・戻る・再生/一時停止・次・前、検索は画面上のキーボード。Home でハブへ戻るときも、Spotify のタブは動かさない（音楽が止まらない）。ログイン画面は触らない（[SPEC 7.8](docs/SPEC.md#78-spotifyopenspotifycom)）|
 | **ハブ** | 共通ホーム。どの画面でも Home キーで戻れる。キー診断・設定・キー割り当てもここにある |
 
 対象はテレビにつないだ PC／ミニPC の Chromium 系ブラウザ（キオスク起動を含む）。リモコンのキー（十字キー・Enter・Esc・Home など）がキーボード入力として届く前提です（HDMI-CEC など）。
@@ -17,7 +18,7 @@
 
 **v0.1.0：実装済み・自動テスト済み。キーボードでの実機確認は済み（リモコンでの確認はこれから）。**
 
-- ✔ 静的チェック、単体テスト 111 件、E2E 129 件（拡張機能を読み込んだ Chromium）、実サイトのスモーク 8 件（実プレイヤーは、地域制限の再生 API だけ偽の応答にして確認）
+- ✔ 静的チェック、単体テスト 111 件、E2E 136 件（拡張機能を読み込んだ Chromium）、実サイトのスモーク 9 件（実プレイヤーは、地域制限の再生 API だけ偽の応答にして確認）
 - ✔ 実機（キーボード操作）で確認済み：TVer の視聴画面の見た目と操作、全画面中の Esc
 - ❔ 実機で確認が必要：リモコンの実際のキー、TVer の再生（日本国内の回線・コーデック・DRM・広告）、キオスク運用 → [実機チェックリスト](docs/NOTES.md#4-実機チェックリスト)
 
@@ -76,7 +77,7 @@ npm run pack             # dist/sofaview-<version>.zip
 
 - 見た目は CSS を優先し、リモコンで動かす部分は JS で行います（コード量は JS のほうが多い。役割分担は [SPEC 4.3](docs/SPEC.md#43-css-と-js-の役割分担)）。
 - 広告ブロック・広告スキップ・DRM 回避・地域制限の回避は**行いません**。
-- 権限は `declarativeNetRequest` と `storage`、ホストは `youtube.com`・`youtu.be`・`tver.jp` のみ。テレメトリ・リモートコードなし。
+- 権限は `declarativeNetRequest` と `storage`、ホストは `youtube.com`・`youtu.be`・`tver.jp`・`open.spotify.com` のみ。テレメトリ・リモートコードなし。
 - ログインや認証情報は扱いません（各サービスの画面で行い、ブラウザのプロファイルに保存されます）。
 
 ## ライセンス
