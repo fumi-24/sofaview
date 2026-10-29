@@ -50,3 +50,17 @@ html.sv-sp [data-sv-hide] {
 html.sv-sp [style*="--left-sidebar-width"] {
   --left-sidebar-width: 300 !important;
 }
+
+/* 読み込み直後の 4 秒だけ出る、版の表示 */
+#sv-badge {
+  position: fixed;
+  left: 8px;
+  bottom: 8px;
+  z-index: 2147483000;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font: 14px system-ui, sans-serif;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.75);
+  pointer-events: none;
+}

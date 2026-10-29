@@ -154,6 +154,8 @@ chromium --kiosk \
 
 ## 8. 更新手順
 
+- **更新できたかの確認**：ハブ・設定・キー診断・小窓の一番下に、`SofaView v0.2.0 ・ by fumi24` のように**版**が出ます。Spotify のページを開くと、左下に版が 4 秒だけ出ます。版が古いままなら、拡張機能が再読み込みされていません（`git pull` のあと、ブラウザを再起動するか、`chrome://extensions` で「再読み込み」を押します）。
+
 - Chromium + `--load-extension`（A）：`git pull` してブラウザを再起動。
 - 開発者モード（B）：`git pull` した後、`chrome://extensions` で拡張機能の「再読み込み」。
 - ポリシー（C）：新しい CRX を配置して `update.xml` のバージョンを上げる。

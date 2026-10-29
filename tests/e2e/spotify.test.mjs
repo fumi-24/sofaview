@@ -26,8 +26,9 @@ const press = async (page, key) => {
 };
 const where = async (page) => (await active(page)) || {};
 
-test('Spotify: 読み込むと、内容（main）の最初のカードにフォーカスが入る。画面倍率の手順は完了する', async () => {
+test('Spotify: 読み込むと、内容（main）の最初のカードにフォーカスが入る。画面倍率の手順は完了する。版の表示が出る', async () => {
   const page = await open();
+  assert.match(await page.locator('#sv-badge').innerText(), /SofaView v\d+\.\d+\.\d+（Spotify）/);
   await until(async () => (await where(page)).href === '/album/a1', { message: '最初のカード' });
   assert.equal(await page.evaluate(() => document.documentElement.classList.contains('sv-sp')), true);
   await page.close();

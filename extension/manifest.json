@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SofaView",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "テレビのリモコン（十字キー・Enter・Esc・Home）だけで YouTube と TVer を操作する。",
   "minimum_chrome_version": "111",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAn8tmfL6J/KVMBqaxdmcKfuoMtn9brllt403Qp7dpdp/aX1yuqD/QsxHP4jQj/ecdkrZG39jaQAralhTppvIsAnPdPqab+nvcRClEW4Wt+dtr/gl477z6G5VLzslHdieRDF2zSWMtbP3Q36ghY3ciUuWt9vCwaLjv6TfgqK6cXCUcrcv3xQTzjQjMzs4L9IOlDaRKbvTH7tbor73CxybNS16Ik86zY2EbA7ALF3nyFhOAIbotZblSiTcNGO+8BJuz6iVzGhlDGwBqr0hbs6q56ZpPUuiC0FUhePaEsTPXvULtqkMx7XHrpuih+ThD6nW0TElFmhJnp3o3weMaiThK7wIDAQAB",

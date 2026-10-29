@@ -135,4 +135,8 @@
     render();
   });
   render();
+
+  // どの版が読み込まれているか分かるように、クレジットの行に版を出す
+  const credit = document.querySelector('.credit');
+  if (credit) credit.textContent = 'SofaView v' + SV.VERSION + ' ・ by fumi24';
 })();

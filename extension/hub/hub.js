@@ -89,6 +89,9 @@
     true,
   );
 
+  // どの版が読み込まれているか分かるように、クレジットの行に版を出す（拡張機能を更新したかの確認用）
+  for (const c of document.querySelectorAll('.credit:not(#remote-line)')) c.textContent = 'SofaView v' + SV.VERSION + ' ・ by fumi24';
+
   // 裏で /tv を開いておく設定（キャスト待機）の状態を一行で出す（キー診断まで行かなくても分かる）
   const remoteLine = document.getElementById('remote-line');
   async function showRemote() {

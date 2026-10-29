@@ -304,6 +304,15 @@
     return ctl.nav.focusInitial(['main ' + S.SEL.row, 'main [role="button"][tabindex="0"]', 'main a[href]', 'main button'], { within: S.SEL.main });
   }
 
+  /** 拡張が動いていることと版を、読み込み直後に 4 秒だけ出す（更新できているかの確認用）。 */
+  function showBadge() {
+    const b = document.createElement('div');
+    b.id = 'sv-badge';
+    b.textContent = 'SofaView v' + SV.VERSION + '（Spotify）';
+    document.body.appendChild(b);
+    setTimeout(() => b.remove(), 4000);
+  }
+
   function init() {
     ctl.nav = SV.nav.createNavigator({
       // 曲の行・棚のカード（role=row）は、サイトが tabindex=-1 にしている。行を 1 つの候補にして、中のボタン・リンクは外す（OK で開く・再生する）
@@ -351,6 +360,7 @@
       clearInterval(retry);
     }, 15000);
     html.setAttribute('data-sv-ready', '1');
+    showBadge();
   }
 
   if (document.body) init();
