@@ -153,10 +153,14 @@ test('Spotify: 再生バーの再生位置・音量の棒にフォーカスで�
   const page = await open();
   await until(async () => (await where(page)).href === '/album/a1');
   assert.equal(await page.locator('[data-sv-slider]').count(), 2, '再生位置と音量に印が付く');
+  const kindNow = () => page.evaluate(() => document.activeElement.getAttribute('data-sv-slider'));
   const toSlider = async (kind) => {
-    for (let i = 0; i < 14; i++) {
-      if ((await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider'))) === kind) return true;
-      await press(page, i < 5 ? 'ArrowDown' : i % 2 ? 'ArrowRight' : 'ArrowDown');
+    for (let i = 0; i < 16; i++) {
+      if ((await kindNow()) === kind) return true;
+      const cur = await kindNow();
+      // 再生バーの外からは下へ。バーの中では、目的の棒の向き（再生位置は左・音量は右）へ
+      const inBar = await page.evaluate(() => !!document.activeElement.closest('[data-testid="now-playing-bar"]'));
+      await press(page, !inBar ? 'ArrowDown' : kind === 'seek' ? (cur === 'volume' || i > 6 ? 'ArrowLeft' : 'ArrowRight') : 'ArrowRight');
     }
     return false;
   };
@@ -185,7 +189,9 @@ test('Spotify: 再生バーの再生位置・音量の棒にフォーカスで�
   }
   assert.deepEqual((await ranges('seek')).slice(3), [70000, 60000]);
   // 音量: 0.1 ずつ
-  assert.equal(await toSlider('volume'), true, '音量の棒に届く');
+  assert.equal(await toSlider('seek'), true);
+  for (let i = 0; i < 8 && (await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider'))) !== 'volume'; i++) await press(page, 'ArrowRight');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider')), 'volume', '音量の棒に届く（再生位置から →）');
   await press(page, 'Enter');
   await press(page, 'ArrowLeft');
   await press(page, 'ArrowLeft');
@@ -209,6 +215,10 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   assert.match(await np.innerText(), /テスト歌手/);
   assert.match(await np.innerText(), /0:50/);
   assert.equal(await np.getAttribute('data-state'), 'paused');
+  // 歌詞: 歌詞ボタンを押して（こちらで押す）、いまの行を中心に出す。サイトの歌詞表示は、色の変数で、いまの行だけ色が違う
+  await until(async () => (await np.locator('.sv-np-line').count()) === 6, { message: '歌詞の行' });
+  assert.match(await np.locator('.sv-np-line.is-current').innerText(), /三行目（いま）/);
+  assert.equal(await page.locator('[data-testid="lyrics-button"]').getAttribute('aria-pressed'), 'true', '歌詞を出すために押した');
   // 画面が前面（フルスクリーンの覆い）で、下のページは操作されない
   const logBefore = (await fx(page, 'log')).length;
   await press(page, 'Enter'); // 再生/一時停止
@@ -224,6 +234,7 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'navigate').length, 0, '下のページは動かない');
   await press(page, 'Escape');
   await until(async () => (await np.count()) === 0, { message: '戻るで閉じる' });
+  assert.equal(await page.locator('[data-testid="lyrics-button"]').getAttribute('aria-pressed'), 'false', '歌詞は、こちらで出した分だけ元に戻す');
   // 黄色キー（どこからでも）
   const cdp = await env.ctx.newCDPSession(page);
   const yellow = async () => {
@@ -238,8 +249,8 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   await page.close();
 });
 
-test('Spotify: 画面倍率は TVer（720）より小さい高さ（600）に合わせて、大きく拡大する', async () => {
+test('Spotify: 画面倍率は TVer（720）より小さい高さ（648）に合わせて、大きく拡大する', async () => {
   const page = await open();
-  await until(async () => (await page.evaluate(() => Math.round(innerHeight))) === 600, { message: '1080 の画面が 600 相当（1.8 倍）' });
+  await until(async () => Math.abs((await page.evaluate(() => innerHeight)) - 648) < 12, { message: '1080 の画面が 648 相当（約 1.67 倍）' });
   await page.close();
 });

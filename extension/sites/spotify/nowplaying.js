@@ -18,6 +18,8 @@
     duration: '[data-testid="playback-duration"]',
     playPause: '[data-testid="control-button-playpause"]',
     seek: '[data-testid="playback-progressbar"] input[type="range"]',
+    lyricsButton: '[data-testid="lyrics-button"]',
+    lyricsLine: '[data-testid="lyrics-line"]',
   });
 
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
@@ -42,11 +44,35 @@
     };
   }
 
+  /**
+   * 歌詞（サイトの歌詞表示が開いているときだけ DOM にある）。いま歌っている行は、文字色で見分ける
+   * （サイトの色の変数 --lyrics-color-active の色で、普通の行（--lyrics-color-inactive）とは違うもの。クラス名のハッシュには頼らない）。
+   * 返す: { lines: [表示する行（前 2・いま・次 3）], active: lines の中の位置 } か、歌詞がない・いまの行が分からないときは null。
+   */
+  function readLyrics(doc) {
+    const nodes = Array.from(doc.querySelectorAll(SEL.lyricsLine));
+    const items = nodes.map((n) => ({ text: text(n), node: n })).filter((x) => x.text);
+    if (!items.length) return null;
+    const win = doc.defaultView;
+    const col = (n) => win.getComputedStyle(n.firstElementChild || n).color;
+    const cs = win.getComputedStyle(nodes[0]);
+    const norm = (c) => c.replace(/\s+/g, '').replace(/^rgba\((\d+),(\d+),(\d+),1\)$/, 'rgb($1,$2,$3)');
+    const active = norm(cs.getPropertyValue('--lyrics-color-active'));
+    const inactive = norm(cs.getPropertyValue('--lyrics-color-inactive'));
+    let cur = -1;
+    if (active && active !== inactive) items.forEach((x, i) => { if (norm(col(x.node)) === active) cur = i; });
+    if (cur < 0) return null; // いまの行が分からないときは、歌詞は出さない（ずれた行を出すより、出さない）
+    const from = Math.max(0, cur - 2);
+    const to = Math.min(items.length, cur + 4);
+    return { lines: items.slice(from, to).map((x) => x.text), active: cur - from };
+  }
+
   /** 画面の部品を作る。open / close / isOpen / refresh。 */
   function create(opts) {
     const doc = (opts && opts.document) || document;
     let el = null;
     let timer = 0;
+    let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか（閉じるときに戻す）
 
     const mk = (tag, cls, txt) => {
       const e = doc.createElement(tag);
@@ -68,6 +94,17 @@
         el.querySelector('.sv-np-bg').style.backgroundImage = 'url("' + i.cover.replace(/"/g, '%22') + '")';
       }
       cover.hidden = !i.cover;
+      const ly = readLyrics(doc);
+      const box = el.querySelector('.sv-np-lyrics');
+      box.hidden = !ly;
+      if (ly) {
+        const sig = ly.active + '|' + ly.lines.join('\n');
+        if (box.getAttribute('data-sig') !== sig) {
+          box.setAttribute('data-sig', sig);
+          box.textContent = '';
+          ly.lines.forEach((t, i) => box.appendChild(mk('div', 'sv-np-line' + (i === ly.active ? ' is-current' : ''), t)));
+        }
+      }
       el.querySelector('.sv-np-fill').style.width = Math.round(i.ratio * 1000) / 10 + '%';
       el.querySelector('.sv-np-pos').textContent = i.position;
       el.querySelector('.sv-np-dur').textContent = i.duration;
@@ -85,13 +122,21 @@
       bar.appendChild(mk('div', 'sv-np-fill'));
       const times = mk('div', 'sv-np-times');
       times.append(mk('span', 'sv-np-pos'), mk('span', 'sv-np-dur'));
-      info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), bar, times, mk('div', 'sv-np-hint', 'OK 再生/一時停止　← → 10 秒　↑ 前の曲　↓ 次の曲　戻る 閉じる'));
+      const lyrics = mk('div', 'sv-np-lyrics');
+      lyrics.hidden = true;
+      info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), bar, times, lyrics, mk('div', 'sv-np-hint', 'OK 再生/一時停止　← → 10 秒　↑ 前の曲　↓ 次の曲　戻る 閉じる'));
       const cover = mk('img', 'sv-np-cover');
       cover.alt = '';
       body.append(cover, info);
       el.append(mk('div', 'sv-np-bg'), body);
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
+      // 歌詞は、サイトの歌詞表示が開いているときだけ DOM にある。閉じていれば、開く（閉じるときに戻す）
+      const lb = doc.querySelector(SEL.lyricsButton);
+      if (lb && lb.getAttribute('aria-pressed') === 'false') {
+        lb.click();
+        openedLyrics = true;
+      }
       refresh();
       timer = setInterval(refresh, 400);
     }
@@ -102,11 +147,16 @@
       el.remove();
       el = null;
       doc.documentElement.classList.remove('sv-np-open');
+      if (openedLyrics) {
+        const lb = doc.querySelector(SEL.lyricsButton);
+        if (lb && lb.getAttribute('aria-pressed') === 'true') lb.click();
+        openedLyrics = false;
+      }
     }
 
     return { open, close, refresh, isOpen: () => !!el };
   }
 
-  SV.spotifyNp = { SEL, read, create };
+  SV.spotifyNp = { SEL, read, readLyrics, create };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyNp;
 })(typeof self !== 'undefined' ? self : globalThis);

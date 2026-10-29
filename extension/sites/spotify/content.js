@@ -37,7 +37,7 @@
   SV.settings.onChange(applySettings);
 
   // Spotify の画面は文字が小さめなので、TVer（720）より小さい高さに合わせて、大きく拡大する（自動のときだけ効く）
-  const ZOOM_TARGET = 600;
+  const ZOOM_TARGET = 648;
 
   // 画面倍率: TVer と同じ手順（SV.zoom.fit）。1 ページ読み込みにつき 1 回
   let zoomRequested = false;
@@ -143,7 +143,7 @@
     // 再生バーのジャケット: 再生中の大きな画面を開く（サイトの「再生中ビュー」は使わない）
     if (a && a.matches && a.matches(SV.spotifyNp.SEL.coverButton)) {
       SV.consume(e);
-      ctl.np.open();
+      openNp();
       return;
     }
     // 曲の行: OK で再生（サイトの再生ボタンを押す）。ほかのリンク・ボタンはブラウザ標準の Enter に任せる
@@ -158,6 +158,20 @@
         // 棚のカード: 開く（中のリンク）。なければ、中のボタン
         const target = a.querySelector('a[href]') || a.querySelector('button');
         if (target) target.click();
+      }
+    }
+  }
+
+  /** 再生中の大きな画面を開く。サイトの作りが想定と違って失敗しても、キー操作は止めない（途中まで作った画面は閉じる）。 */
+  function openNp() {
+    try {
+      ctl.np.open();
+    } catch (err) {
+      console.error('[SV] 再生中の画面を開けませんでした', err);
+      try {
+        ctl.np.close();
+      } catch (e2) {
+        /* 何もしない */
       }
     }
   }
@@ -198,7 +212,7 @@
     if (!action) return;
     if (action === 'YELLOW') {
       SV.consume(e);
-      if (!e.repeat) ctl.np.open();
+      if (!e.repeat) openNp();
       return;
     }
 
@@ -274,8 +288,16 @@
     if (action === 'BACK') ctl.hold.release('BACK');
   }
 
-  window.addEventListener('keydown', onKeyDown, true);
-  window.addEventListener('keyup', onKeyUp, true);
+  // サイトの作りが想定と違って例外になっても、原因が分かるように記録する（キー操作は 1 回ぶん失うだけ）
+  const guard = (fn) => (e) => {
+    try {
+      fn(e);
+    } catch (err) {
+      console.error('[SV] spotify key handler', err);
+    }
+  };
+  window.addEventListener('keydown', guard(onKeyDown), true);
+  window.addEventListener('keyup', guard(onKeyUp), true);
 
   // ---- 初期フォーカス: 内容（main）の中に候補が描画されたら、1 回だけ
   function focusInitial() {
@@ -304,9 +326,11 @@
     };
     new MutationObserver(() => {
       S.markSliders(document);
+      S.markPanel(document);
       tryInitial();
     }).observe(document.body, { childList: true, subtree: true });
     S.markSliders(document);
+    S.markPanel(document);
     // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
     let path = location.pathname;
     setInterval(() => {

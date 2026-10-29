@@ -69,11 +69,24 @@
     return true;
   }
 
+  /**
+   * 右の「再生中ビュー」の列（#Desktop_PanelContainer_Id）を、グリッドの直下の要素ごと隠す印を付ける（大きな画面は拡張が作るので要らない）。
+   * 列は画面の幅を使う（TV の画面で、内容の列が細くなる）。グリッド = 左のライブラリ（#Desktop_LeftSidebar_Id）の親。
+   */
+  function markPanel(doc) {
+    const panel = doc.getElementById('Desktop_PanelContainer_Id');
+    const left = doc.getElementById('Desktop_LeftSidebar_Id');
+    if (!panel || !left || !left.parentElement) return;
+    let el = panel;
+    while (el.parentElement && el.parentElement !== left.parentElement) el = el.parentElement;
+    if (el.parentElement === left.parentElement && !el.hasAttribute('data-sv-hide')) el.setAttribute('data-sv-hide', '');
+  }
+
   /** ルート（ホーム）か。ここで「戻る」を押したらハブへ。 */
   function isRoot(pathname) {
     return /^\/(intl-[a-z-]+\/)?$/i.test(pathname || '');
   }
 
-  SV.spotify = { SEL, HOST, isExcluded, isRoot, markSliders, stepSlider };
+  SV.spotify = { SEL, HOST, isExcluded, isRoot, markSliders, stepSlider, markPanel };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotify;
 })(typeof self !== 'undefined' ? self : globalThis);

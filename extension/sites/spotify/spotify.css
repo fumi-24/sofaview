@@ -41,3 +41,12 @@ html.sv-sp [data-testid="global-nav-bar"] a[href*="support.spotify.com"] {
 html.sv-sp [data-sv-adjusting] {
   outline-width: 6px !important;
 }
+
+/* 画面の幅を、内容の列に回す: 右の「再生中ビュー」の列は隠し（大きな画面は拡張が作る）、左のライブラリは細くする */
+html.sv-sp [data-sv-hide] {
+  display: none !important;
+}
+
+html.sv-sp [style*="--left-sidebar-width"] {
+  --left-sidebar-width: 300 !important;
+}

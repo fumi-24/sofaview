@@ -49,6 +49,7 @@ export function spotifyHtml() {
     <div data-testid="playback-progressbar" class="bar"><label class="hidden-visually">曲の再生位置を変える<input type="range" min="0" max="175797" step="5000" value="50000"></label><div data-testid="progress-bar" class="track"></div></div>
   </div>
   <div data-testid="volume-bar"><button data-testid="volume-bar-toggle-mute-button" aria-label="ミュート">🔈</button><div><div><label class="hidden-visually">音量を変える<input type="range" min="0" max="1" step="0.1" value="1"></label><div data-testid="progress-bar" class="track"></div></div></div></div>
+  <button data-testid="lyrics-button" aria-pressed="false" aria-label="歌詞">歌</button>
   <button data-testid="whats-new-feed-button" aria-label="最新情報">新</button>
   </aside>
 </div>
@@ -78,6 +79,27 @@ export function spotifyHtml() {
       return;
     }
     const b = e.target.closest('button');
+    if (b && b.dataset.testid === 'lyrics-button') {
+      // 歌詞は、歌詞ボタンが押されている間だけ DOM にある（サイトと同じ）。色の変数と、いまの行の色も同じ作り
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', String(on));
+      const old = document.getElementById('lyr');
+      if (old) old.remove();
+      if (on) {
+        const box = document.createElement('div');
+        box.id = 'lyr';
+        box.setAttribute('style', '--lyrics-color-active: rgba(255, 255, 255, 1); --lyrics-color-inactive: rgba(200, 209, 184, 1); position: fixed; left: -9999px');
+        ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'].forEach((t, i) => {
+          const l = document.createElement('div');
+          l.setAttribute('data-testid', 'lyrics-line');
+          l.setAttribute('dir', 'auto');
+          l.innerHTML = '<div style="color: ' + (i === 2 ? 'rgb(255, 255, 255)' : 'rgb(200, 209, 184)') + '">' + t + '</div>';
+          box.appendChild(l);
+        });
+        document.body.appendChild(box);
+      }
+      log('lyrics', { on });
+    }
     if (b && b.dataset.testid === 'control-button-playpause') b.setAttribute('aria-label', b.getAttribute('aria-label') === '再生' ? '一時停止' : '再生');
     if (b) log('click', { id: b.dataset.testid || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
   });

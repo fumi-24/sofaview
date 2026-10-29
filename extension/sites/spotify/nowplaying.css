@@ -68,7 +68,7 @@
 }
 
 #sv-np .sv-np-bar {
-  margin-top: 6vh;
+  margin-top: 5vh;
   height: 0.9vh;
   background: rgba(255, 255, 255, 0.28);
   border-radius: 0.5vh;
@@ -102,4 +102,32 @@
 #sv-np[data-state="empty"] .sv-np-bar,
 #sv-np[data-state="empty"] .sv-np-times {
   visibility: hidden;
+}
+
+#sv-np .sv-np-lyrics {
+  margin-top: 4vh;
+  font-size: 3vh;
+  line-height: 1.3;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+#sv-np .sv-np-lyrics[hidden] {
+  display: none;
+}
+
+#sv-np .sv-np-line {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.2vh 0;
+}
+
+#sv-np .sv-np-line.is-current {
+  color: #fff;
+  font-weight: 700;
+  font-size: 3.8vh;
+}
+
+#sv-np .sv-np-hint {
+  margin-top: 4vh;
 }
