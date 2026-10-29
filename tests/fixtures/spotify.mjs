@@ -17,6 +17,8 @@ export function spotifyHtml() {
   .card .img { display: block; width: 150px; height: 150px; background: #444; }
   .card button { position: absolute; right: 8px; top: 108px; width: 32px; height: 32px; border-radius: 16px; }
   [data-testid="now-playing-bar"] { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; display: flex; gap: 16px; align-items: center; justify-content: center; }
+  [data-testid="now-playing-widget-v2"] { display: flex; align-items: center; gap: 8px; margin-right: 24px; }
+  [data-testid="cover-art-button"] img { width: 48px; height: 48px; background: #555; }
   [role="row"] { display: flex; gap: 12px; padding: 8px; }
   h2 { margin: 12px 8px 0; }
   .hidden-visually { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
@@ -35,9 +37,14 @@ export function spotifyHtml() {
     <a href="/other" target="_blank" data-id="blank">新しいタブ</a>
   </nav>
   <main id="main"></main>
-  <aside data-testid="now-playing-bar" aria-label="再生中バー"><div data-testid="player-controls">
+  <aside data-testid="now-playing-bar" aria-label="再生中バー">
+  <div data-testid="now-playing-widget-v2" role="region" aria-label="再生中">
+    <div data-testid="cover-art-container"><button data-testid="cover-art-button" aria-label="再生中ビュー"><img data-testid="cover-art-image" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs="></button></div>
+    <div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>
+  </div>
+  <div data-testid="player-controls">
     <button data-testid="control-button-skip-back" aria-label="前へ">⏮</button>
-    <button data-testid="control-button-playpause" aria-label="再生">⏯</button>
+    <button data-testid="control-button-playpause" aria-label="再生">⏯</button><span data-testid="playback-position">0:50</span><span data-testid="playback-duration">2:55</span>
     <button data-testid="control-button-skip-forward" aria-label="次へ">⏭</button>
     <div data-testid="playback-progressbar" class="bar"><label class="hidden-visually">曲の再生位置を変える<input type="range" min="0" max="175797" step="5000" value="50000"></label><div data-testid="progress-bar" class="track"></div></div>
   </div>
@@ -71,6 +78,7 @@ export function spotifyHtml() {
       return;
     }
     const b = e.target.closest('button');
+    if (b && b.dataset.testid === 'control-button-playpause') b.setAttribute('aria-label', b.getAttribute('aria-label') === '再生' ? '一時停止' : '再生');
     if (b) log('click', { id: b.dataset.testid || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
   });
   addEventListener('popstate', () => { log('popstate', { to: location.pathname }); render(); });

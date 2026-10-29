@@ -3,7 +3,7 @@
  * フォーカスは実 DOM のフォーカス（:focus）。リングはサイトの配色の上でも見える白＋黒の二重線。
  */
 html.sv-sp :focus {
-  outline: 3px solid #fff !important;
+  outline: 4px solid #fff !important;
   outline-offset: 2px !important;
   box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.85) !important;
 }
@@ -31,7 +31,9 @@ html.sv-sp [data-sv-slider] {
 html.sv-sp [data-testid="whats-new-feed-button"],
 html.sv-sp [data-testid="friend-activity-button"],
 html.sv-sp [data-testid="pip-toggle-button"],
-html.sv-sp #global-nav-bar a[href$="/download"] {
+html.sv-sp [data-testid="global-nav-bar"] a[href$="/download"],
+html.sv-sp [data-testid="global-nav-bar"] a[href*="/premium"],
+html.sv-sp [data-testid="global-nav-bar"] a[href*="support.spotify.com"] {
   display: none !important;
 }
 

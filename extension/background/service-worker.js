@@ -127,7 +127,8 @@ async function applyZoom(sender, msg) {
     innerHeight: Number(msg.innerHeight) || 0,
     currentZoom: current,
     mode,
-    targetHeight: s.zoom.targetHeight,
+    // サイトごとの目標の高さ（Spotify は小さめ＝大きく拡大）。自動のときだけ効く
+    targetHeight: Number(msg.targetHeight) >= 360 && Number(msg.targetHeight) <= 1440 ? Number(msg.targetHeight) : s.zoom.targetHeight,
     factor: s.zoom.factor,
   });
   if (!SV.zoom.shouldApply(current, target)) return { ok: true, mode, current, target, applied: false };

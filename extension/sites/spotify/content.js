@@ -10,7 +10,7 @@
   'use strict';
 
   const SV = self.SV;
-  if (!SV || !SV.spotify || !SV.keys || !SV.nav || !SV.osk || !SV.settings) return;
+  if (!SV || !SV.spotify || !SV.spotifyNp || !SV.keys || !SV.nav || !SV.osk || !SV.settings) return;
   const S = SV.spotify;
   const html = document.documentElement;
   const DIR = { UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right' };
@@ -22,6 +22,7 @@
     settings: SV.settings.defaults(),
     nav: null,
     osk: null,
+    np: null, // 再生中の大きな画面
     initialDone: false,
     userMoved: false,
   };
@@ -35,6 +36,9 @@
   SV.settings.load().then(applySettings);
   SV.settings.onChange(applySettings);
 
+  // Spotify の画面は文字が小さめなので、TVer（720）より小さい高さに合わせて、大きく拡大する（自動のときだけ効く）
+  const ZOOM_TARGET = 600;
+
   // 画面倍率: TVer と同じ手順（SV.zoom.fit）。1 ページ読み込みにつき 1 回
   let zoomRequested = false;
   function requestZoom() {
@@ -42,7 +46,7 @@
     zoomRequested = true;
     html.setAttribute('data-sv-zoom', 'pending');
     SV.zoom
-      .fit({ height: () => window.innerHeight, dpr: () => window.devicePixelRatio, request: (msg) => SV.sendMessage(msg) })
+      .fit({ height: () => window.innerHeight, dpr: () => window.devicePixelRatio, request: (msg) => SV.sendMessage({ ...msg, targetHeight: ZOOM_TARGET }) })
       .then((r) => html.setAttribute('data-sv-zoom', r && r.ok ? 'done' : 'skipped'))
       .catch(() => html.setAttribute('data-sv-zoom', 'skipped'));
   }
@@ -136,6 +140,12 @@
       focusInitial();
       return;
     }
+    // 再生バーのジャケット: 再生中の大きな画面を開く（サイトの「再生中ビュー」は使わない）
+    if (a && a.matches && a.matches(SV.spotifyNp.SEL.coverButton)) {
+      SV.consume(e);
+      ctl.np.open();
+      return;
+    }
     // 曲の行: OK で再生（サイトの再生ボタンを押す）。ほかのリンク・ボタンはブラウザ標準の Enter に任せる
     if (a && a.matches && a.matches(S.SEL.row)) {
       SV.consume(e);
@@ -152,11 +162,45 @@
     }
   }
 
+  /** 再生中の大きな画面が開いている間のキー。すべてここで受ける（ページへは渡さない）。 */
+  function onNpKey(e, action) {
+    SV.consume(e);
+    if (!action) return;
+    if (action === 'HOME') {
+      if (!e.repeat) {
+        ctl.np.close();
+        SV.goHub();
+      }
+      return;
+    }
+    if (action === 'BACK' || action === 'YELLOW') {
+      if (!e.repeat) ctl.np.close();
+      return;
+    }
+    if (!ctl.gate.allow(action, e)) return;
+    const seek = (dir) => {
+      const box = document.querySelector('[data-sv-slider="seek"]');
+      if (box) S.stepSlider(box, dir);
+    };
+    if (action === 'OK' || action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(S.SEL.playPause);
+    else if (action === 'LEFT' || action === 'SEEK_BACK') seek(-1);
+    else if (action === 'RIGHT' || action === 'SEEK_FWD') seek(1);
+    else if (action === 'UP' || action === 'PREV') click(S.SEL.prev);
+    else if (action === 'DOWN' || action === 'NEXT') click(S.SEL.next);
+    setTimeout(() => ctl.np.refresh(), 150);
+  }
+
   function onKeyDown(e) {
     if (SV.keys.shouldIgnore(e)) return;
     const action = ctl.matcher.match(e);
     if (ctl.osk && ctl.osk.isOpen()) return onOskKey(e, action);
+    if (ctl.np && ctl.np.isOpen()) return onNpKey(e, action);
     if (!action) return;
+    if (action === 'YELLOW') {
+      SV.consume(e);
+      if (!e.repeat) ctl.np.open();
+      return;
+    }
 
     if (action === 'HOME') {
       SV.consume(e);
@@ -246,6 +290,7 @@
       exclude: (el) => (el.matches(S.SEL.searchInput) ? S.isExcluded(el) : SV.nav.defaultExclude(el) || S.isExcluded(el) || el.matches(S.SEL.grid) || (!el.matches(S.SEL.row) && !!el.closest(S.SEL.row))),
     });
     ctl.osk = SV.osk.create({ document });
+    ctl.np = SV.spotifyNp.create({ document });
     requestZoom();
     // 音楽を流したまま別のタブへ移れるよう、このタブは休止・破棄されないようにする
     SV.sendMessage({ type: 'sv:remoteKeep' });

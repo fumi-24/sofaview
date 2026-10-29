@@ -1,0 +1,105 @@
+/*
+ * Spotify: 再生中の大きな画面（#sv-np）。寸法は画面の高さ（vh）の倍数。ジャケットの色をぼかした背景（/tv の再生画面に近い暗さ）。
+ * アニメーション・トランジションは付けない（/tv と同じ）。
+ */
+#sv-np {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  background: #000;
+  color: #f1f1f1;
+  font-family: system-ui, -apple-system, 'Segoe UI', 'Hiragino Sans', 'Yu Gothic UI', Meiryo, sans-serif;
+  overflow: hidden;
+}
+
+#sv-np .sv-np-bg {
+  position: absolute;
+  inset: -10vh;
+  background-size: cover;
+  background-position: center;
+  filter: blur(7vh) brightness(0.38) saturate(1.2);
+}
+
+#sv-np .sv-np-body {
+  position: relative;
+  height: 100%;
+  box-sizing: border-box;
+  padding: 0 8vh;
+  display: flex;
+  align-items: center;
+  gap: 8vh;
+}
+
+#sv-np .sv-np-cover {
+  flex: none;
+  width: 56vh;
+  height: 56vh;
+  object-fit: cover;
+  border-radius: 1.2vh;
+  box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.6);
+}
+
+#sv-np .sv-np-info {
+  flex: 1;
+  min-width: 0;
+}
+
+#sv-np .sv-np-state {
+  font-size: 2.6vh;
+  color: #b7b7b7;
+  min-height: 3.4vh;
+}
+
+#sv-np .sv-np-title {
+  margin: 1vh 0 0;
+  font-size: 6vh;
+  line-height: 1.2;
+  font-weight: 700;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+#sv-np .sv-np-artist {
+  margin-top: 1.6vh;
+  font-size: 3.4vh;
+  color: #d9d9d9;
+}
+
+#sv-np .sv-np-bar {
+  margin-top: 6vh;
+  height: 0.9vh;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 0.5vh;
+  overflow: hidden;
+}
+
+#sv-np .sv-np-fill {
+  height: 100%;
+  width: 0;
+  background: #fff;
+}
+
+#sv-np .sv-np-times {
+  margin-top: 1.2vh;
+  display: flex;
+  justify-content: space-between;
+  font-size: 2.6vh;
+  color: #b7b7b7;
+}
+
+#sv-np .sv-np-hint {
+  margin-top: 7vh;
+  font-size: 2.2vh;
+  color: #8a8a8a;
+}
+
+#sv-np[data-state="empty"] .sv-np-title {
+  font-size: 4.4vh;
+}
+
+#sv-np[data-state="empty"] .sv-np-bar,
+#sv-np[data-state="empty"] .sv-np-times {
+  visibility: hidden;
+}

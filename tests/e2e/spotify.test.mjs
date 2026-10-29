@@ -194,3 +194,52 @@ test('Spotify: 再生バーの再生位置・音量の棒にフォーカスで�
   assert.equal(await page.locator('[data-testid="whats-new-feed-button"]').isVisible(), false);
   await page.close();
 });
+
+test('Spotify: 再生バーのジャケットで OK を押すと、再生中の大きな画面（曲名・アーティスト・再生位置）が開く。OK 再生/一時停止、← → 10 秒、↑ 前、↓ 次、戻るで閉じる。黄色キーでも開閉', async () => {
+  for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
+  const page = await open();
+  await until(async () => (await where(page)).href === '/album/a1');
+  const np = page.locator('#sv-np');
+  // ジャケットにフォーカスして OK
+  for (let i = 0; i < 12 && (await page.evaluate(() => document.activeElement.dataset.testid)) !== 'cover-art-button'; i++) await press(page, i < 5 ? 'ArrowDown' : 'ArrowLeft');
+  assert.equal(await page.evaluate(() => document.activeElement.dataset.testid), 'cover-art-button', 'ジャケットに届く');
+  await press(page, 'Enter');
+  await until(async () => (await np.count()) === 1, { message: '再生中の画面が開く' });
+  await until(async () => /テスト曲のタイトル/.test(await np.innerText()), { message: '曲名' });
+  assert.match(await np.innerText(), /テスト歌手/);
+  assert.match(await np.innerText(), /0:50/);
+  assert.equal(await np.getAttribute('data-state'), 'paused');
+  // 画面が前面（フルスクリーンの覆い）で、下のページは操作されない
+  const logBefore = (await fx(page, 'log')).length;
+  await press(page, 'Enter'); // 再生/一時停止
+  await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '再生中になる' });
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowUp');
+  await press(page, 'ArrowDown');
+  const log = (await fx(page, 'log')).slice(logBefore);
+  assert.deepEqual(log.filter((l) => l.ev === 'range').map((l) => l.value), [60000, 70000, 60000], '← → で 10 秒ずつ');
+  assert.deepEqual(log.filter((l) => l.ev === 'click').map((l) => l.id), ['control-button-playpause', 'control-button-skip-back', 'control-button-skip-forward']);
+  assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'navigate').length, 0, '下のページは動かない');
+  await press(page, 'Escape');
+  await until(async () => (await np.count()) === 0, { message: '戻るで閉じる' });
+  // 黄色キー（どこからでも）
+  const cdp = await env.ctx.newCDPSession(page);
+  const yellow = async () => {
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ColorF2Yellow', code: 'ColorF2Yellow', windowsVirtualKeyCode: 405 });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ColorF2Yellow', code: 'ColorF2Yellow', windowsVirtualKeyCode: 405 });
+    await page.waitForTimeout(150);
+  };
+  await yellow();
+  assert.equal(await np.count(), 1, '黄色キーで開く');
+  await yellow();
+  assert.equal(await np.count(), 0, '黄色キーで閉じる');
+  await page.close();
+});
+
+test('Spotify: 画面倍率は TVer（720）より小さい高さ（600）に合わせて、大きく拡大する', async () => {
+  const page = await open();
+  await until(async () => (await page.evaluate(() => Math.round(innerHeight))) === 600, { message: '1080 の画面が 600 相当（1.8 倍）' });
+  await page.close();
+});
