@@ -147,3 +147,50 @@ test('Spotify: 開いている Spotify がなければ、ハブのタイルは�
   await hub.waitForURL('https://open.spotify.com/', { timeout: 8000 });
   await hub.close();
 });
+
+test('Spotify: 再生バーの再生位置・音量の棒にフォーカスでき、← → で動かせる（本体の input は画面に出ないので、見える容器に印を付ける）。早送り・巻き戻しのキーは再生位置を 10 秒動かす', async () => {
+  for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
+  const page = await open();
+  await until(async () => (await where(page)).href === '/album/a1');
+  assert.equal(await page.locator('[data-sv-slider]').count(), 2, '再生位置と音量に印が付く');
+  const toSlider = async (kind) => {
+    for (let i = 0; i < 14; i++) {
+      if ((await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider'))) === kind) return true;
+      await press(page, i < 5 ? 'ArrowDown' : i % 2 ? 'ArrowRight' : 'ArrowDown');
+    }
+    return false;
+  };
+  assert.equal(await toSlider('seek'), true, '再生位置の棒に届く');
+  const ranges = async (kind) => (await fx(page, 'log')).filter((l) => l.ev === 'range' && l.kind === kind).map((l) => l.value);
+  await press(page, 'ArrowRight'); // 調整中でないときは、← → は普通のフォーカス移動
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider')), null, '棒から出る');
+  await press(page, 'ArrowLeft');
+  assert.equal(await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider')), 'seek', '戻る');
+  assert.deepEqual(await ranges('seek'), [], 'まだ動いていない');
+  await press(page, 'Enter'); // 調整中へ
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await ranges('seek'), [60000, 70000, 60000], '← → で 10 秒ずつ');
+  await press(page, 'Enter'); // 調整を終える
+  await press(page, 'ArrowRight');
+  assert.notEqual(await page.evaluate(() => document.activeElement.getAttribute('data-sv-slider')), 'seek', '調整を終えると、← → で移れる');
+  await toSlider('seek');
+  // 早送り・巻き戻しのキー（フォーカスがどこでも）
+  const cdp = await env.ctx.newCDPSession(page);
+  for (const [key, code] of [['MediaFastForward', 228], ['MediaRewind', 227]]) {
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key, code: key, windowsVirtualKeyCode: code });
+    await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code: key, windowsVirtualKeyCode: code });
+    await page.waitForTimeout(150);
+  }
+  assert.deepEqual((await ranges('seek')).slice(3), [70000, 60000]);
+  // 音量: 0.1 ずつ
+  assert.equal(await toSlider('volume'), true, '音量の棒に届く');
+  await press(page, 'Enter');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await ranges('volume'), [0.9, 0.8]);
+  // リモコンで使えない「最新情報」は隠れ、候補にならない
+  assert.equal(await page.locator('[data-testid="whats-new-feed-button"]').isVisible(), false);
+  await page.close();
+});

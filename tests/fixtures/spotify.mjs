@@ -19,6 +19,9 @@ export function spotifyHtml() {
   [data-testid="now-playing-bar"] { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; display: flex; gap: 16px; align-items: center; justify-content: center; }
   [role="row"] { display: flex; gap: 12px; padding: 8px; }
   h2 { margin: 12px 8px 0; }
+  .hidden-visually { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+  .bar { display: inline-block; width: 300px; } .track { height: 4px; background: #666; }
+  [data-testid="volume-bar"] { display: flex; align-items: center; gap: 8px; width: 160px; } [data-testid="volume-bar"] > div { width: 100px; }
 </style></head><body>
 <div data-testid="root">
   <header data-testid="global-nav-bar">
@@ -32,11 +35,15 @@ export function spotifyHtml() {
     <a href="/other" target="_blank" data-id="blank">新しいタブ</a>
   </nav>
   <main id="main"></main>
-  <div data-testid="now-playing-bar"><div data-testid="player-controls">
+  <aside data-testid="now-playing-bar" aria-label="再生中バー"><div data-testid="player-controls">
     <button data-testid="control-button-skip-back" aria-label="前へ">⏮</button>
     <button data-testid="control-button-playpause" aria-label="再生">⏯</button>
     <button data-testid="control-button-skip-forward" aria-label="次へ">⏭</button>
-  </div></div>
+    <div data-testid="playback-progressbar" class="bar"><label class="hidden-visually">曲の再生位置を変える<input type="range" min="0" max="175797" step="5000" value="50000"></label><div data-testid="progress-bar" class="track"></div></div>
+  </div>
+  <div data-testid="volume-bar"><button data-testid="volume-bar-toggle-mute-button" aria-label="ミュート">🔈</button><div><div><label class="hidden-visually">音量を変える<input type="range" min="0" max="1" step="0.1" value="1"></label><div data-testid="progress-bar" class="track"></div></div></div></div>
+  <button data-testid="whats-new-feed-button" aria-label="最新情報">新</button>
+  </aside>
 </div>
 <script>
   window.__fx = { log: [], inputs: [] };
@@ -67,6 +74,7 @@ export function spotifyHtml() {
     if (b) log('click', { id: b.dataset.testid || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
   });
   addEventListener('popstate', () => { log('popstate', { to: location.pathname }); render(); });
+  document.querySelectorAll('input[type=range]').forEach((r) => { r.addEventListener('input', () => window.__fx.log.push({ ev: 'range', kind: r.max === '1' ? 'volume' : 'seek', value: Number(r.value) })); });
   document.querySelector('[data-testid="search-input"]').addEventListener('input', (e) => window.__fx.inputs.push(e.target.value));
   render();
 </script></body></html>`;

@@ -11,6 +11,8 @@
     playPause: '[data-testid="control-button-playpause"]',
     next: '[data-testid="control-button-skip-forward"]',
     prev: '[data-testid="control-button-skip-back"]',
+    seekInput: '[data-testid="playback-progressbar"] input[type="range"]',
+    slider: '[data-testid="now-playing-bar"] input[type="range"]', // 再生位置・音量（画面には出ない input。隣の棒が見た目）
     searchInput: '[data-testid="search-input"]',
     trackRow: '[data-testid="tracklist-row"]',
     row: '[role="row"]', // 曲の行・棚のカード（サイトは role=row・tabindex=-1 で並べる）。行を 1 つの候補にする
@@ -27,6 +29,7 @@
     if (!el || !el.matches) return true;
     if (el.matches('[data-testid$="sentinel"], [data-testid="LayoutResizer__resize-bar"], [data-testid="language-selection-modal"] *')) return true;
     if (el.closest('[aria-hidden="true"]')) return true;
+    if (el.matches('input[type="range"]')) return true; // 画面に出ない本体（棒の容器 data-sv-slider が候補）。位置は画面の外にある
     if (el.matches('a[href]')) {
       if (el.getAttribute('target') === '_blank') return true;
       try {
@@ -38,11 +41,39 @@
     return false;
   }
 
+  /**
+   * 再生バーの再生位置・音量の棒: 本体の input[type=range] は画面に出ない（hidden-visually）ので、フォーカスできる見た目の容器に印を付ける。
+   * 容器 = input の label の親（再生位置は data-testid="playback-progressbar"）。印は data-sv-slider（seek / volume）。
+   */
+  function markSliders(doc) {
+    for (const input of doc.querySelectorAll(SEL.slider)) {
+      const label = input.closest('label');
+      const box = label && label.parentElement;
+      if (!box || box.hasAttribute('data-sv-slider')) continue;
+      box.setAttribute('data-sv-slider', input.matches(SEL.seekInput) ? 'seek' : 'volume');
+      box.setAttribute('tabindex', '0');
+      box.setAttribute('role', 'slider');
+      box.setAttribute('aria-label', input.matches(SEL.seekInput) ? '再生位置' : '音量');
+    }
+  }
+
+  /** 棒を動かす（向き: 1 = 右・-1 = 左）。再生位置は 10 秒（step 5000 の 2 つ分）、音量は step 1 つ分（0.1）。サイトの React が input イベントで気づく。 */
+  function stepSlider(box, dir) {
+    const input = box && box.querySelector('input[type="range"]');
+    if (!input) return false;
+    const n = box.getAttribute('data-sv-slider') === 'seek' ? 2 : 1;
+    if (dir > 0) input.stepUp(n);
+    else input.stepDown(n);
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+    return true;
+  }
+
   /** ルート（ホーム）か。ここで「戻る」を押したらハブへ。 */
   function isRoot(pathname) {
     return /^\/(intl-[a-z-]+\/)?$/i.test(pathname || '');
   }
 
-  SV.spotify = { SEL, HOST, isExcluded, isRoot };
+  SV.spotify = { SEL, HOST, isExcluded, isRoot, markSliders, stepSlider };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotify;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -176,6 +176,26 @@
       SV.consume(e);
       return;
     }
+    // 再生位置・音量の棒: OK で「調整中」（← → で動かす）。↑ ↓・OK・戻るで調整を終える。調整中でなければ、← → は普通のフォーカス移動
+    const cur = document.activeElement;
+    const adjusting = cur && cur.hasAttribute && cur.hasAttribute('data-sv-adjusting');
+    if (adjusting) {
+      if (action === 'LEFT' || action === 'RIGHT') {
+        SV.consume(e);
+        S.stepSlider(cur, action === 'RIGHT' ? 1 : -1);
+        return;
+      }
+      cur.removeAttribute('data-sv-adjusting');
+      if (action === 'OK' || action === 'BACK') {
+        SV.consume(e);
+        return;
+      }
+    }
+    if (action === 'OK' && cur && cur.hasAttribute && cur.hasAttribute('data-sv-slider')) {
+      SV.consume(e);
+      cur.setAttribute('data-sv-adjusting', '');
+      return;
+    }
     if (SV.keys.isDirection(action)) {
       SV.consume(e);
       ctl.userMoved = true;
@@ -183,6 +203,12 @@
       return;
     }
     if (action === 'OK') return onOk(e);
+    // 早送り・巻き戻しのキー: 再生位置を 10 秒動かす
+    if (action === 'SEEK_FWD' || action === 'SEEK_BACK') {
+      const box = document.querySelector('[data-sv-slider="seek"]');
+      if (box && S.stepSlider(box, action === 'SEEK_FWD' ? 1 : -1)) SV.consume(e);
+      return;
+    }
     if (action === 'BACK') {
       SV.consume(e);
       if (!e.repeat) goBack();
@@ -231,7 +257,11 @@
       }
       if (focusInitial()) ctl.initialDone = true;
     };
-    new MutationObserver(tryInitial).observe(document.body, { childList: true, subtree: true });
+    new MutationObserver(() => {
+      S.markSliders(document);
+      tryInitial();
+    }).observe(document.body, { childList: true, subtree: true });
+    S.markSliders(document);
     // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
     let path = location.pathname;
     setInterval(() => {
