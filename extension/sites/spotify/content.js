@@ -51,6 +51,25 @@
       .catch(() => html.setAttribute('data-sv-zoom', 'skipped'));
   }
 
+  /** サイトのメニュー・ダイアログが開いているか（見えているもの。拡張の画面は除く）。 */
+  const POPUP = '[role="menu"], [role="dialog"], [role="listbox"]';
+  function openPopup() {
+    for (const el of document.querySelectorAll(POPUP)) {
+      if (el.id === 'sv-np' || el.closest('#sv-np') || el.closest('[aria-hidden="true"]')) continue;
+      const r = el.getBoundingClientRect();
+      if (r.width < 8 || r.height < 8) continue;
+      if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true })) continue;
+      return el;
+    }
+    return null;
+  }
+
+  /** 開いているメニュー・ダイアログを閉じる: Esc を送る（サイトが自分で閉じる）。 */
+  function closePopup() {
+    const t = document.activeElement || document.body;
+    for (const type of ['keydown', 'keyup']) t.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true }));
+  }
+
   function goBack() {
     if (S.isRoot(location.pathname) || history.length <= 1) SV.goHub();
     else history.back();
@@ -192,16 +211,7 @@
       return;
     }
     if (!ctl.gate.allow(action, e)) return;
-    const seek = (dir) => {
-      const box = document.querySelector('[data-sv-slider="seek"]');
-      if (box) S.stepSlider(box, dir);
-    };
-    if (action === 'OK' || action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(S.SEL.playPause);
-    else if (action === 'LEFT' || action === 'SEEK_BACK') seek(-1);
-    else if (action === 'RIGHT' || action === 'SEEK_FWD') seek(1);
-    else if (action === 'UP' || action === 'PREV') click(S.SEL.prev);
-    else if (action === 'DOWN' || action === 'NEXT') click(S.SEL.next);
-    setTimeout(() => ctl.np.refresh(), 150);
+    ctl.np.handleAction(action);
   }
 
   function onKeyDown(e) {
@@ -269,7 +279,9 @@
     }
     if (action === 'BACK') {
       SV.consume(e);
-      if (!e.repeat) goBack();
+      if (e.repeat) return;
+      if (openPopup()) closePopup(); // メニュー・ダイアログが開いていれば、それを閉じる（ページは戻らない）
+      else goBack();
       return;
     }
     // 再生の操作（サイトの操作ボタンを押す）
@@ -317,6 +329,11 @@
     ctl.nav = SV.nav.createNavigator({
       // 曲の行・棚のカード（role=row）は、サイトが tabindex=-1 にしている。行を 1 つの候補にして、中のボタン・リンクは外す（OK で開く・再生する）
       selector: SV.nav.DEFAULT_SELECTOR + ', ' + S.SEL.row,
+      // 開いているメニュー・ダイアログがあるときは、その中だけを動く（後ろのページへ行かない）
+      regionOf: (el) => {
+        const m = el.closest(POPUP);
+        return m && m === openPopup() ? 'modal' : 'content';
+      },
       // 検索欄は文字入力欄だが、候補にする（OK で画面上のキーボード）
       exclude: (el) => (el.matches(S.SEL.searchInput) ? S.isExcluded(el) : SV.nav.defaultExclude(el) || S.isExcluded(el) || el.matches(S.SEL.grid) || (!el.matches(S.SEL.row) && !!el.closest(S.SEL.row))),
     });
@@ -333,11 +350,35 @@
       }
       if (focusInitial()) ctl.initialDone = true;
     };
+    // スマホから再生が始まった（曲が変わった）ら、background に知らせる。裏のタブなら、前面に出て、再生中の画面が開く（設定 spotify.standby）。
+    // 裏のタブはタイマーが間引かれる（5 分後から 1 分に 1 回）ので、タイマーではなく DOM の変化で見る。最初に読んだ曲は、基準にするだけ
+    let lastTitle;
+    const watchTrack = () => {
+      const t = SV.spotifyNp.trackTitle(document);
+      if (lastTitle === undefined) {
+        lastTitle = t;
+        return;
+      }
+      if (t && t !== lastTitle) SV.sendMessage({ type: 'sv:spotifyWake' });
+      lastTitle = t;
+    };
+    if (SV.hasChrome()) {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (msg && msg.type === 'sv:openNp') openNp();
+      });
+      try {
+        navigator.locks.request('sv-spotify-keepalive', () => new Promise(() => {}));
+      } catch (e) {
+        /* 使えない環境では何もしない */
+      }
+    }
     new MutationObserver(() => {
       S.markSliders(document);
       S.markPanel(document);
+      watchTrack();
       tryInitial();
-    }).observe(document.body, { childList: true, subtree: true });
+    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    watchTrack();
     S.markSliders(document);
     S.markPanel(document);
     // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）

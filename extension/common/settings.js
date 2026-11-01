@@ -19,6 +19,9 @@
       hideAppCta: true, // 「アプリで視聴する」等を隠す
       nativeFullscreen: true, // 再生が始まったら、ブラウザの全画面（アドレスバー等も消える）にもする。オフでも画面いっぱいの表示（劇場表示）になる
     },
+    spotify: {
+      standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
+    },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
       receiver: false, // スマホのリモコン用に、YouTube /tv を裏のタブで開いておく（スマホから YouTube を送ると前面に出る）
@@ -71,6 +74,9 @@
     out.tver.hideHeader = bool(t.hideHeader, d.tver.hideHeader);
     out.tver.hideAppCta = bool(t.hideAppCta, d.tver.hideAppCta);
     out.tver.nativeFullscreen = bool(t.nativeFullscreen, d.tver.nativeFullscreen);
+
+    const sp = isObj(s.spotify) ? s.spotify : {};
+    out.spotify.standby = bool(sp.standby, d.spotify.standby);
 
     const y = isObj(s.youtube) ? s.youtube : {};
     out.youtube.redirect = bool(y.redirect, d.youtube.redirect);

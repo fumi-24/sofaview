@@ -23,6 +23,7 @@
     { id: 'tver.hideAppCta', label: '「アプリで視聴する」を隠す', options: onOff },
     { id: 'youtube.redirect', label: 'YouTube の通常 URL を /tv へ転送', sub: 'watch?v=… と youtu.be のリンクも /tv で開きます', options: onOff },
     { id: 'youtube.receiver', label: 'キャスト待機：YouTube を裏で開いておく', sub: 'スマホから YouTube を送る（キャスト）と、自動で前面に出て再生します', options: onOff },
+    { id: 'spotify.standby', label: 'Spotify を裏で開いておく（スマホから再生すると自動で再生中の画面）', sub: 'スマホの Spotify で、再生先に「Web Player」を選んで使います', options: onOff },
     { id: 'holdBackToHome', label: '戻るキーの長押しでホームへ', sub: 'リモコンに Home がない場合の保険', options: onOff },
     { id: 'link:keys', label: 'キー割り当て（追加）', value: '›', href: 'keys.html' },
     { id: 'link:diag', label: 'キー診断', value: '›', href: 'diag.html' },

@@ -17,6 +17,7 @@ export function spotifyHtml() {
   .card .img { display: block; width: 150px; height: 150px; background: #444; }
   .card button { position: absolute; right: 8px; top: 108px; width: 32px; height: 32px; border-radius: 16px; }
   [data-testid="now-playing-bar"] { position: fixed; left: 0; right: 0; bottom: 0; height: 80px; display: flex; gap: 16px; align-items: center; justify-content: center; }
+  [data-testid="general-controls"] { display: inline-flex; gap: 4px; }
   [data-testid="now-playing-widget-v2"] { display: flex; align-items: center; gap: 8px; margin-right: 24px; }
   [data-testid="cover-art-button"] img { width: 48px; height: 48px; background: #555; }
   [role="row"] { display: flex; gap: 12px; padding: 8px; }
@@ -30,6 +31,7 @@ export function spotifyHtml() {
     <a data-testid="home-button" href="/" aria-label="ホーム">ホーム</a>
     <input data-testid="search-input" type="search" placeholder="何を再生したいですか？" aria-label="検索">
     <a href="https://www.spotify.com/jp/premium/" data-id="ext">Premium</a>
+    <button data-testid="more-button" aria-label="その他のオプション">…</button>
   </header>
   <nav class="side" aria-label="メインナビゲーション">
     <a href="/collection/playlists" data-id="lib">マイライブラリ</a>
@@ -41,11 +43,15 @@ export function spotifyHtml() {
   <div data-testid="now-playing-widget-v2" role="region" aria-label="再生中">
     <div data-testid="cover-art-container"><button data-testid="cover-art-button" aria-label="再生中ビュー"><img data-testid="cover-art-image" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs="></button></div>
     <div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>
+    <button aria-checked="false" aria-label="お気に入りに追加" data-like>♡</button>
   </div>
-  <div data-testid="player-controls">
+  <div data-testid="player-controls"><div data-testid="general-controls">
+    <button aria-label="シャッフル">⇄</button>
     <button data-testid="control-button-skip-back" aria-label="前へ">⏮</button>
-    <button data-testid="control-button-playpause" aria-label="再生">⏯</button><span data-testid="playback-position">0:50</span><span data-testid="playback-duration">2:55</span>
+    <button data-testid="control-button-playpause" aria-label="再生">⏯</button>
     <button data-testid="control-button-skip-forward" aria-label="次へ">⏭</button>
+    <button data-testid="control-button-repeat" role="checkbox" aria-checked="false" aria-label="リピートを無効にする">↻</button>
+    </div><span data-testid="playback-position">0:50</span><span data-testid="playback-duration">2:55</span>
     <div data-testid="playback-progressbar" class="bar"><label class="hidden-visually">曲の再生位置を変える<input type="range" min="0" max="175797" step="5000" value="50000"></label><div data-testid="progress-bar" class="track"></div></div>
   </div>
   <div data-testid="volume-bar"><button data-testid="volume-bar-toggle-mute-button" aria-label="ミュート">🔈</button><div><div><label class="hidden-visually">音量を変える<input type="range" min="0" max="1" step="0.1" value="1"></label><div data-testid="progress-bar" class="track"></div></div></div></div>
@@ -54,7 +60,7 @@ export function spotifyHtml() {
   </aside>
 </div>
 <script>
-  window.__fx = { log: [], inputs: [] };
+  window.__fx = { log: [], inputs: [], setTrack: (t) => { document.querySelector('[data-testid="now-playing-widget-v2"] a').textContent = t; } };
   const log = (ev, d) => window.__fx.log.push({ ev, ...(d || {}) });
   const main = document.getElementById('main');
   function render() {
@@ -79,6 +85,25 @@ export function spotifyHtml() {
       return;
     }
     const b = e.target.closest('button');
+    if (b && b.dataset.testid === 'more-button' && !document.getElementById('ctx')) {
+      // サイトのコンテキストメニュー: role=menu。Esc で閉じる。外のものも候補になる（後ろに動かないことを確かめる）
+      const m = document.createElement('div');
+      m.id = 'ctx';
+      m.setAttribute('role', 'menu');
+      m.setAttribute('style', 'position: fixed; right: 20px; top: 60px; background: #333; padding: 8px; width: 200px; z-index: 50');
+      ['プレイリストに追加', 'キューに追加', 'シェア'].forEach((t) => {
+        const i = document.createElement('button');
+        i.setAttribute('role', 'menuitem');
+        i.textContent = t;
+        i.style.display = 'block';
+        m.appendChild(i);
+      });
+      document.body.appendChild(m);
+      m.firstChild.focus();
+      log('menu-open');
+      return;
+    }
+    if (b && b.getAttribute('role') === 'menuitem') { log('menu-item', { text: b.textContent }); }
     if (b && b.dataset.testid === 'lyrics-button') {
       // 歌詞は、歌詞ボタンが押されている間だけ DOM にある（サイトと同じ）。色の変数と、いまの行の色も同じ作り
       const on = b.getAttribute('aria-pressed') !== 'true';
@@ -100,9 +125,11 @@ export function spotifyHtml() {
       }
       log('lyrics', { on });
     }
+    if (b && (b.hasAttribute('data-like') || b.dataset.testid === 'control-button-repeat')) b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
     if (b && b.dataset.testid === 'control-button-playpause') b.setAttribute('aria-label', b.getAttribute('aria-label') === '再生' ? '一時停止' : '再生');
     if (b) log('click', { id: b.dataset.testid || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
   });
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('ctx')) { document.getElementById('ctx').remove(); log('menu-close'); } });
   addEventListener('popstate', () => { log('popstate', { to: location.pathname }); render(); });
   document.querySelectorAll('input[type=range]').forEach((r) => { r.addEventListener('input', () => window.__fx.log.push({ ev: 'range', kind: r.max === '1' ? 'volume' : 'seek', value: Number(r.value) })); });
   document.querySelector('[data-testid="search-input"]').addEventListener('input', (e) => window.__fx.inputs.push(e.target.value));

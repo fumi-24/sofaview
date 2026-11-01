@@ -1,6 +1,6 @@
 /*
- * Spotify: 再生中の大きな画面（#sv-np）。寸法は画面の高さ（vh）の倍数。ジャケットの色をぼかした背景（/tv の再生画面に近い暗さ）。
- * アニメーション・トランジションは付けない（/tv と同じ）。
+ * Spotify: 再生中の大きな画面（#sv-np）。寸法は画面の高さ（vh）の倍数。ジャケットの色をぼかした暗い背景（/tv の再生画面に近い暗さ）。
+ * アニメーション・トランジションは付けない（/tv と同じ）。フォーカスは実 DOM のフォーカス（:focus）。
  */
 #sv-np {
   position: fixed;
@@ -24,16 +24,16 @@
   position: relative;
   height: 100%;
   box-sizing: border-box;
-  padding: 0 8vh;
+  padding: 0 7vh;
   display: flex;
   align-items: center;
-  gap: 8vh;
+  gap: 7vh;
 }
 
 #sv-np .sv-np-cover {
   flex: none;
-  width: 56vh;
-  height: 56vh;
+  width: 50vh;
+  height: 50vh;
   object-fit: cover;
   border-radius: 1.2vh;
   box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.6);
@@ -45,68 +45,36 @@
 }
 
 #sv-np .sv-np-state {
-  font-size: 2.6vh;
+  font-size: 2.4vh;
   color: #b7b7b7;
-  min-height: 3.4vh;
+  min-height: 3vh;
 }
 
 #sv-np .sv-np-title {
-  margin: 1vh 0 0;
-  font-size: 6vh;
+  margin: 0.6vh 0 0;
+  font-size: 5.4vh;
   line-height: 1.2;
   font-weight: 700;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
 }
 
 #sv-np .sv-np-artist {
-  margin-top: 1.6vh;
-  font-size: 3.4vh;
+  margin-top: 1vh;
+  font-size: 3vh;
   color: #d9d9d9;
 }
 
-#sv-np .sv-np-bar {
-  margin-top: 5vh;
-  height: 0.9vh;
-  background: rgba(255, 255, 255, 0.28);
-  border-radius: 0.5vh;
-  overflow: hidden;
-}
-
-#sv-np .sv-np-fill {
-  height: 100%;
-  width: 0;
-  background: #fff;
-}
-
-#sv-np .sv-np-times {
-  margin-top: 1.2vh;
-  display: flex;
-  justify-content: space-between;
-  font-size: 2.6vh;
-  color: #b7b7b7;
-}
-
-#sv-np .sv-np-hint {
-  margin-top: 7vh;
-  font-size: 2.2vh;
-  color: #8a8a8a;
-}
-
 #sv-np[data-state="empty"] .sv-np-title {
-  font-size: 4.4vh;
+  font-size: 4.2vh;
 }
 
-#sv-np[data-state="empty"] .sv-np-bar,
-#sv-np[data-state="empty"] .sv-np-times {
-  visibility: hidden;
-}
-
+/* 歌詞 */
 #sv-np .sv-np-lyrics {
-  margin-top: 4vh;
-  font-size: 3vh;
+  margin-top: 2.4vh;
+  font-size: 2.6vh;
   line-height: 1.3;
   color: rgba(255, 255, 255, 0.5);
 }
@@ -119,15 +87,151 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0.2vh 0;
+  padding: 0.15vh 0;
 }
 
 #sv-np .sv-np-line.is-current {
   color: #fff;
   font-weight: 700;
-  font-size: 3.8vh;
+  font-size: 3.4vh;
+}
+
+/* 再生位置（段 1） */
+#sv-np .sv-np-bar {
+  margin-top: 3vh;
+  height: 1vh;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 0.5vh;
+  outline: none;
+}
+
+#sv-np .sv-np-fill {
+  height: 100%;
+  width: 0;
+  background: #fff;
+  border-radius: 0.5vh;
+}
+
+#sv-np .sv-np-bar:focus {
+  height: 1.5vh;
+  margin-top: 2.75vh;
+  box-shadow: 0 0 0 0.5vh #fff;
+}
+
+#sv-np .sv-np-times {
+  margin-top: 1vh;
+  display: flex;
+  justify-content: space-between;
+  font-size: 2.2vh;
+  color: #b7b7b7;
+}
+
+/* ボタンの列（段 2） */
+#sv-np .sv-np-btns {
+  margin-top: 2.4vh;
+  display: flex;
+  gap: 1.2vh;
+}
+
+#sv-np .sv-np-btn {
+  flex: 1;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 1.2vh 0.4vh;
+  border: 0;
+  border-radius: 1.2vh;
+  background: rgba(255, 255, 255, 0.12);
+  color: #f1f1f1;
+  font: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4vh;
+  cursor: default;
+  outline: none;
+}
+
+#sv-np .sv-np-icon {
+  font-size: 3.6vh;
+  line-height: 1;
+}
+
+#sv-np .sv-np-cap {
+  font-size: 1.7vh;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
+}
+
+/* 押されている状態（リピート・お気に入り・歌詞・スリープ）: 緑の下線 */
+#sv-np .sv-np-btn[aria-pressed="true"] {
+  box-shadow: inset 0 -0.5vh 0 #1db954;
+}
+
+/* フォーカス: 白地・黒文字（/tv のフォーカスと同じ） */
+#sv-np .sv-np-btn:focus {
+  background: #f1f1f1;
+  color: #0f0f0f;
+}
+
+/* 音量（段 3） */
+#sv-np .sv-np-vol {
+  margin-top: 2vh;
+  display: flex;
+  align-items: center;
+  gap: 1.6vh;
+  font-size: 2vh;
+  color: #b7b7b7;
+  outline: none;
+}
+
+#sv-np .sv-np-vol-track {
+  flex: 1;
+  height: 0.8vh;
+  background: rgba(255, 255, 255, 0.28);
+  border-radius: 0.4vh;
+}
+
+#sv-np .sv-np-vol-fill {
+  height: 100%;
+  width: 0;
+  background: #fff;
+  border-radius: 0.4vh;
+}
+
+#sv-np .sv-np-vol:focus {
+  color: #fff;
+}
+
+#sv-np .sv-np-vol:focus .sv-np-vol-track {
+  height: 1.3vh;
+  box-shadow: 0 0 0 0.5vh #fff;
+}
+
+#sv-np .sv-np-vol-text {
+  min-width: 5vh;
+  text-align: right;
+}
+
+#sv-np .sv-np-toast {
+  margin-top: 1.6vh;
+  font-size: 2.2vh;
+  color: #1db954;
+  min-height: 3vh;
+}
+
+#sv-np .sv-np-toast[hidden] {
+  display: block;
+  visibility: hidden;
 }
 
 #sv-np .sv-np-hint {
-  margin-top: 4vh;
+  margin-top: 1.4vh;
+  font-size: 1.9vh;
+  color: #8a8a8a;
+}
+
+#sv-np[data-state="empty"] .sv-np-bar,
+#sv-np[data-state="empty"] .sv-np-times {
+  visibility: hidden;
 }

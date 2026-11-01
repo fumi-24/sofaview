@@ -48,6 +48,41 @@ async function ensureReceiver() {
   return { ok: true, on: true, created: true };
 }
 
+/**
+ * スマホの Spotify から再生を始めたとき（Spotify Connect）に、再生中の画面を出せるよう、Spotify を裏のタブで開いておく（設定 spotify.standby）。
+ * Web プレーヤーは、開いているタブごとに「再生先」になる。ほかのタブを閉じたり、重複を整えたりはしない（音楽が止まる）。
+ */
+async function ensureSpotifyStandby() {
+  const s = await SV.settings.load();
+  if (!s.spotify.standby) return { ok: true, on: false };
+  if ((await chrome.tabs.query({ url: SPOTIFY + '*' })).length) return { ok: true, on: true, created: false };
+  const { svSpotifyAt } = await chrome.storage.session.get('svSpotifyAt');
+  if (svSpotifyAt && Date.now() - svSpotifyAt < 15000) return { ok: true, on: true, created: false };
+  await chrome.storage.session.set({ svSpotifyAt: Date.now() });
+  const tab = await chrome.tabs.create({ url: SPOTIFY, active: false });
+  await chrome.storage.session.set({ svSpotifyTab: tab.id });
+  return { ok: true, on: true, created: true };
+}
+
+/** どちらの待機タブも整える（YouTube /tv・Spotify）。 */
+async function ensureStandby() {
+  const a = await ensureReceiver();
+  const b = await ensureSpotifyStandby();
+  return { ok: true, youtube: a, spotify: b };
+}
+
+/**
+ * Spotify のタブで曲が変わった（スマホから再生が始まった）とき、タブが裏なら前面に出して、再生中の画面を開かせる。
+ * 前面のときは何もしない（操作中の画面を奪わない）。
+ */
+async function spotifyWake(sender) {
+  const s = await SV.settings.load();
+  if (!s.spotify.standby || !sender.tab || sender.tab.active) return { ok: true, woke: false };
+  await activate(sender.tab);
+  chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:openNp' }, () => void chrome.runtime.lastError);
+  return { ok: true, woke: true };
+}
+
 /** ハブの YouTube タイル: 裏の /tv があれば、それを前面に出す（もう 1 つ /tv を開かない）。 */
 async function openYoutube() {
   const s = await SV.settings.load();
@@ -108,7 +143,7 @@ async function goHub(sender) {
     return { ok: true, spotify: true };
   }
   await chrome.tabs.update(tabId, { url: HUB_URL });
-  ensureReceiver().catch(() => {});
+  ensureStandby().catch(() => {});
   return { ok: true };
 }
 
@@ -191,7 +226,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       p = applyZoom(sender, msg);
       break;
     case 'sv:ensureReceiver':
-      p = ensureReceiver();
+      p = ensureStandby();
+      break;
+    case 'sv:spotifyWake':
+      p = spotifyWake(sender);
       break;
     case 'sv:openYoutube':
       p = openYoutube();
@@ -227,28 +265,28 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[SV.settings.KEY]) {
     syncRulesets().catch(() => {});
-    ensureReceiver().catch(() => {});
+    ensureStandby().catch(() => {});
   }
 });
 chrome.runtime.onInstalled.addListener(() => {
   syncRulesets().catch(() => {});
-  ensureReceiver().catch(() => {});
+  ensureStandby().catch(() => {});
 });
 chrome.runtime.onStartup.addListener(() => {
   syncRulesets().catch(() => {});
-  ensureReceiver().catch(() => {});
+  ensureStandby().catch(() => {});
 });
 // どこかのタブが別のページへ移ったとき（/tv から出て受け取り役がいなくなった、/tv が 2 つになった）も、少しあとに整える
 let tidy = 0;
 chrome.tabs.onUpdated.addListener((tabId, info) => {
   if (info.url === undefined) return;
   clearTimeout(tidy);
-  tidy = setTimeout(() => ensureReceiver().catch(() => {}), 3000);
+  tidy = setTimeout(() => ensureStandby().catch(() => {}), 3000);
 });
 // 裏の /tv を閉じてしまっても、少しあとに開き直す
 chrome.tabs.onRemoved.addListener(async (tabId) => {
-  const { svReceiverTab } = await chrome.storage.session.get('svReceiverTab');
-  if (tabId !== svReceiverTab) return;
-  await chrome.storage.session.remove(['svReceiverTab', 'svReceiverAt']);
-  setTimeout(() => ensureReceiver().catch(() => {}), 3000);
+  const { svReceiverTab, svSpotifyTab } = await chrome.storage.session.get(['svReceiverTab', 'svSpotifyTab']);
+  if (tabId !== svReceiverTab && tabId !== svSpotifyTab) return;
+  await chrome.storage.session.remove(tabId === svSpotifyTab ? ['svSpotifyTab', 'svSpotifyAt'] : ['svReceiverTab', 'svReceiverAt']);
+  setTimeout(() => ensureStandby().catch(() => {}), 3000);
 });
