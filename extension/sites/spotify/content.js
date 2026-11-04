@@ -359,8 +359,24 @@
         lastTitle = t;
         return;
       }
-      if (t && t !== lastTitle) SV.sendMessage({ type: 'sv:spotifyWake' });
+      if (t && t !== lastTitle) {
+        SV.sendMessage({ type: 'sv:spotifyWake' }); // 裏のタブなら、前面に出る
+        if (ctl.settings.spotify.standby) openNp(); // スマホ主体の使い方（待機）のときは、前面でも、再生中の画面を出す
+      }
       lastTitle = t;
+    };
+    // ハブのタイルに出す状態（再生中・待機中・ログインしていない…）を、background に知らせる。変わったときだけ、500ms に 1 回まで
+    let lastSig = '';
+    let lastAt = 0;
+    const reportState = () => {
+      const now = Date.now();
+      if (now - lastAt < 500) return;
+      lastAt = now;
+      const d = ctl.np.status();
+      const sig = d.kind + '|' + d.info.title;
+      if (sig === lastSig) return;
+      lastSig = sig;
+      SV.sendMessage({ type: 'sv:spotifyState', kind: d.kind, title: d.info.title, artists: d.info.artists });
     };
     if (SV.hasChrome()) {
       chrome.runtime.onMessage.addListener((msg) => {
@@ -376,11 +392,22 @@
       S.markSliders(document);
       S.markPanel(document);
       watchTrack();
+      reportState();
       tryInitial();
     }).observe(document.body, { childList: true, subtree: true, characterData: true });
     watchTrack();
+    reportState();
     S.markSliders(document);
     S.markPanel(document);
+    // 待機（スマホ主体の使い方）の設定のとき、読み込んだら、再生中の画面（曲がなければ状態の画面）を出す。設定を切り替えたときも
+    let wasStandby = false;
+    const applyStandby = (st) => {
+      const on = !!(st && st.spotify && st.spotify.standby);
+      if (on && !wasStandby) openNp();
+      wasStandby = on;
+    };
+    SV.settings.load().then(applyStandby);
+    SV.settings.onChange(applyStandby);
     // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
     let path = location.pathname;
     setInterval(() => {

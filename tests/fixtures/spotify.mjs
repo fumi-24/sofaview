@@ -1,6 +1,7 @@
 // Spotify Web プレーヤー（open.spotify.com）の構造を縮小した再現ページ。ログアウト状態の実サイトで確かめた data-testid を使う。
 // 実サイトにだけある要素は、ライブスモーク（tests/live）で見つかる。
-export function spotifyHtml() {
+export function spotifyHtml(opt) {
+  const o = opt || {};
   const card = (id, title) =>
     `<div class="card"><a href="/album/${id}" data-testid="card-click-handler" data-card="${id}"><span class="img"></span><span>${title}</span></a>` +
     `<button data-testid="play-button" aria-label="${title}を再生">▶</button></div>`;
@@ -32,6 +33,7 @@ export function spotifyHtml() {
     <input data-testid="search-input" type="search" placeholder="何を再生したいですか？" aria-label="検索">
     <a href="https://www.spotify.com/jp/premium/" data-id="ext">Premium</a>
     <button data-testid="more-button" aria-label="その他のオプション">…</button>
+    ${o.loggedOut ? '<button data-testid="login-button">ログイン</button>' : '<button data-testid="user-widget-link" aria-label="アカウント">人</button>'}
   </header>
   <nav class="side" aria-label="メインナビゲーション">
     <a href="/collection/playlists" data-id="lib">マイライブラリ</a>
@@ -42,7 +44,7 @@ export function spotifyHtml() {
   <aside data-testid="now-playing-bar" aria-label="再生中バー">
   <div data-testid="now-playing-widget-v2" role="region" aria-label="再生中">
     <div data-testid="cover-art-container"><button data-testid="cover-art-button" aria-label="再生中ビュー"><img data-testid="cover-art-image" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs="></button></div>
-    <div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>
+    ${o.noTrack ? '<div></div>' : '<div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>'}
     <button aria-checked="false" aria-label="お気に入りに追加" data-like>♡</button>
   </div>
   <div data-testid="player-controls"><div data-testid="general-controls">
@@ -103,6 +105,7 @@ export function spotifyHtml() {
       log('menu-open');
       return;
     }
+    if (b && b.dataset.testid === 'login-button') log('login');
     if (b && b.getAttribute('role') === 'menuitem') { log('menu-item', { text: b.textContent }); }
     if (b && b.dataset.testid === 'lyrics-button') {
       // 歌詞は、歌詞ボタンが押されている間だけ DOM にある（サイトと同じ）。色の変数と、いまの行の色も同じ作り

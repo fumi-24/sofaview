@@ -83,6 +83,20 @@ async function spotifyWake(sender) {
   return { ok: true, woke: true };
 }
 
+/** Spotify のタブの状態（曲・待機中・ログインしていない…）を覚える。ハブのタイルに出す。 */
+async function recordSpotifyState(msg) {
+  const keep = (v) => String(v == null ? '' : v).slice(0, 120);
+  await chrome.storage.session.set({ svSpotifyState: { kind: keep(msg.kind), title: keep(msg.title), artists: keep(msg.artists), at: Date.now() } });
+  return { ok: true };
+}
+
+/** ハブ用: Spotify のタブがあるか・前面か・最後に知らせてきた状態。 */
+async function spotifyStatus() {
+  const tabs = await chrome.tabs.query({ url: SPOTIFY + '*' });
+  const { svSpotifyState } = await chrome.storage.session.get('svSpotifyState');
+  return { ok: true, tab: tabs.length > 0, active: tabs.some((t) => t.active), state: tabs.length ? svSpotifyState || null : null, now: Date.now() };
+}
+
 /** ハブの YouTube タイル: 裏の /tv があれば、それを前面に出す（もう 1 つ /tv を開かない）。 */
 async function openYoutube() {
   const s = await SV.settings.load();
@@ -227,6 +241,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       break;
     case 'sv:ensureReceiver':
       p = ensureStandby();
+      break;
+    case 'sv:spotifyState':
+      p = recordSpotifyState(msg);
+      break;
+    case 'sv:spotifyStatus':
+      p = spotifyStatus();
       break;
     case 'sv:spotifyWake':
       p = spotifyWake(sender);

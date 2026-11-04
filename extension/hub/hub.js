@@ -89,6 +89,21 @@
     true,
   );
 
+  // Spotify のタイルに、いまの状態を出す（Spotify のタブがあるとき）: 再生中の曲・スマホから再生を待っている・ログインしていない・再生できない
+  const spSub = document.getElementById('sp-sub');
+  async function showSpotify() {
+    const r = await SV.sendMessage({ type: 'sv:spotifyStatus' });
+    if (!spSub) return;
+    const st = r && r.ok && r.tab ? r.state : null;
+    const cut = (t) => (t.length > 22 ? t.slice(0, 21) + '…' : t);
+    const labels = { track: () => '再生中: ' + cut(st.title), idle: () => '待機中（スマホから再生できます）', loggedOut: () => 'ログインしていません', noDrm: () => '再生できません（Widevine がありません）', loading: () => '読み込み中…' };
+    spSub.textContent = st && labels[st.kind] ? labels[st.kind]() : '音楽・ポッドキャスト';
+  }
+  if (spSub) {
+    showSpotify();
+    setInterval(showSpotify, 3000);
+  }
+
   // どの版が読み込まれているか分かるように、クレジットの行に版を出す（拡張機能を更新したかの確認用）
   for (const c of document.querySelectorAll('.credit:not(#remote-line)')) c.textContent = 'SofaView v' + SV.VERSION + ' ・ by fumi24';
 

@@ -206,7 +206,7 @@ test('Spotify: 再生バーの再生位置・音量の棒にフォーカスで�
   await page.close();
 });
 
-test('Spotify: 再生バーのジャケットで OK を押すと、再生中の大きな画面（曲名・アーティスト・歌詞・再生位置・操作のボタン）が開く。3 段（再生位置・ボタン・音量）を ↑ ↓ で移って操作する。戻るで閉じる。黄色キーでも開閉', async () => {
+test('Spotify: 再生バーのジャケットで OK を押すと、再生中の画面（曲名・アーティスト・歌詞・再生位置）が開く。OK 再生/一時停止、← → 10 秒、↑ ↓ 音量。戻るで閉じる。黄色キーでも開閉', async () => {
   for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
   const page = await open();
   await until(async () => (await where(page)).href === '/album/a1');
@@ -216,6 +216,7 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   await press(page, 'Enter');
   await until(async () => (await np.count()) === 1, { message: '再生中の画面が開く' });
   await until(async () => /テスト曲のタイトル/.test(await np.innerText()), { message: '曲名' });
+  assert.equal(await np.getAttribute('data-view'), 'track');
   assert.match(await np.innerText(), /テスト歌手/);
   assert.match(await np.innerText(), /0:50/);
   assert.equal(await np.getAttribute('data-state'), 'paused');
@@ -223,70 +224,21 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   assert.match(await np.locator('.sv-np-line.is-current').innerText(), /三行目（いま）/);
   assert.equal(await page.locator('[data-testid="lyrics-button"]').getAttribute('aria-pressed'), 'true', '歌詞を出すために押した');
 
-  const id = () => page.evaluate(() => document.activeElement.dataset.id || document.activeElement.className);
-  const logSince = async (n) => (await fx(page, 'log')).slice(n);
-  const clicks = (l) => l.filter((x) => x.ev === 'click').map((x) => x.id);
-  assert.equal(await id(), 'play', '最初のフォーカスは 再生/一時停止');
+  // 簡単な操作だけ: OK 再生/一時停止、← → 10 秒、↑ ↓ 音量
   let mark = (await fx(page, 'log')).length;
   await press(page, 'Enter');
   await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '再生中になる' });
-  // ボタンの列: ← → で移動、OK で押す
   await press(page, 'ArrowRight');
-  assert.equal(await id(), 'next');
-  await press(page, 'Enter');
+  await press(page, 'ArrowRight');
   await press(page, 'ArrowLeft');
-  await press(page, 'ArrowLeft');
-  assert.equal(await id(), 'prev');
-  await press(page, 'Enter');
-  await press(page, 'ArrowLeft');
-  assert.equal(await id(), 'shuffle');
-  await press(page, 'Enter');
-  assert.deepEqual(clicks(await logSince(mark)), ['control-button-playpause', 'control-button-skip-forward', 'control-button-skip-back', 'シャッフル']);
-  // リピート・お気に入り（押された状態が見える）
-  for (let i = 0; i < 4; i++) await press(page, 'ArrowRight');
-  assert.equal(await id(), 'repeat');
-  await press(page, 'Enter');
-  await until(async () => (await np.locator('[data-id="repeat"]').getAttribute('aria-pressed')) === 'true', { message: 'リピートの状態' });
-  await press(page, 'ArrowRight');
-  assert.equal(await id(), 'like');
-  await press(page, 'Enter');
-  await until(async () => (await np.locator('[data-id="like"]').getAttribute('aria-pressed')) === 'true', { message: 'お気に入りの状態' });
-  assert.match(await np.locator('[data-id="like"]').innerText(), /♥/);
-  // 歌詞の表示・非表示（サイトの歌詞ボタンは押したまま。こちらの画面の中だけ）
-  await press(page, 'ArrowRight');
-  assert.equal(await id(), 'lyrics');
-  await press(page, 'Enter');
-  await until(async () => (await np.locator('.sv-np-lyrics').isHidden()), { message: '歌詞を隠す' });
-  await press(page, 'Enter');
-  await until(async () => (await np.locator('.sv-np-line').count()) === 6, { message: '歌詞をまた出す' });
-  // スリープタイマー: 押すたびに 15 → 30 → 60 → 90 → オフ
-  await press(page, 'ArrowRight');
-  assert.equal(await id(), 'sleep');
-  await press(page, 'Enter');
-  await until(async () => /15 分後に一時停止/.test(await np.locator('.sv-np-toast').innerText()), { message: 'スリープ 15 分' });
-  assert.equal(await np.locator('[data-id="sleep"]').getAttribute('aria-pressed'), 'true');
-  for (let i = 0; i < 4; i++) await press(page, 'Enter');
-  await until(async () => /オフ/.test(await np.locator('.sv-np-toast').innerText()), { message: 'スリープ オフ' });
-  // 段 1: 再生位置（↑）← → で 10 秒、OK で再生/一時停止
-  mark = (await fx(page, 'log')).length;
+  await press(page, 'ArrowDown');
+  await press(page, 'ArrowDown');
   await press(page, 'ArrowUp');
-  assert.equal(await id(), 'sv-np-bar');
-  await press(page, 'ArrowRight');
-  await press(page, 'ArrowRight');
-  await press(page, 'ArrowLeft');
-  await press(page, 'Enter');
-  const l1 = await logSince(mark);
-  assert.deepEqual(l1.filter((x) => x.ev === 'range').map((x) => x.value), [60000, 70000, 60000], '← → で 10 秒ずつ');
-  assert.deepEqual(clicks(l1), ['control-button-playpause']);
-  // 段 3: 音量（↓ ↓）← → で 10%
-  mark = (await fx(page, 'log')).length;
-  await press(page, 'ArrowDown');
-  await press(page, 'ArrowDown');
-  assert.equal(await id(), 'sv-np-vol');
-  await press(page, 'ArrowLeft');
-  await press(page, 'ArrowLeft');
-  assert.deepEqual((await logSince(mark)).filter((x) => x.ev === 'range').map((x) => x.value), [0.9, 0.8]);
-  await until(async () => /80%/.test(await np.locator('.sv-np-vol-text').innerText()), { message: '音量の表示' });
+  const log = (await fx(page, 'log')).slice(mark);
+  assert.deepEqual(log.filter((l) => l.ev === 'click').map((l) => l.id), ['control-button-playpause']);
+  assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'seek').map((l) => l.value), [60000, 70000, 60000], '← → で 10 秒ずつ');
+  assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'volume').map((l) => l.value), [0.9, 0.8, 0.9], '↑ ↓ で音量 10%');
+  await until(async () => /音量 90%/.test(await np.locator('.sv-np-toast').innerText()), { message: '音量の表示' });
   assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'navigate').length, 0, '下のページは動かない');
   await press(page, 'Escape');
   await until(async () => (await np.count()) === 0, { message: '戻るで閉じる' });
@@ -304,37 +256,95 @@ test('Spotify: 再生バーのジャケットで OK を押すと、再生中の�
   await page.close();
 });
 
+/** 変種の再現ページ（ログインしていない・曲がない）を開く。 */
+async function openVariant(opt) {
+  const page = await env.ctx.newPage();
+  await page.route('https://open.spotify.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: spotifyHtml(opt) }));
+  await page.goto('https://open.spotify.com/');
+  await tverReady(page);
+  return page;
+}
+const yellowKey = async (page) => {
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'ColorF2Yellow', code: 'ColorF2Yellow', windowsVirtualKeyCode: 405 });
+  await cdp.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ColorF2Yellow', code: 'ColorF2Yellow', windowsVirtualKeyCode: 405 });
+  await page.waitForTimeout(200);
+};
+
+test('Spotify: ログインしていないと、状態の画面で理由と、やることを出す。OK でログイン画面を開く（ボタンを押す）。戻るで閉じる', async () => {
+  const page = await openVariant({ loggedOut: true, noTrack: true });
+  await yellowKey(page);
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.count()) === 1, { message: '画面が開く' });
+  assert.equal(await np.getAttribute('data-kind'), 'loggedOut');
+  assert.equal(await np.getAttribute('data-view'), 'status');
+  assert.match(await np.innerText(), /Spotify にログインしていません/);
+  assert.match(await np.innerText(), /OK でログイン画面を開く/);
+  await page.keyboard.press('Enter');
+  await until(async () => (await fx(page, 'log')).some((l) => l.ev === 'login'), { message: 'ログインのボタンが押される' });
+  await page.keyboard.press('Escape');
+  await until(async () => (await np.count()) === 0, { message: '戻るで閉じる' });
+  await page.close();
+});
+
+test('Spotify: ログインしていて曲がないときは、スマホから再生するのを待つ画面（手順つき）。保護機能（Widevine）がないブラウザでは、再生できない理由を出す', async () => {
+  const page = await openVariant({ noTrack: true });
+  await yellowKey(page);
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.count()) === 1, { message: '画面が開く' });
+  const drm = await page.evaluate(() => navigator.requestMediaKeySystemAccess('com.widevine.alpha', [{ initDataTypes: ['cenc'], audioCapabilities: [{ contentType: 'audio/mp4;codecs="mp4a.40.2"' }] }]).then(() => true, () => false));
+  const kind = drm ? 'idle' : 'noDrm';
+  await until(async () => (await np.getAttribute('data-kind')) === kind, { message: '保護機能の有無に合った画面: ' + kind });
+  assert.equal(await np.getAttribute('data-view'), 'status');
+  if (drm) {
+    assert.match(await np.innerText(), /スマホの Spotify から、再生してください/);
+    assert.match(await np.innerText(), /デバイスに接続/);
+  } else {
+    assert.match(await np.innerText(), /再生できません/);
+    assert.match(await np.innerText(), /Widevine/);
+  }
+  // 曲がないときは、方向キー・OK は何もしない（ページを動かさない）
+  const before = (await fx(page, 'log')).length;
+  for (const k of ['ArrowLeft', 'ArrowDown', 'Enter']) await page.keyboard.press(k);
+  assert.equal((await fx(page, 'log')).length, before);
+  await page.close();
+});
+
 test('Spotify: 画面倍率は TVer（720）より小さい高さ（648）に合わせて、大きく拡大する', async () => {
   const page = await open();
   await until(async () => Math.abs((await page.evaluate(() => innerHeight)) - 648) < 12, { message: '1080 の画面が 648 相当（約 1.67 倍）' });
   await page.close();
 });
 
-test('Spotify: 「裏で開いておく」をオンにすると Spotify が裏のタブで開く。スマホから再生が始まる（曲が変わる）と、裏のタブなら前面に出て、再生中の画面が開く。前面のときは奪わない', async () => {
+test('Spotify: 「裏で開いておく」をオンにすると、Spotify が裏のタブで開き、読み込むと再生中の画面（待機）を出す。スマホから再生が始まる（曲が変わる）と、裏のタブなら前面に出て、新しい曲を出す。ハブのタイルに状態が出る', async () => {
   for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
   const tabsOf = () => env.sw.evaluate(async () => (await chrome.tabs.query({})).map((t) => ({ id: t.id, url: t.url || '', active: t.active })));
   const hub = await env.ctx.newPage();
   await hub.goto(env.hubUrl);
   await until(() => hub.evaluate(() => document.documentElement.dataset.svReady === '1'), { message: 'hub ready' });
-  await env.sw.evaluate(() => chrome.storage.session.remove('svSpotifyAt'));
+  await env.sw.evaluate(() => chrome.storage.session.remove(['svSpotifyAt', 'svSpotifyState']));
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: true } } }, r)));
   await until(async () => (await tabsOf()).filter((t) => t.url.startsWith('https://open.spotify.com/')).length === 1, { message: '裏の Spotify が開く' });
   assert.equal((await tabsOf()).find((t) => t.url.startsWith('https://open.spotify.com/')).active, false, '前面を奪わない');
   const sp = env.ctx.pages().find((p) => p.url().startsWith('https://open.spotify.com/'));
   await sp.reload(); // 拡張が作ったタブは、Playwright が付く前に読み込みが始まるので、再現ページにするため読み込み直す
   await until(() => sp.evaluate(() => document.documentElement.dataset.svReady === '1' && !!window.__fx).catch(() => false), { message: '拡張が読み込まれる' });
+  // 待機のときは、読み込むと、再生中の画面が開いている
+  await until(async () => (await sp.locator('#sv-np').count()) === 1, { message: '待機の画面が開いている' });
+  assert.match(await sp.locator('#sv-np').innerText(), /テスト曲のタイトル/);
+  // ハブのタイルに、再生中の曲が出る
   await hub.bringToFront();
+  await until(async () => /再生中: テスト曲のタイトル/.test(await hub.locator('#sp-sub').innerText()), { timeout: 10000, message: 'ハブのタイルに状態' });
   // スマホから再生が始まった（曲が変わった）
   await sp.evaluate(() => window.__fx.setTrack('スマホから送った曲'));
   await until(async () => (await tabsOf()).find((t) => t.url.startsWith('https://open.spotify.com/')).active, { message: '前面に出る' });
-  await until(async () => (await sp.locator('#sv-np').count()) === 1, { message: '再生中の画面が開く' });
-  assert.match(await sp.locator('#sv-np').innerText(), /スマホから送った曲/);
-  // 前面にいるときは、曲が変わっても、画面を開かない
+  await until(async () => /スマホから送った曲/.test(await sp.locator('#sv-np').innerText()), { message: '新しい曲が出る' });
+  // 戻るで画面を閉じたあと、前面でも、曲が変われば、また再生中の画面になる（スマホ主体の使い方）
   await sp.keyboard.press('Escape');
   await until(async () => (await sp.locator('#sv-np').count()) === 0, { message: '戻るで閉じる' });
   await sp.evaluate(() => window.__fx.setTrack('前面で変わった曲'));
-  await sp.waitForTimeout(800);
-  assert.equal(await sp.locator('#sv-np').count(), 0, '前面のときは開かない');
+  await until(async () => (await sp.locator('#sv-np').count()) === 1, { message: '前面でも開く' });
+  await until(async () => /前面で変わった曲/.test(await sp.locator('#sv-np').innerText()), { message: '新しい曲' });
   // 設定をオフに戻す
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: false } } }, r)));
   await hub.close().catch(() => {});
@@ -345,7 +355,7 @@ test('Spotify: サイトのメニュー（role=menu）が開いている間は�
   for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
   const page = await open();
   await until(async () => (await where(page)).href === '/album/a1');
-  for (let i = 0; i < 12 && (await page.evaluate(() => document.activeElement.dataset.testid)) !== 'more-button'; i++) await press(page, 'ArrowUp');
+  for (let i = 0; i < 14 && (await page.evaluate(() => document.activeElement.dataset.testid)) !== 'more-button'; i++) await press(page, i < 3 ? 'ArrowUp' : 'ArrowLeft');
   assert.equal(await page.evaluate(() => document.activeElement.dataset.testid), 'more-button', '「…」に届く');
   await press(page, 'Enter');
   await until(async () => (await page.locator('#ctx').count()) === 1, { message: 'メニューが開く' });

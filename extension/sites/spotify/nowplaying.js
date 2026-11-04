@@ -1,8 +1,9 @@
 /*
- * Spotify: 再生中の大きな画面（リモコンで操作する用）。ジャケット・曲名・アーティスト・歌詞・再生位置と、操作の列を大きく出す。
+ * Spotify: 再生中の画面（テレビに出す専用の画面）。スマホから再生して、テレビには「いま何が流れているか」を大きく出す使い方が主。
  * 画面は拡張が作る（Spotify 自身の「再生中ビュー」は、サイトの内側の作りに依存するので使わない）。読み取り・操作は、再生バーの data-testid だけ。
- *   開く: 再生バーのジャケット（cover-art-button）で OK／黄色キー／スマホから再生が始まったとき（キャスト待機）
- *   操作: 3 段（再生位置・ボタンの列・音量）。↑ ↓ で段を移り、← → は、再生位置は 10 秒・ボタンの列は移動・音量は 10%。OK で押す。戻る・黄色で閉じる
+ *   曲があるとき: ジャケット・曲名・アーティスト・歌詞・再生位置。OK 再生/一時停止、← → 10 秒、↑ ↓ 音量。
+ *   曲がないとき（状態の画面）: 読み込み中／ログインしていない／再生できない（Widevine がない）／スマホから再生するのを待っている、を、理由とやることつきで出す。
+ *   開く: 再生バーのジャケット（cover-art-button）で OK／黄色キー／スマホから再生が始まったとき／待機の設定のとき（読み込み時）
  */
 (function (root) {
   'use strict';
@@ -20,18 +21,53 @@
     playPause: '[data-testid="control-button-playpause"]',
     prev: '[data-testid="control-button-skip-back"]',
     next: '[data-testid="control-button-skip-forward"]',
-    repeat: '[data-testid="control-button-repeat"]',
-    shuffle: '[data-testid="general-controls"] button:not([data-testid])', // 前の曲の左の、テスト用の印がないボタン
-    like: '[data-testid="now-playing-widget-v2"] button[aria-checked], [data-testid="now-playing-widget"] button[aria-checked]',
     seek: '[data-testid="playback-progressbar"] input[type="range"]',
     lyricsButton: '[data-testid="lyrics-button"]',
     lyricsLine: '[data-testid="lyrics-line"]',
+    bar: '[data-testid="now-playing-bar"]',
+    login: '[data-testid="login-button"]',
+    user: '[data-testid="user-widget-link"]',
     volumeBox: '[data-sv-slider="volume"]',
     seekBox: '[data-sv-slider="seek"]',
   });
 
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
-  const SLEEP_STEPS = Object.freeze([0, 15, 30, 60, 90]); // 分。0 = オフ
+
+  /**
+   * いまの状態（画面の種類）。純粋な判定（DOM に触らない）。
+   *   loggedOut: ログインしていない（曲があっても、再生できない）／loading: 読み込み中／track: 曲がある／noDrm: 再生に必要な保護機能がない／idle: スマホから再生するのを待っている
+   * drm: true / false / null（まだ確認中）。
+   */
+  function statusOf(i) {
+    if (i.loggedOut) return 'loggedOut';
+    if (i.hasTrack) return 'track';
+    if (!i.ready) return 'loading';
+    if (i.drm === false) return 'noDrm';
+    return 'idle';
+  }
+
+  /** 状態の画面に出す文言。 */
+  const STATUS_TEXT = Object.freeze({
+    loading: { icon: '…', head: 'Spotify を読み込んでいます', lines: [], hint: '' },
+    loggedOut: {
+      icon: '🔒',
+      head: 'Spotify にログインしていません',
+      lines: ['ログインすると、スマホの Spotify から、このテレビで再生できます', 'ログイン画面は文字入力が必要です。キーボードをつなぐか、パソコンから操作してください'],
+      hint: 'OK でログイン画面を開く',
+    },
+    noDrm: {
+      icon: '🔇',
+      head: 'このブラウザでは、音楽を再生できません',
+      lines: ['再生に必要な保護機能（Widevine）が、このブラウザにありません', 'Google Chrome など、Widevine のあるブラウザで開いてください'],
+      hint: '',
+    },
+    idle: {
+      icon: '📱',
+      head: 'スマホの Spotify から、再生してください',
+      lines: ['① スマホで Spotify を開いて、曲を再生する', '② 再生画面の下の「デバイスに接続」を押す', '③ 一覧から、「Web Player」と書かれたこのブラウザを選ぶ'],
+      hint: '戻る　Spotify の画面で、曲を探す',
+    },
+  });
 
   /** いま再生中の曲名だけ（軽い読み取り。曲が変わったかの確認用）。 */
   function trackTitle(doc) {
@@ -48,10 +84,6 @@
     const max = seek ? Number(seek.max) : 0;
     const label = (doc.querySelector(SEL.playPause) || { getAttribute: () => '' }).getAttribute('aria-label') || '';
     const vol = doc.querySelector('[data-testid="volume-bar"] input[type="range"]');
-    const checked = (sel) => {
-      const b = doc.querySelector(sel);
-      return !!b && b.getAttribute('aria-checked') === 'true';
-    };
     return {
       hasTrack: !!title,
       title,
@@ -62,9 +94,15 @@
       duration: text(doc.querySelector(SEL.duration)),
       ratio: seek && max > 0 ? Math.min(1, Math.max(0, Number(seek.value) / max)) : 0,
       volume: vol && Number(vol.max) > 0 ? Number(vol.value) / Number(vol.max) : null,
-      liked: checked(SEL.like),
-      repeat: checked(SEL.repeat),
     };
+  }
+
+  /** ページから、状態を読む（drm は呼び出し側が確認した結果）。 */
+  function detect(doc, drm) {
+    const info = read(doc);
+    const loggedOut = !!doc.querySelector(SEL.login) && !doc.querySelector(SEL.user);
+    const ready = !!doc.querySelector(SEL.bar);
+    return { kind: statusOf({ loggedOut, hasTrack: info.hasTrack, ready, drm }), info };
   }
 
   /**
@@ -90,19 +128,25 @@
     return { lines: items.slice(from, to).map((x) => x.text), active: cur - from };
   }
 
+  /** 再生に必要な保護機能（Widevine）が使えるか。 */
+  function checkWidevine(win) {
+    const n = win && win.navigator;
+    if (!n || typeof n.requestMediaKeySystemAccess !== 'function') return Promise.resolve(false);
+    return n
+      .requestMediaKeySystemAccess('com.widevine.alpha', [{ initDataTypes: ['cenc'], audioCapabilities: [{ contentType: 'audio/mp4;codecs="mp4a.40.2"' }] }])
+      .then(() => true, () => false);
+  }
+
   /** 画面の部品を作る。 */
   function create(opts) {
     const doc = (opts && opts.document) || document;
+    const win = doc.defaultView;
     let el = null;
     let timer = 0;
-    let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか（閉じるときに戻す）
-    let showLyrics = true;
-    let row = 1; // 0 = 再生位置・1 = ボタンの列・2 = 音量
-    let col = 2; // ボタンの列の位置（初期は再生/一時停止）
-    let sleepIdx = 0;
-    let sleepTimer = 0;
-    let sleepUntil = 0;
     let toastTimer = 0;
+    let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか（閉じるときに戻す）
+    let drm = null;
+    let lock = null;
 
     const mk = (tag, cls, txt) => {
       const e = doc.createElement(tag);
@@ -116,17 +160,27 @@
       return !!b;
     };
 
-    // ボタンの列。state(info) は、押された状態の見た目（true で強調）。label は、文字（画面に出る）
-    const BUTTONS = [
-      { id: 'shuffle', icon: '⇄', label: 'シャッフル', run: () => click(SEL.shuffle) },
-      { id: 'prev', icon: '⏮', label: '前の曲', run: () => click(SEL.prev) },
-      { id: 'play', icon: '▶', label: '再生', run: () => click(SEL.playPause), icons: (i) => (i.playing ? '⏸' : '▶'), labelOf: (i) => (i.playing ? '一時停止' : '再生') },
-      { id: 'next', icon: '⏭', label: '次の曲', run: () => click(SEL.next) },
-      { id: 'repeat', icon: '↻', label: 'リピート', run: () => click(SEL.repeat), state: (i) => i.repeat },
-      { id: 'like', icon: '♡', label: 'お気に入り', run: () => click(SEL.like), state: (i) => i.liked, icons: (i) => (i.liked ? '♥' : '♡') },
-      { id: 'lyrics', icon: '歌', label: '歌詞', run: () => { showLyrics = !showLyrics; refresh(); }, state: () => showLyrics },
-      { id: 'sleep', icon: '⏲', label: 'スリープ', run: () => cycleSleep(), state: () => sleepIdx > 0, labelOf: () => (sleepIdx > 0 ? 'スリープ ' + SLEEP_STEPS[sleepIdx] + ' 分' : 'スリープ') },
-    ];
+    // 保護機能の確認は 1 回だけ（結果は画面に反映する）
+    (opts && opts.checkDrm ? opts.checkDrm() : checkWidevine(win)).then((ok) => {
+      drm = !!ok;
+      if (el) refresh();
+    });
+
+    /** 画面を点けたままにする（テレビの画面が消えないように）。画面が見えなくなると外れるので、見えたら取り直す。 */
+    async function acquireLock() {
+      try {
+        if (!el || lock || !win.navigator.wakeLock || doc.visibilityState !== 'visible') return;
+        lock = await win.navigator.wakeLock.request('screen');
+        lock.addEventListener('release', () => {
+          lock = null;
+        });
+      } catch (e) {
+        /* 許可されない環境では何もしない */
+      }
+    }
+    doc.addEventListener('visibilitychange', () => {
+      if (el) acquireLock();
+    });
 
     function toast(msg) {
       if (!el) return;
@@ -136,53 +190,43 @@
       clearTimeout(toastTimer);
       toastTimer = setTimeout(() => {
         t.hidden = true;
-      }, 2500);
+      }, 1500);
     }
 
-    /** スリープタイマー: オフ → 15 → 30 → 60 → 90 分 → オフ。時間が来たら、再生中なら一時停止する。 */
-    function cycleSleep() {
-      sleepIdx = (sleepIdx + 1) % SLEEP_STEPS.length;
-      clearTimeout(sleepTimer);
-      sleepUntil = 0;
-      if (sleepIdx > 0) {
-        sleepUntil = Date.now() + SLEEP_STEPS[sleepIdx] * 60000;
-        sleepTimer = setTimeout(() => {
-          sleepIdx = 0;
-          sleepUntil = 0;
-          if (read(doc).playing) click(SEL.playPause);
-          toast('スリープタイマー: 一時停止しました');
-          refresh();
-        }, SLEEP_STEPS[sleepIdx] * 60000);
-        toast('スリープタイマー: ' + SLEEP_STEPS[sleepIdx] + ' 分後に一時停止');
-      } else {
-        toast('スリープタイマー: オフ');
-      }
-      refresh();
-    }
-
-    function paintFocus() {
-      if (!el) return;
-      const bar = el.querySelector('.sv-np-bar');
-      const vol = el.querySelector('.sv-np-vol');
-      const btns = el.querySelectorAll('.sv-np-btn');
-      const target = row === 0 ? bar : row === 2 ? vol : btns[col];
-      if (target && doc.activeElement !== target) target.focus({ preventScroll: true });
+    function paintStatus(kind) {
+      const t = STATUS_TEXT[kind];
+      const box = el.querySelector('.sv-np-status');
+      box.querySelector('.sv-np-s-icon').textContent = t.icon;
+      box.querySelector('.sv-np-s-head').textContent = t.head;
+      const lines = box.querySelector('.sv-np-s-lines');
+      lines.textContent = '';
+      t.lines.forEach((l) => lines.appendChild(mk('div', 'sv-np-s-line', l)));
+      box.querySelector('.sv-np-s-hint').textContent = t.hint;
     }
 
     function refresh() {
       if (!el) return;
-      const i = read(doc);
-      el.setAttribute('data-state', i.hasTrack ? (i.playing ? 'playing' : 'paused') : 'empty');
-      el.querySelector('.sv-np-state').textContent = i.hasTrack ? (i.playing ? '▶ 再生中' : '⏸ 一時停止') : '';
-      el.querySelector('.sv-np-title').textContent = i.hasTrack ? i.title : '再生している曲がありません';
-      el.querySelector('.sv-np-artist').textContent = i.hasTrack ? i.artists : 'スマホの Spotify から送るか、曲を選んで再生してください';
+      const d = detect(doc, drm);
+      el.setAttribute('data-kind', d.kind);
+      const trackView = d.kind === 'track';
+      el.setAttribute('data-view', trackView ? 'track' : 'status');
+      el.querySelector('.sv-np-hint').textContent = trackView ? 'OK 再生/一時停止　← → 10 秒　↑ ↓ 音量　戻る Spotify の画面' : '';
+      if (!trackView) {
+        paintStatus(d.kind);
+        return;
+      }
+      const i = d.info;
+      el.setAttribute('data-state', i.playing ? 'playing' : 'paused');
+      el.querySelector('.sv-np-state').textContent = i.playing ? '▶ 再生中' : '⏸ 一時停止';
+      el.querySelector('.sv-np-title').textContent = i.title;
+      el.querySelector('.sv-np-artist').textContent = i.artists;
       const cover = el.querySelector('.sv-np-cover');
       if (i.cover && cover.getAttribute('src') !== i.cover) {
         cover.setAttribute('src', i.cover);
         el.querySelector('.sv-np-bg').style.backgroundImage = 'url("' + i.cover.replace(/"/g, '%22') + '")';
       }
       cover.hidden = !i.cover;
-      const ly = showLyrics ? readLyrics(doc) : null;
+      const ly = readLyrics(doc);
       const box = el.querySelector('.sv-np-lyrics');
       box.hidden = !ly;
       if (ly) {
@@ -196,57 +240,31 @@
       el.querySelector('.sv-np-fill').style.width = Math.round(i.ratio * 1000) / 10 + '%';
       el.querySelector('.sv-np-pos').textContent = i.position;
       el.querySelector('.sv-np-dur').textContent = i.duration;
-      el.querySelector('.sv-np-vol-fill').style.width = (i.volume == null ? 0 : Math.round(i.volume * 100)) + '%';
-      el.querySelector('.sv-np-vol-text').textContent = i.volume == null ? '' : Math.round(i.volume * 100) + '%';
-      el.querySelectorAll('.sv-np-btn').forEach((b, k) => {
-        const d = BUTTONS[k];
-        b.querySelector('.sv-np-icon').textContent = d.icons ? d.icons(i) : d.icon;
-        b.querySelector('.sv-np-cap').textContent = d.labelOf ? d.labelOf(i) : d.label;
-        b.setAttribute('aria-pressed', d.state ? String(!!d.state(i)) : 'false');
-      });
     }
 
     function open() {
       if (el) return;
-      row = 1;
-      col = 2;
       el = mk('div');
       el.id = 'sv-np';
       el.setAttribute('role', 'dialog');
       el.setAttribute('aria-label', '再生中');
-      const body = mk('div', 'sv-np-body');
+      const track = mk('div', 'sv-np-body');
       const info = mk('div', 'sv-np-info');
       const bar = mk('div', 'sv-np-bar');
-      bar.tabIndex = 0;
-      bar.setAttribute('aria-label', '再生位置');
       bar.appendChild(mk('div', 'sv-np-fill'));
       const times = mk('div', 'sv-np-times');
       times.append(mk('span', 'sv-np-pos'), mk('span', 'sv-np-dur'));
       const lyrics = mk('div', 'sv-np-lyrics');
       lyrics.hidden = true;
-      const btns = mk('div', 'sv-np-btns');
-      BUTTONS.forEach((d, k) => {
-        const b = mk('button', 'sv-np-btn');
-        b.type = 'button';
-        b.setAttribute('data-id', d.id);
-        b.append(mk('span', 'sv-np-icon', d.icon), mk('span', 'sv-np-cap', d.label));
-        b.addEventListener('focus', () => {
-          row = 1;
-          col = k;
-        });
-        btns.appendChild(b);
-      });
-      const vol = mk('div', 'sv-np-vol');
-      vol.tabIndex = 0;
-      vol.setAttribute('aria-label', '音量');
-      vol.append(mk('span', 'sv-np-vol-label', '音量'), (() => { const t = mk('div', 'sv-np-vol-track'); t.appendChild(mk('div', 'sv-np-vol-fill')); return t; })(), mk('span', 'sv-np-vol-text'));
-      const toastEl = mk('div', 'sv-np-toast');
-      toastEl.hidden = true;
-      info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), lyrics, bar, times, btns, vol, toastEl, mk('div', 'sv-np-hint', '↑ ↓ 段を移る　← → 動かす　OK 押す　戻る 閉じる'));
+      info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), lyrics, bar, times);
       const cover = mk('img', 'sv-np-cover');
       cover.alt = '';
-      body.append(cover, info);
-      el.append(mk('div', 'sv-np-bg'), body);
+      track.append(cover, info);
+      const status = mk('div', 'sv-np-status');
+      status.append(mk('div', 'sv-np-s-icon'), mk('h1', 'sv-np-s-head'), mk('div', 'sv-np-s-lines'), mk('div', 'sv-np-s-hint'));
+      const toastEl = mk('div', 'sv-np-toast');
+      toastEl.hidden = true;
+      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, mk('div', 'sv-np-hint'));
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
       // 歌詞は、サイトの歌詞表示が開いているときだけ DOM にある。閉じていれば、開く（閉じるときに戻す）
@@ -257,7 +275,7 @@
       }
       if (SV.spotify) SV.spotify.markSliders(doc);
       refresh();
-      paintFocus();
+      acquireLock();
       timer = setInterval(refresh, 400);
     }
 
@@ -268,6 +286,10 @@
       el.remove();
       el = null;
       doc.documentElement.classList.remove('sv-np-open');
+      if (lock) {
+        lock.release().catch(() => {});
+        lock = null;
+      }
       if (openedLyrics) {
         const lb = doc.querySelector(SEL.lyricsButton);
         if (lb && lb.getAttribute('aria-pressed') === 'true') lb.click();
@@ -275,10 +297,7 @@
       }
     }
 
-    /**
-     * 開いている間の、方向・決定のキー（action は SV.keys の論理名）。処理したら true。
-     * 再生位置の段: ← → で 10 秒。ボタンの段: ← → で移動。音量の段: ← → で 10%。↑ ↓ で段を移る。OK は、再生位置の段では再生/一時停止。
-     */
+    /** 開いている間の、決定・方向のキー（action は SV.keys の論理名）。処理したら true。 */
     function handleAction(action) {
       if (!el) return false;
       const step = (box, dir) => {
@@ -286,30 +305,31 @@
         const b = doc.querySelector(box);
         return b ? SV.spotify.stepSlider(b, dir) : false;
       };
-      if (action === 'UP') row = Math.max(0, row - 1);
-      else if (action === 'DOWN') row = Math.min(2, row + 1);
-      else if (action === 'LEFT' || action === 'RIGHT') {
-        const dir = action === 'RIGHT' ? 1 : -1;
-        if (row === 0) step(SEL.seekBox, dir);
-        else if (row === 2) step(SEL.volumeBox, dir);
-        else col = Math.max(0, Math.min(BUTTONS.length - 1, col + dir));
-      } else if (action === 'SEEK_FWD') step(SEL.seekBox, 1);
-      else if (action === 'SEEK_BACK') step(SEL.seekBox, -1);
-      else if (action === 'OK') {
-        if (row === 1) BUTTONS[col].run();
-        else if (row === 0) click(SEL.playPause);
+      const kind = el.getAttribute('data-kind');
+      if (action === 'OK') {
+        if (kind === 'loggedOut') click(SEL.login);
+        else if (kind === 'track') click(SEL.playPause);
+      } else if (kind !== 'track') {
+        return false; // 曲がないときは、ほかの操作はない
+      } else if (action === 'LEFT' || action === 'SEEK_BACK') step(SEL.seekBox, -1);
+      else if (action === 'RIGHT' || action === 'SEEK_FWD') step(SEL.seekBox, 1);
+      else if (action === 'UP' || action === 'DOWN') {
+        step(SEL.volumeBox, action === 'UP' ? 1 : -1);
+        setTimeout(() => {
+          const v = read(doc).volume;
+          if (v != null) toast('音量 ' + Math.round(v * 100) + '%');
+        }, 150);
       } else if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(SEL.playPause);
       else if (action === 'NEXT') click(SEL.next);
       else if (action === 'PREV') click(SEL.prev);
       else return false;
-      paintFocus();
       setTimeout(refresh, 150);
       return true;
     }
 
-    return { open, close, refresh, handleAction, isOpen: () => !!el, sleepMinutes: () => (sleepIdx ? SLEEP_STEPS[sleepIdx] : 0) };
+    return { open, close, refresh, handleAction, isOpen: () => !!el, status: () => detect(doc, drm) };
   }
 
-  SV.spotifyNp = { SEL, SLEEP_STEPS, trackTitle, read, readLyrics, create };
+  SV.spotifyNp = { SEL, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, create };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyNp;
 })(typeof self !== 'undefined' ? self : globalThis);
