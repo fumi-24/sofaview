@@ -207,7 +207,8 @@
       return;
     }
     if (action === 'BACK' || action === 'YELLOW') {
-      if (!e.repeat) ctl.np.close();
+      // 常に再生中の画面（既定）では閉じない。一覧のページへ切り替える設定（browse）のときだけ閉じる
+      if (!e.repeat && ctl.settings.spotify.browse) ctl.np.close();
       return;
     }
     if (!ctl.gate.allow(action, e)) return;
@@ -361,7 +362,7 @@
       }
       if (t && t !== lastTitle) {
         SV.sendMessage({ type: 'sv:spotifyWake' }); // 裏のタブなら、前面に出る
-        if (ctl.settings.spotify.standby) openNp(); // スマホ主体の使い方（待機）のときは、前面でも、再生中の画面を出す
+        if (ctl.settings.spotify.standby || !ctl.settings.spotify.browse) openNp(); // スマホ主体の使い方（待機）のときは、前面でも、再生中の画面を出す
       }
       lastTitle = t;
     };
@@ -401,8 +402,10 @@
     S.markPanel(document);
     // 待機（スマホ主体の使い方）の設定のとき、読み込んだら、再生中の画面（曲がなければ状態の画面）を出す。設定を切り替えたときも
     let wasStandby = false;
+    // 常に再生中の画面（既定）: 読み込んだら開き、閉じない。browse のときだけ、待機の設定が入ったときに開く
     const applyStandby = (st) => {
-      const on = !!(st && st.spotify && st.spotify.standby);
+      const sp = (st && st.spotify) || {};
+      const on = !!sp.standby || !sp.browse;
       if (on && !wasStandby) openNp();
       wasStandby = on;
     };

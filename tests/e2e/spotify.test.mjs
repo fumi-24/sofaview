@@ -8,10 +8,13 @@ let env;
 test.before(async () => {
   env = await launch();
   await env.ctx.route('https://open.spotify.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: spotifyHtml() }));
+  await setSp({ browse: true }); // 既定は「常に再生中の画面」。一覧のページの操作を調べるテストは browse で
 });
 test.after(async () => {
   await env.close();
 });
+
+const setSp = (sp) => env.sw.evaluate((sp) => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: sp } }, r)), sp);
 
 async function open(path = '/') {
   const page = await env.ctx.newPage();
@@ -323,7 +326,7 @@ test('Spotify: 「裏で開いておく」をオンにすると、Spotify が裏
   await hub.goto(env.hubUrl);
   await until(() => hub.evaluate(() => document.documentElement.dataset.svReady === '1'), { message: 'hub ready' });
   await env.sw.evaluate(() => chrome.storage.session.remove(['svSpotifyAt', 'svSpotifyState']));
-  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: true } } }, r)));
+  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: true, browse: true } } }, r)));
   await until(async () => (await tabsOf()).filter((t) => t.url.startsWith('https://open.spotify.com/')).length === 1, { message: '裏の Spotify が開く' });
   assert.equal((await tabsOf()).find((t) => t.url.startsWith('https://open.spotify.com/')).active, false, '前面を奪わない');
   const sp = env.ctx.pages().find((p) => p.url().startsWith('https://open.spotify.com/'));
@@ -346,7 +349,7 @@ test('Spotify: 「裏で開いておく」をオンにすると、Spotify が裏
   await until(async () => (await sp.locator('#sv-np').count()) === 1, { message: '前面でも開く' });
   await until(async () => /前面で変わった曲/.test(await sp.locator('#sv-np').innerText()), { message: '新しい曲' });
   // 設定をオフに戻す
-  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: false } } }, r)));
+  await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: { standby: false, browse: true } } }, r)));
   await hub.close().catch(() => {});
   await sp.close().catch(() => {});
 });
@@ -372,4 +375,24 @@ test('Spotify: サイトのメニュー（role=menu）が開いている間は�
   await until(async () => (await page.locator('#ctx').count()) === 0, { message: '戻るでメニューが閉じる' });
   assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'popstate' || l.ev === 'navigate').length, 0, 'ページは戻らない');
   await page.close();
+});
+
+test('Spotify: 既定は「常に再生中の画面」。読み込むと開き、戻る・黄色キーでは閉じない。↑ ↓ は効く。曲がなくても状態の画面のまま', async () => {
+  await setSp({ browse: false });
+  const page = await open();
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.count()) === 1, { message: '読み込むと再生中の画面が開く' });
+  assert.match(await np.innerText(), /テスト曲のタイトル/);
+  await press(page, 'Escape');
+  await yellowKey(page);
+  assert.equal(await np.count(), 1, '戻る・黄色キーでは閉じない');
+  await press(page, 'ArrowUp');
+  await until(async () => /音量 \d+%/.test(await page.locator('.sv-np-toast').innerText()), { message: '音量の表示' });
+  const v = await openVariant({ loggedOut: false, noTrack: true });
+  await until(async () => (await v.locator('#sv-np').count()) === 1, { message: '曲がなくても状態の画面が開く' });
+  await press(v, 'Escape');
+  assert.equal(await v.locator('#sv-np').count(), 1, '状態の画面も閉じない');
+  await v.close();
+  await page.close();
+  await setSp({ browse: true });
 });

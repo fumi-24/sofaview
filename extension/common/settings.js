@@ -21,6 +21,7 @@
     },
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
+      browse: false, // 一覧のページ（検索・プレイリストなど）を十字キーで操作できる状態にも切り替える。画面には出さない（今は常に再生中の画面。ページの作り込みは後回し）
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
@@ -77,6 +78,7 @@
 
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
+    out.spotify.browse = bool(sp.browse, d.spotify.browse);
 
     const y = isObj(s.youtube) ? s.youtube : {};
     out.youtube.redirect = bool(y.redirect, d.youtube.redirect);
