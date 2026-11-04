@@ -427,6 +427,8 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   const page = await open();
   const np = page.locator('#sv-np');
   await until(async () => (await np.locator('.sv-np-line').count()) === 6, { message: '歌詞が出る' });
+  assert.equal(await np.locator('.sv-np-ly-track').evaluate((e) => e.style.getPropertyValue('--cur')), '2', 'いまの行（3 行目）が真ん中に来る位置（列ごと滑らかに動かす）');
+  assert.equal(await np.locator('.sv-np-fill').evaluate((e) => e.style.transform), 'scaleX(0.2844)', '再生位置は transform だけで動かす（レイアウトを走らせない）');
   const focused = () => page.evaluate(() => document.activeElement && document.activeElement.dataset.id);
   await press(page, 'ArrowRight'); // 列を出す
   await press(page, 'ArrowRight');
@@ -456,5 +458,44 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   assert.equal(await p2.locator('.sv-np-controls').isVisible(), true);
   await until(async () => (await p2.locator('.sv-np-controls').isVisible()) === false, { timeout: 8000, message: '5 秒で隠れる' });
   await p2.close();
+  await setSp({ browse: true });
+});
+
+test('Spotify: サイトの作りが変わっても（目印の data-testid・クラス名が全部なくなっても）、再生中の画面は動く。曲の情報は再生情報（mediaSession）、再生位置は音声、操作はボタンの表示名と範囲入力の並びで見つける', async () => {
+  await setSp({ browse: false });
+  const page = await openVariant({ plain: true });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.getAttribute('data-kind')) === 'track', { message: '再生情報から、曲の画面になる' });
+  assert.match(await np.innerText(), /テスト曲のタイトル/);
+  assert.match(await np.innerText(), /テスト歌手/);
+  await until(async () => /0:10/.test(await np.innerText()), { message: '再生位置は音声から' });
+  assert.match(await np.innerText(), /0:20/, '長さも音声から');
+  assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid]').length), 0, '目印は 1 つもない');
+  assert.equal(await np.getAttribute('data-state'), 'paused');
+  const focused = () => page.evaluate(() => document.activeElement && document.activeElement.dataset.id);
+  const mark = (await fx(page, 'log')).length;
+  await press(page, 'Enter'); // 列を出す
+  await press(page, 'Enter'); // 再生/一時停止（ボタンの表示名「再生」で見つける）
+  await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '音声が再生中になる' });
+  await press(page, 'ArrowRight');
+  assert.equal(await focused(), 'fwd');
+  await press(page, 'Enter'); // +10 秒（範囲入力の並びの 1 つ目 = 再生位置）
+  await press(page, 'ArrowUp'); // 音量（並びの最後 = 音量）
+  await press(page, 'ArrowDown');
+  const log = (await fx(page, 'log')).slice(mark);
+  assert.deepEqual(log.filter((l) => l.ev === 'click').map((l) => l.id), ['control-button-playpause'], '再生ボタンだけが押される');
+  assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'seek').map((l) => l.value), [60000]);
+  assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'volume').map((l) => l.value), [1, 0.9], '音量（上限では動かない）');
+  assert.equal(await np.locator('.sv-np-lyrics').isVisible(), false, '歌詞の目印がなければ、歌詞は出さない（落ちない）');
+  assert.deepEqual(errors, []);
+  await page.close();
+  // ログインしていない: ログインのボタンも、表示名で見つかる
+  const out = await openVariant({ plain: true, loggedOut: true, noTrack: true });
+  await until(async () => (await out.locator('#sv-np').getAttribute('data-kind')) === 'loggedOut', { message: 'ログインしていない画面' });
+  await press(out, 'Enter');
+  await until(async () => (await fx(out, 'log')).some((l) => l.ev === 'login'), { message: 'ログインのボタンが押される' });
+  await out.close();
   await setSp({ browse: true });
 });

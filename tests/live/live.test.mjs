@@ -383,7 +383,24 @@ test('実際の TVer のプレイヤー（再生 API だけ偽）で、視聴画
   await page.close();
 });
 
+const setSpotify = (sp) => env.sw.evaluate((sp) => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { spotify: sp } }, r)), sp);
+
+test('Spotify（ログアウト状態の Web プレーヤー）: 既定は再生中の画面。本来の画面は描画せず、ログインしていない状態の画面を出す（実サイトで、ログインのボタンが見つかること）', opts, async () => {
+  await setSpotify({ browse: false });
+  const page = await env.ctx.newPage();
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await until(() => page.evaluate(() => document.documentElement.dataset.svReady === '1'), { timeout: 30000, message: 'sv ready' });
+  await until(() => page.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 30000, message: 'logged-out status view' });
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).visibility), 'hidden', '本来の画面は描画しない');
+  await shot(page, 'spotify-0-np-loggedout');
+  assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
+  await page.close();
+});
+
 test('Spotify（ログアウト状態の Web プレーヤー）: 初期フォーカスが内容のカードに入り、OK でカードを開き、戻るで戻ると、またカードにフォーカスが入る。十字キーで移動でき、別サイトのリンクには止まらない', opts, async () => {
+  await setSpotify({ browse: true }); // 一覧のページの操作（元の画面を使う設定）
   const page = await env.ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));

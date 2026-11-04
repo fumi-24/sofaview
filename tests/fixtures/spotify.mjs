@@ -44,7 +44,7 @@ export function spotifyHtml(opt) {
   <aside data-testid="now-playing-bar" aria-label="再生中バー">
   <div data-testid="now-playing-widget-v2" role="region" aria-label="再生中">
     <div data-testid="cover-art-container"><button data-testid="cover-art-button" aria-label="再生中ビュー"><img data-testid="cover-art-image" alt="" src="data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs="></button></div>
-    ${o.noTrack ? '<div></div>' : '<div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>'}
+    ${o.noTrack || o.plain ? '<div></div>' : '<div><a href="/album/np1">テスト曲のタイトル</a><span data-testid="now-playing-widget-v2-byline"><a href="/artist/np2">テスト歌手</a></span></div>'}
     <button aria-checked="false" aria-label="お気に入りに追加" data-like>♡</button>
   </div>
   <div data-testid="player-controls"><div data-testid="general-controls">
@@ -62,6 +62,7 @@ export function spotifyHtml(opt) {
   </aside>
 </div>
 <script>
+  document.querySelectorAll('[data-testid]').forEach((e) => { e.dataset.fx = e.dataset.testid; });
   window.__fx = { log: [], inputs: [], setTrack: (t) => { document.querySelector('[data-testid="now-playing-widget-v2"] a').textContent = t; } };
   const log = (ev, d) => window.__fx.log.push({ ev, ...(d || {}) });
   const main = document.getElementById('main');
@@ -87,7 +88,7 @@ export function spotifyHtml(opt) {
       return;
     }
     const b = e.target.closest('button');
-    if (b && b.dataset.testid === 'more-button' && !document.getElementById('ctx')) {
+    if (b && b.dataset.fx === 'more-button' && !document.getElementById('ctx')) {
       // サイトのコンテキストメニュー: role=menu。Esc で閉じる。外のものも候補になる（後ろに動かないことを確かめる）
       const m = document.createElement('div');
       m.id = 'ctx';
@@ -105,9 +106,9 @@ export function spotifyHtml(opt) {
       log('menu-open');
       return;
     }
-    if (b && b.dataset.testid === 'login-button') log('login');
+    if (b && b.dataset.fx === 'login-button') log('login');
     if (b && b.getAttribute('role') === 'menuitem') { log('menu-item', { text: b.textContent }); }
-    if (b && b.dataset.testid === 'lyrics-button') {
+    if (b && b.dataset.fx === 'lyrics-button') {
       // 歌詞は、歌詞ボタンが押されている間だけ DOM にある（サイトと同じ）。色の変数と、いまの行の色も同じ作り
       const on = b.getAttribute('aria-pressed') !== 'true';
       b.setAttribute('aria-pressed', String(on));
@@ -119,7 +120,7 @@ export function spotifyHtml(opt) {
         box.setAttribute('style', '--lyrics-color-active: rgba(255, 255, 255, 1); --lyrics-color-inactive: rgba(200, 209, 184, 1); position: fixed; left: -9999px');
         ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'].forEach((t, i) => {
           const l = document.createElement('div');
-          l.setAttribute('data-testid', 'lyrics-line');
+          l.setAttribute(${JSON.stringify(o.plain ? 'data-fx' : 'data-testid')}, 'lyrics-line');
           l.setAttribute('dir', 'auto');
           l.innerHTML = '<div style="color: ' + (i === 2 ? 'rgb(255, 255, 255)' : 'rgb(200, 209, 184)') + '">' + t + '</div>';
           box.appendChild(l);
@@ -128,14 +129,29 @@ export function spotifyHtml(opt) {
       }
       log('lyrics', { on });
     }
-    if (b && (b.hasAttribute('data-like') || b.dataset.testid === 'control-button-repeat')) b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
-    if (b && b.dataset.testid === 'control-button-playpause') b.setAttribute('aria-label', b.getAttribute('aria-label') === '再生' ? '一時停止' : '再生');
-    if (b) log('click', { id: b.dataset.testid || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
+    if (b && (b.hasAttribute('data-like') || b.dataset.fx === 'control-button-repeat')) b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));
+    if (b && b.dataset.fx === 'control-button-playpause') b.setAttribute('aria-label', b.getAttribute('aria-label') === '再生' ? '一時停止' : '再生');
+    if (b) log('click', { id: b.dataset.fx || (b.dataset.trackPlay ? 'track-' + b.dataset.trackPlay : b.getAttribute('aria-label')) });
   });
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && document.getElementById('ctx')) { document.getElementById('ctx').remove(); log('menu-close'); } });
   addEventListener('popstate', () => { log('popstate', { to: location.pathname }); render(); });
   document.querySelectorAll('input[type=range]').forEach((r) => { r.addEventListener('input', () => window.__fx.log.push({ ev: 'range', kind: r.max === '1' ? 'volume' : 'seek', value: Number(r.value) })); });
   document.querySelector('[data-testid="search-input"]').addEventListener('input', (e) => window.__fx.inputs.push(e.target.value));
   render();
+  ${o.plain ? `
+  // 「サイトの作りが変わった」再現: 目印（data-testid）を全部外し、クラス名も意味のないものにする。曲の情報は mediaSession と audio、操作はボタンの表示名と範囲入力の並びだけで見つかる
+  const strip = () => document.querySelectorAll('[data-testid]').forEach((e) => { e.removeAttribute('data-testid'); e.className = 'x' + Math.random().toString(36).slice(2, 7); });
+  strip();
+  new MutationObserver(strip).observe(document.body, { childList: true, subtree: true });
+  // 本物の audio 要素（拡張は別の世界から見るので、ページ側で定義したプロパティは見えない）。20 秒の無音の WAV。再生・一時停止はボタンの押下に連動
+  const au = document.createElement('audio');
+  au.muted = true;
+  const wav = (sec) => { const rate = 8000, n = rate * sec, b = new ArrayBuffer(44 + n), v = new DataView(b); const w = (o, t) => Array.from(t).forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0))); w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true); v.setUint32(24, rate, true); v.setUint32(28, rate, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true); new Uint8Array(b, 44).fill(128); return b; };
+  au.src = URL.createObjectURL(new Blob([wav(20)], { type: 'audio/wav' }));
+  au.addEventListener('loadedmetadata', () => { au.currentTime = 10; });
+  document.body.appendChild(au);
+  document.addEventListener('click', (e) => { const b = e.target.closest('button'); if (b && b.dataset.fx === 'control-button-playpause') { if (au.paused) au.play(); else au.pause(); } });
+  ${o.noTrack ? '' : `navigator.mediaSession.metadata = new MediaMetadata({ title: 'テスト曲のタイトル', artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] });`}
+  ` : ''}
 </script></body></html>`;
 }

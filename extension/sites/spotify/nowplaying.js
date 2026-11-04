@@ -29,7 +29,92 @@
     user: '[data-testid="user-widget-link"]',
     volumeBox: '[data-sv-slider="volume"]',
     seekBox: '[data-sv-slider="seek"]',
+    volumeInput: '[data-testid="volume-bar"] input[type="range"]',
   });
+
+  /**
+   * サイトの作りが変わっても動くよう、読み取りと操作の部品は、2 段で探す（単純さを保つため、段はこれだけ）。
+   *   1) 既知の目印（data-testid。上の SEL）
+   *   2) 見た目の意味: ボタンの表示名（aria-label）、再生バーの中の範囲入力の並び、再生中の音声（audio/video）、ブラウザの再生情報（mediaSession）
+   * クラス名（ハッシュ）には頼らない。見つけた要素は覚えておき、DOM から外れたら探し直す（毎回探さない）。
+   */
+  const LABEL = {
+    playPause: /^(再生|一時停止|play|pause)$/i,
+    prev: /^(前へ|前の曲|前のトラック|previous( track)?|prev)$/i,
+    next: /^(次へ|次の曲|次のトラック|next( track)?)$/i,
+    lyricsButton: /^(歌詞|lyrics)$/i,
+    login: /^(ログイン|log ?in|sign ?in)$/i,
+  };
+  const found = new WeakMap(); // document → { key: 要素 }
+
+  function find(doc, key) {
+    let c = found.get(doc);
+    if (!c) found.set(doc, (c = {}));
+    const hit = c[key];
+    if (hit && hit.isConnected) return hit;
+    let el = doc.querySelector(SEL[key]);
+    if (el) {
+      c[key] = el;
+      return el;
+    }
+    // 目印がないときの探し直し（全部のボタンを調べるので、3 秒に 1 回まで）
+    const now = Date.now();
+    if (now - (c['miss:' + key] || 0) < 3000) return null;
+    c['miss:' + key] = now;
+    if (key === 'bar') el = Array.from(doc.querySelectorAll('footer, aside')).find((x) => x.querySelector('input[type="range"]')) || null;
+    else if (LABEL[key]) {
+      const scope = key === 'login' ? 'header, nav, [role="banner"]' : null; // ログインは上のバーにある（ページ全体は調べない）
+      const roots = scope ? Array.from(doc.querySelectorAll(scope)) : [find(doc, 'bar') || doc];
+      for (const b of roots.flatMap((r) => Array.from(r.querySelectorAll('button, [role="button"], a')))) {
+        const name = (b.getAttribute('aria-label') || (key === 'login' ? text(b) : '')).trim();
+        if (name && LABEL[key].test(name)) {
+          el = b;
+          break;
+        }
+      }
+    }
+    if (el) c[key] = el;
+    return el;
+  }
+
+  /** 再生バーの範囲入力（再生位置・音量）。目印がなければ、バーの中の並び（再生位置 → 音量）で決める。 */
+  function range(doc, kind) {
+    const hit = doc.querySelector(kind === 'seek' ? SEL.seek : SEL.volumeInput);
+    if (hit) return hit;
+    const bar = find(doc, 'bar');
+    const all = Array.from((bar || doc).querySelectorAll('input[type="range"]')).filter((x) => !x.closest('[class*="LayoutResizer"], [aria-hidden="true"]'));
+    if (all.length < 2) return null;
+    return kind === 'seek' ? all[0] : all[all.length - 1];
+  }
+
+  /** 再生中の音声（audio / video）。長さが分かるものだけ。 */
+  function media(doc) {
+    let first = null;
+    for (const m of doc.querySelectorAll('audio, video')) {
+      if (!(Number.isFinite(m.duration) && m.duration > 0)) continue;
+      if (!m.paused) return m; // 再生中のものを優先（広告・プレビューなどが別にあっても、鳴っている方）
+      first = first || m;
+    }
+    return first;
+  }
+
+  /** ブラウザの再生情報（曲名・アーティスト・ジャケット）。Spotify が OS のメディアキー用に出している。 */
+  function session(doc) {
+    try {
+      const m = doc.defaultView.navigator.mediaSession.metadata;
+      if (!m || !m.title) return null;
+      const art = m.artwork && m.artwork.length ? m.artwork[m.artwork.length - 1].src : '';
+      return { title: String(m.title), artist: String(m.artist || ''), cover: art || '' };
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /** 秒 → m:ss（サイトの表示と同じ形）。 */
+  function fmt(sec) {
+    const t = Math.max(0, Math.floor(sec));
+    return Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0');
+  }
 
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
 
@@ -72,43 +157,72 @@
   /** いま再生中の曲名だけ（軽い読み取り。曲が変わったかの確認用）。 */
   function trackTitle(doc) {
     const w = doc.querySelector(SEL.widget);
-    return text(w && w.querySelector(SEL.title));
+    const t = text(w && w.querySelector(SEL.title));
+    if (t) return t;
+    const m = session(doc);
+    return m ? m.title : '';
   }
 
-  /** 再生バーから、いま再生中の曲の情報を読む（DOM に触るのは読むだけ）。 */
+  /** 再生バーから、いま再生中の曲の情報を読む（DOM に触るのは読むだけ）。曲の情報は 目印 → 再生情報、再生位置は 音声 → 画面の順。 */
   function read(doc) {
     const w = doc.querySelector(SEL.widget);
-    const title = text(w && w.querySelector(SEL.title));
+    let title = text(w && w.querySelector(SEL.title));
+    let artists = text(w && w.querySelector(SEL.byline));
     const img = w && w.querySelector(SEL.cover);
-    const seek = doc.querySelector(SEL.seek);
+    let cover = img ? img.currentSrc || img.src || '' : '';
+    if (!title) {
+      const m = session(doc);
+      if (m) {
+        title = m.title;
+        artists = artists || m.artist;
+        cover = cover || m.cover;
+      }
+    }
+    const au = media(doc);
+    const seek = range(doc, 'seek');
     const max = seek ? Number(seek.max) : 0;
-    const label = (doc.querySelector(SEL.playPause) || { getAttribute: () => '' }).getAttribute('aria-label') || '';
-    const vol = doc.querySelector('[data-testid="volume-bar"] input[type="range"]');
+    let position = text(doc.querySelector(SEL.position));
+    let duration = text(doc.querySelector(SEL.duration));
+    let ratio = seek && max > 0 ? Math.min(1, Math.max(0, Number(seek.value) / max)) : 0;
+    if (au) {
+      position = fmt(au.currentTime);
+      duration = fmt(au.duration);
+      ratio = Math.min(1, Math.max(0, au.currentTime / au.duration));
+    } else if ((!position || !duration) && seek) {
+      const m = /(\d+:\d+(?::\d+)?)\s*\/\s*(\d+:\d+(?::\d+)?)/.exec(seek.getAttribute('aria-valuetext') || '');
+      if (m) {
+        position = position || m[1];
+        duration = duration || m[2];
+      }
+    }
+    const pp = find(doc, 'playPause');
+    const label = (pp && pp.getAttribute('aria-label')) || '';
+    const vol = range(doc, 'volume');
     return {
       hasTrack: !!title,
       title,
-      artists: text(w && w.querySelector(SEL.byline)),
-      cover: img ? img.currentSrc || img.src || '' : '',
-      playing: /一時停止|pause/i.test(label),
-      position: text(doc.querySelector(SEL.position)),
-      duration: text(doc.querySelector(SEL.duration)),
-      ratio: seek && max > 0 ? Math.min(1, Math.max(0, Number(seek.value) / max)) : 0,
+      artists,
+      cover,
+      playing: au ? !au.paused && !au.ended : /一時停止|pause/i.test(label),
+      position,
+      duration,
+      ratio,
       volume: vol && Number(vol.max) > 0 ? Number(vol.value) / Number(vol.max) : null,
     };
   }
 
-  /** ページから、状態を読む（drm は呼び出し側が確認した結果）。 */
-  function detect(doc, drm) {
+  /** ページから、状態を読む（drm は呼び出し側が確認した結果。waited: 開いてから十分待ったか。目印が変わって「読み込み中」のままにならないように）。 */
+  function detect(doc, drm, waited) {
     const info = read(doc);
-    const loggedOut = !!doc.querySelector(SEL.login) && !doc.querySelector(SEL.user);
-    const ready = !!doc.querySelector(SEL.bar);
+    const loggedOut = !!find(doc, 'login') && !doc.querySelector(SEL.user);
+    const ready = !!find(doc, 'bar') || !!media(doc) || !!session(doc) || !!waited;
     return { kind: statusOf({ loggedOut, hasTrack: info.hasTrack, ready, drm }), info };
   }
 
   /**
    * 歌詞（サイトの歌詞表示が開いているときだけ DOM にある）。いま歌っている行は、文字色で見分ける
    * （サイトの色の変数 --lyrics-color-active の色で、普通の行（--lyrics-color-inactive）とは違うもの。クラス名のハッシュには頼らない）。
-   * 返す: { lines: [表示する行（前 2・いま・次 3）], active: lines の中の位置 } か、歌詞がない・いまの行が分からないときは null。
+   * 返す: { lines: [全部の行], cur: いまの行の位置 } か、歌詞がない・いまの行が分からないときは null（そのときは歌詞は出さない）。
    */
   function readLyrics(doc, hint) {
     const nodes = Array.from(doc.querySelectorAll(SEL.lyricsLine));
@@ -122,18 +236,15 @@
     const inactive = norm(cs.getPropertyValue('--lyrics-color-inactive'));
     let cur = -1;
     if (active && active !== inactive) {
-      // いまの行は 1 つだけ。前に見つけた位置の近くから探して、見つかったら止める（全部の行の色を調べると重い）
+      // いまの行は 1 つだけ。前に見つけた位置から順に探して、見つかったら止める（全部の行の色を調べると重い）
       const start = Math.max(0, Math.min(items.length - 1, hint == null ? 0 : hint));
       for (let k = 0; k < items.length && cur < 0; k++) {
-        const j = k % 2 ? start - (k + 1) / 2 : start + k / 2;
-        if (j >= 0 && j < items.length && norm(col(items[j].node)) === active) cur = j;
+        const j = (start + k) % items.length;
+        if (norm(col(items[j].node)) === active) cur = j;
       }
-      if (cur < 0) items.forEach((x, i) => { if (cur < 0 && norm(col(x.node)) === active) cur = i; });
     }
     if (cur < 0) return null; // いまの行が分からないときは、歌詞は出さない（ずれた行を出すより、出さない）
-    const from = Math.max(0, cur - 2);
-    const to = Math.min(items.length, cur + 4);
-    return { lines: items.slice(from, to).map((x) => x.text), active: cur - from, cur };
+    return { lines: items.map((x) => x.text), cur };
   }
 
   /** 再生に必要な保護機能（Widevine）が使えるか。 */
@@ -149,15 +260,22 @@
   function create(opts) {
     const doc = (opts && opts.document) || document;
     const win = doc.defaultView;
+    const createdAt = Date.now();
     let el = null;
     let timer = 0;
     let toastTimer = 0;
+    let barTimer = 0;
     let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか（閉じるときに戻す）
     let drm = null;
     let lock = null;
-    let barTimer = 0;
     let fi = 2; // ボタンの列で、フォーカスがある位置（初めは再生/一時停止）
     let lyricsSynced = false; // サイトの歌詞表示を、設定に合わせたか
+    let lyricHint = 0;
+    let lyricSig = '';
+    let lyricCur = -2;
+    let lastLyricAt = 0;
+    let lastRatio = 0;
+    const waited = () => Date.now() - createdAt > 8000; // 目印が変わっても、「読み込み中」のままにしない
     const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
     const BUTTONS = [
       { id: 'prev', text: '⏮', label: '前の曲' },
@@ -174,11 +292,36 @@
       if (txt != null) e.textContent = txt;
       return e;
     };
-    const click = (sel) => {
-      const b = doc.querySelector(sel);
+    const click = (key) => {
+      const b = find(doc, key);
       if (b) b.click();
       return !!b;
     };
+    // 値が変わったときだけ書く（同じ文字を書き直すと、画面の再計算が毎回走って重い）
+    const put = (node, v) => {
+      if (node.textContent !== v) node.textContent = v;
+    };
+
+    /** 範囲入力を、決まった幅（再生位置は 10 秒、音量は 10%）だけ動かす。サイトの React が input イベントで気づく。入力がなければ、再生位置だけ音声を直接動かす。 */
+    function stepRange(kind, dir) {
+      const r = range(doc, kind);
+      if (r) {
+        const max = Number(r.max) || 1;
+        const delta = kind === 'seek' ? (max > 10000 ? 10000 : 10) : max * 0.1;
+        const n = Math.max(1, Math.round(delta / (Number(r.step) > 0 ? Number(r.step) : 1)));
+        if (dir > 0) r.stepUp(n);
+        else r.stepDown(n);
+        r.dispatchEvent(new Event('input', { bubbles: true }));
+        r.dispatchEvent(new Event('change', { bubbles: true }));
+        return true;
+      }
+      const m = kind === 'seek' ? media(doc) : null;
+      if (m) {
+        m.currentTime = Math.min(m.duration, Math.max(0, m.currentTime + dir * 10));
+        return true;
+      }
+      return false;
+    }
 
     // 保護機能の確認は 1 回だけ（結果は画面に反映する）
     (opts && opts.checkDrm ? opts.checkDrm() : checkWidevine(win)).then((ok) => {
@@ -229,7 +372,7 @@
     /** サイトの歌詞表示を、設定に合わせる（歌詞は、サイトの歌詞表示が開いているときだけ DOM にある）。ボタンが現れたら 1 回だけ合わせる */
     function syncLyrics(force) {
       if (!el || (lyricsSynced && !force)) return;
-      const lb = doc.querySelector(SEL.lyricsButton);
+      const lb = find(doc, 'lyricsButton');
       if (!lb) return;
       lyricsSynced = true;
       const pressed = lb.getAttribute('aria-pressed') === 'true';
@@ -239,6 +382,35 @@
       } else if (!wantLyrics() && pressed && openedLyrics) {
         lb.click();
         openedLyrics = false;
+      }
+    }
+
+    /** 歌詞。全部の行を並べて、いまの行が真ん中に来るよう、列ごと滑らかに動かす（行の作り直しは、曲が変わったときだけ）。 */
+    function paintLyrics() {
+      const box = el.querySelector('.sv-np-lyrics');
+      const ly = wantLyrics() ? readLyrics(doc, lyricHint) : null;
+      box.hidden = !ly;
+      if (!ly) return;
+      lyricHint = ly.cur;
+      const track = box.firstChild;
+      const L = ly.lines;
+      const sig = L.length + '\n' + L[0] + '\n' + L[L.length >> 1] + '\n' + L[L.length - 1];
+      if (sig !== lyricSig) {
+        lyricSig = sig;
+        lyricCur = -2;
+        track.textContent = '';
+        L.forEach((t) => track.appendChild(mk('div', 'sv-np-line', t)));
+        track.style.transition = 'none'; // 曲が変わったときは、滑らせずに合わせる
+        track.style.setProperty('--cur', String(ly.cur));
+        void track.offsetWidth;
+        track.style.transition = '';
+      }
+      if (ly.cur !== lyricCur) {
+        const kids = track.children;
+        if (kids[lyricCur]) kids[lyricCur].classList.remove('is-current');
+        if (kids[ly.cur]) kids[ly.cur].classList.add('is-current');
+        track.style.setProperty('--cur', String(ly.cur));
+        lyricCur = ly.cur;
       }
     }
 
@@ -253,14 +425,14 @@
     }
 
     function barVisible() {
-      return !!el && !el.querySelector('.sv-np-controls').hidden;
+      return !!el && el.querySelector('.sv-np-controls').hasAttribute('data-show');
     }
     function hideBar() {
       if (!el) return false;
       clearTimeout(barTimer);
       const bar = el.querySelector('.sv-np-controls');
-      const was = !bar.hidden;
-      bar.hidden = true;
+      const was = bar.hasAttribute('data-show');
+      bar.removeAttribute('data-show');
       el.querySelector('.sv-np-hint').hidden = false;
       return was;
     }
@@ -268,8 +440,8 @@
     function showBar() {
       if (!el) return;
       const bar = el.querySelector('.sv-np-controls');
-      const was = !bar.hidden;
-      bar.hidden = false;
+      const was = bar.hasAttribute('data-show');
+      bar.setAttribute('data-show', '1');
       el.querySelector('.sv-np-hint').hidden = true;
       if (!was) focusButton(fi);
       clearTimeout(barTimer);
@@ -281,34 +453,24 @@
       if (b) b.focus({ preventScroll: true });
     }
     function activate(id) {
-      const step = (box, dir) => {
-        if (SV.spotify) SV.spotify.markSliders(doc);
-        const b = doc.querySelector(box);
-        return b ? SV.spotify.stepSlider(b, dir) : false;
-      };
-      if (id === 'prev') click(SEL.prev);
-      else if (id === 'next') click(SEL.next);
-      else if (id === 'play') click(SEL.playPause);
-      else if (id === 'back') step(SEL.seekBox, -1);
-      else if (id === 'fwd') step(SEL.seekBox, 1);
+      if (id === 'prev') click('prev');
+      else if (id === 'next') click('next');
+      else if (id === 'play') click('playPause');
+      else if (id === 'back') stepRange('seek', -1);
+      else if (id === 'fwd') stepRange('seek', 1);
       else if (id === 'lyrics') {
         const v = !wantLyrics();
         if (opts && opts.onLyrics) opts.onLyrics(v);
         syncLyrics(true);
         toast('歌詞 ' + (v ? 'オン' : 'オフ'));
+        lastLyricAt = 0;
         refresh();
       }
     }
 
-    // 値が変わったときだけ書く（同じ文字を書き直すと、画面の再計算が毎回走って重い）
-    const put = (node, v) => {
-      if (node.textContent !== v) node.textContent = v;
-    };
-    let lyricHint = 0;
-
     function refresh() {
       if (!el) return;
-      const d = detect(doc, drm);
+      const d = detect(doc, drm, waited());
       el.setAttribute('data-kind', d.kind);
       const trackView = d.kind === 'track';
       el.setAttribute('data-view', trackView ? 'track' : 'status');
@@ -331,21 +493,20 @@
       cover.hidden = !i.cover;
       syncLyrics();
       paintButtons(i);
-      const ly = wantLyrics() ? readLyrics(doc, lyricHint) : null;
-      if (ly) lyricHint = ly.cur;
-      const box = el.querySelector('.sv-np-lyrics');
-      box.hidden = !ly;
-      if (ly) {
-        const sig = ly.active + '|' + ly.lines.join('\n');
-        if (box.getAttribute('data-sig') !== sig) {
-          box.setAttribute('data-sig', sig);
-          box.textContent = '';
-          ly.lines.forEach((t, k) => box.appendChild(mk('div', 'sv-np-line' + (k === ly.active ? ' is-current' : ''), t)));
-        }
+      const now = Date.now();
+      if (now - lastLyricAt >= 450) {
+        lastLyricAt = now;
+        paintLyrics();
       }
-      const w = Math.round(i.ratio * 1000) / 10 + '%';
+      // 再生位置: 動かすのは transform だけ（レイアウトが走らない）。再生中の小さな進みは滑らかに、大きな飛び（シーク・曲の変わり目）は一気に
       const fill = el.querySelector('.sv-np-fill');
-      if (fill.style.width !== w) fill.style.width = w;
+      const r = Math.round(i.ratio * 10000) / 10000;
+      if (fill.getAttribute('data-r') !== String(r)) {
+        fill.setAttribute('data-r', String(r));
+        fill.style.transition = i.playing && Math.abs(r - lastRatio) < 0.03 ? 'transform 0.3s linear' : 'none';
+        fill.style.transform = 'scaleX(' + r + ')';
+        lastRatio = r;
+      }
       put(el.querySelector('.sv-np-pos'), i.position);
       put(el.querySelector('.sv-np-dur'), i.duration);
     }
@@ -363,6 +524,7 @@
       const times = mk('div', 'sv-np-times');
       times.append(mk('span', 'sv-np-pos'), mk('span', 'sv-np-dur'));
       const lyrics = mk('div', 'sv-np-lyrics');
+      lyrics.appendChild(mk('div', 'sv-np-ly-track'));
       lyrics.hidden = true;
       info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), lyrics, bar, times);
       const cover = mk('img', 'sv-np-cover');
@@ -373,7 +535,6 @@
       const toastEl = mk('div', 'sv-np-toast');
       toastEl.hidden = true;
       const controls = mk('div', 'sv-np-controls');
-      controls.hidden = true;
       controls.setAttribute('role', 'toolbar');
       BUTTONS.forEach((b) => {
         const btn = mk('button', 'sv-np-btn', b.text);
@@ -386,12 +547,11 @@
       el.append(mk('div', 'sv-np-bg'), track, status, toastEl, controls, mk('div', 'sv-np-hint'));
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
-      if (SV.spotify) SV.spotify.markSliders(doc);
       refresh();
       acquireLock();
       timer = setInterval(() => {
         if (doc.visibilityState === 'visible') refresh(); // 見えていないときは、描画を更新しない
-      }, 500);
+      }, 250);
     }
 
     function close() {
@@ -400,6 +560,8 @@
       clearTimeout(toastTimer);
       clearTimeout(barTimer);
       lyricsSynced = false;
+      lyricSig = '';
+      lyricCur = -2;
       el.remove();
       el = null;
       doc.documentElement.classList.remove('sv-np-open');
@@ -408,7 +570,7 @@
         lock = null;
       }
       if (openedLyrics) {
-        const lb = doc.querySelector(SEL.lyricsButton);
+        const lb = find(doc, 'lyricsButton');
         if (lb && lb.getAttribute('aria-pressed') === 'true') lb.click();
         openedLyrics = false;
       }
@@ -419,20 +581,21 @@
       if (!el) return false;
       const kind = el.getAttribute('data-kind');
       if (kind !== 'track') {
-        if (action === 'OK' && kind === 'loggedOut') click(SEL.login); // 曲がないときは、ほかの操作はない
-        return action === 'OK' && kind === 'loggedOut';
+        if (action === 'OK' && kind === 'loggedOut') {
+          click('login'); // 曲がないときは、ほかの操作はない
+          return true;
+        }
+        return false;
       }
       // 再生・次・前のキー（リモコンのメディアキー）は、ボタンを出さずにそのまま
-      if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(SEL.playPause);
-      else if (action === 'NEXT') click(SEL.next);
-      else if (action === 'PREV') click(SEL.prev);
+      if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click('playPause');
+      else if (action === 'NEXT') click('next');
+      else if (action === 'PREV') click('prev');
       else if (action === 'SEEK_BACK') activate('back');
       else if (action === 'SEEK_FWD') activate('fwd');
       else if (action === 'UP' || action === 'DOWN') {
         // 音量は、ボタンの列が出ていなくても、すぐ動かす
-        if (SV.spotify) SV.spotify.markSliders(doc);
-        const vb = doc.querySelector(SEL.volumeBox);
-        if (vb) SV.spotify.stepSlider(vb, action === 'UP' ? 1 : -1);
+        stepRange('volume', action === 'UP' ? 1 : -1);
         setTimeout(() => {
           const v = read(doc).volume;
           if (v != null) toast('音量 ' + Math.round(v * 100) + '%');
@@ -450,9 +613,9 @@
       return true;
     }
 
-    return { open, close, refresh, handleAction, hideBar, isOpen: () => !!el, status: () => detect(doc, drm) };
+    return { open, close, refresh, handleAction, hideBar, isOpen: () => !!el, status: () => detect(doc, drm, waited()) };
   }
 
-  SV.spotifyNp = { SEL, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, create };
+  SV.spotifyNp = { SEL, LABEL, fmt, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, find, create };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyNp;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -22,7 +22,7 @@
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
       lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
-      browse: false, // 一覧のページ（検索・プレイリストなど）を十字キーで操作できる状態にも切り替える。画面には出さない（今は常に再生中の画面。ページの作り込みは後回し）
+      browse: false, // 再生中の画面をやめて、Spotify 本来の画面を十字キーで操作する（画面が変わって再生中の画面が動かないときの切り替え。ページの作り込みは後回し）
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する

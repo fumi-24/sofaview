@@ -95,29 +95,42 @@ html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
   color: #d9d9d9;
 }
 
-/* 歌詞 */
+/* 歌詞: 全部の行を並べ、いまの行が真ん中に来るよう、列ごと動かす（動かすのは transform だけ。レイアウトを走らせない） */
 #sv-np .sv-np-lyrics {
-  margin-top: 3.6vh;
-  font-size: 3vh;
-  line-height: 1.3;
-  color: rgba(255, 255, 255, 0.5);
+  margin-top: 3vh;
+  height: 31.2vh; /* 5.2vh の行 × 6 */
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
+  mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
 }
 
 #sv-np .sv-np-lyrics[hidden] {
   display: none;
 }
 
+#sv-np .sv-np-ly-track {
+  transform: translateY(calc(13vh - var(--cur, 0) * 5.2vh));
+  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+  will-change: transform;
+}
+
 #sv-np .sv-np-line {
+  width: 86%;
+  height: 5.2vh;
+  line-height: 5.2vh;
+  font-size: 3.2vh;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  padding: 0.2vh 0;
+  color: rgba(255, 255, 255, 0.5);
+  transform-origin: left center;
+  transition: transform 0.35s ease, color 0.35s ease;
 }
 
 #sv-np .sv-np-line.is-current {
   color: #fff;
   font-weight: 700;
-  font-size: 4vh;
+  transform: scale(1.15);
 }
 
 /* 再生位置 */
@@ -131,8 +144,11 @@ html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
 
 #sv-np .sv-np-fill {
   height: 100%;
-  width: 0;
+  width: 100%;
   background: #fff;
+  transform: scaleX(0);
+  transform-origin: left center;
+  will-change: transform;
 }
 
 #sv-np .sv-np-times {
@@ -225,9 +241,17 @@ html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
   display: flex;
   justify-content: center;
   gap: 2.4vh;
+  visibility: hidden;
+  opacity: 0;
 }
 
-#sv-np .sv-np-controls[hidden],
+/* 出すときだけ、すっと現れる（隠すのは一気に） */
+#sv-np .sv-np-controls[data-show] {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.15s ease-out;
+}
+
 #sv-np .sv-np-hint[hidden] {
   display: none;
 }
@@ -244,6 +268,7 @@ html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
   font: inherit;
   font-size: 4vh;
   cursor: default;
+  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
 }
 
 #sv-np .sv-np-btn[data-id="play"] {
@@ -265,4 +290,5 @@ html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
   outline: 0.6vh solid #fff;
   outline-offset: 0.4vh;
   background: rgba(255, 255, 255, 0.34);
+  transform: scale(1.08);
 }

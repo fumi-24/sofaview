@@ -415,7 +415,7 @@
     };
     function ensureObserver() {
       const browse = !!ctl.settings.spotify.browse;
-      const bar = browse ? null : document.querySelector(SV.spotifyNp.SEL.bar);
+      const bar = browse ? null : SV.spotifyNp.find(document, 'bar');
       const target = browse ? document.body : bar || document.body;
       if (obs && obsTarget === target && target.isConnected) return;
       if (obs) obs.disconnect();
@@ -464,6 +464,7 @@
     // 常に再生中の画面（既定）: 読み込んだら開き、閉じない。元の画面は隠す（CSS: html.sv-sp:not(.sv-browse)）。
     // browse のときだけ、元の画面を出し、待機の設定が入ったときに再生中の画面を開く
     let wasStandby = false;
+    let wasBrowse = null;
     const applyMode = (st) => {
       const sp = (st && st.spotify) || {};
       html.classList.toggle('sv-browse', !!sp.browse);
@@ -471,8 +472,9 @@
       else if (!zoomRequested) html.setAttribute('data-sv-zoom', 'skipped'); // 再生中の画面は vh の寸法なので、画面倍率は要らない
       ensureObserver();
       const on = !!sp.standby || !sp.browse;
-      if (on && !wasStandby) openNp();
+      if (on && (!wasStandby || wasBrowse !== !!sp.browse)) openNp(); // 開いていれば何もしない
       wasStandby = on;
+      wasBrowse = !!sp.browse;
     };
     SV.settings.load().then(applyMode);
     SV.settings.onChange(applyMode);
