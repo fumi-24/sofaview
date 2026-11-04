@@ -1,54 +1,14 @@
 /*
- * Spotify Web プレーヤー用: リモコンで使うための最小限の見た目。サイト本来の画面は変えない。
- * フォーカスは実 DOM のフォーカス（:focus）。リングはサイトの配色の上でも見える白＋黒の二重線。
+ * Spotify: 本来の画面は、完全に差し替える（見せない・描画しない・触れない）。
+ * body 直下の、拡張の要素以外は display: none（レイアウトも描画もしない）。DOM は残る（音楽を鳴らす再生エンジンで、
+ * 曲の情報の読み取りとボタンの押下に使う）。再生中の画面を開けなかったとき（html.sv-np-failed）だけ、最後の手段として出す。
  */
-html.sv-sp :focus {
-  outline: 4px solid #fff !important;
-  outline-offset: 2px !important;
-  box-shadow: 0 0 0 6px rgba(0, 0, 0, 0.85) !important;
+html.sv-sp:not(.sv-np-failed) {
+  background: #000;
 }
 
-html.sv-sp a:focus,
-html.sv-sp button:focus,
-html.sv-sp [role="row"]:focus {
-  z-index: 5;
-}
-
-/* 棚のカード・曲の行（role=row）は、親のスクロール領域に外側の線を切られるので、内側に描く */
-html.sv-sp [role="row"]:focus {
-  outline-offset: -3px !important;
-  box-shadow: inset 0 0 0 6px rgba(0, 0, 0, 0.7) !important;
-  border-radius: 8px;
-}
-
-/* 再生バーの再生位置・音量の棒（本体の input は画面に出ない）: フォーカスできる容器に、見える大きさを与える */
-html.sv-sp [data-sv-slider] {
-  min-height: 16px;
-  cursor: default;
-}
-
-/* リモコンで使えないもの（アプリのインストール・最新情報・再生状況・ミニプレーヤー）は隠す */
-html.sv-sp [data-testid="whats-new-feed-button"],
-html.sv-sp [data-testid="friend-activity-button"],
-html.sv-sp [data-testid="pip-toggle-button"],
-html.sv-sp [data-testid="global-nav-bar"] a[href$="/download"],
-html.sv-sp [data-testid="global-nav-bar"] a[href*="/premium"],
-html.sv-sp [data-testid="global-nav-bar"] a[href*="support.spotify.com"] {
+html.sv-sp:not(.sv-np-failed) body > :not(#sv-np):not(#sv-badge) {
   display: none !important;
-}
-
-/* 調整中（OK を押した棒）: ← → で動かせる。リングを太くして、いまの状態が分かるように */
-html.sv-sp [data-sv-adjusting] {
-  outline-width: 6px !important;
-}
-
-/* 画面の幅を、内容の列に回す: 右の「再生中ビュー」の列は隠し（大きな画面は拡張が作る）、左のライブラリは細くする */
-html.sv-sp [data-sv-hide] {
-  display: none !important;
-}
-
-html.sv-sp [style*="--left-sidebar-width"] {
-  --left-sidebar-width: 300 !important;
 }
 
 /* 読み込み直後の 4 秒だけ出る、版の表示 */

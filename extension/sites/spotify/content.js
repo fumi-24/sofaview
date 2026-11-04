@@ -1,30 +1,24 @@
 /*
  * Spotify（open.spotify.com の Web プレーヤー）用コンテンツスクリプト。
- *  - 画面倍率（10 フィート表示）・マウスカーソルの自動非表示（共通）
- *  - 十字キーでフォーカス移動（空間ナビ）、OK で決定、戻る・ホーム、再生/一時停止・次・前
- *  - 検索欄は OK で画面上のキーボード（common/osk.js）
+ * このタブは、拡張が作る「再生中の画面」（nowplaying.js）だけを出す。Spotify 本来の画面は、見せない・動かさない（CSS: spotify.css で描画しない）。
+ * 本来の画面の DOM は、音楽を鳴らす本体（再生エンジン）として残す。曲の情報の読み取りとボタンの押下にだけ使う。
+ *  - キー: OK・← →（ボタンの列）・↑ ↓（音量）・再生/次/前のメディアキー・戻る（列を隠す。長押しでホーム）・Home（ハブへ。このタブは動かさない）
+ *  - スマホから再生が始まったら、裏のタブなら前面に出る（background）。ハブのタイルに状態を出す
  * ログイン画面（accounts.spotify.com）は別サイトなので、拡張は動かない（そのまま）。
- * 画面そのものは作り替えない。Home で戻るときも、このタブは動かさない（遷移すると音楽が止まる。background の goHub）。
  */
 (function () {
   'use strict';
 
   const SV = self.SV;
-  if (!SV || !SV.spotify || !SV.spotifyNp || !SV.keys || !SV.nav || !SV.osk || !SV.settings) return;
-  const S = SV.spotify;
+  if (!SV || !SV.spotifyNp || !SV.keys || !SV.settings) return;
   const html = document.documentElement;
-  const DIR = { UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right' };
 
   const ctl = {
     matcher: SV.keys.createMatcher(),
     gate: new SV.keys.RepeatGate({ maxPerSec: 12 }),
     hold: new SV.keys.HoldDetector({ holdMs: 800 }),
     settings: SV.settings.defaults(),
-    nav: null,
-    osk: null,
     np: null, // 再生中の大きな画面
-    initialDone: false,
-    userMoved: false,
   };
   html.classList.add('sv-sp');
 
@@ -35,151 +29,6 @@
   }
   SV.settings.load().then(applySettings);
   SV.settings.onChange(applySettings);
-
-  // Spotify の画面は文字が小さめなので、TVer（720）より小さい高さに合わせて、大きく拡大する（自動のときだけ効く）
-  const ZOOM_TARGET = 648;
-
-  // 画面倍率: TVer と同じ手順（SV.zoom.fit）。1 ページ読み込みにつき 1 回
-  let zoomRequested = false;
-  function requestZoom() {
-    if (zoomRequested) return;
-    zoomRequested = true;
-    html.setAttribute('data-sv-zoom', 'pending');
-    SV.zoom
-      .fit({ height: () => window.innerHeight, dpr: () => window.devicePixelRatio, request: (msg) => SV.sendMessage({ ...msg, targetHeight: ZOOM_TARGET }) })
-      .then((r) => html.setAttribute('data-sv-zoom', r && r.ok ? 'done' : 'skipped'))
-      .catch(() => html.setAttribute('data-sv-zoom', 'skipped'));
-  }
-
-  /** サイトのメニュー・ダイアログが開いているか（見えているもの。拡張の画面は除く）。 */
-  const POPUP = '[role="menu"], [role="dialog"], [role="listbox"]';
-  function openPopup() {
-    for (const el of document.querySelectorAll(POPUP)) {
-      if (el.id === 'sv-np' || el.closest('#sv-np') || el.closest('[aria-hidden="true"]')) continue;
-      const r = el.getBoundingClientRect();
-      if (r.width < 8 || r.height < 8) continue;
-      if (typeof el.checkVisibility === 'function' && !el.checkVisibility({ checkVisibilityCSS: true, visibilityProperty: true })) continue;
-      return el;
-    }
-    return null;
-  }
-
-  /** 開いているメニュー・ダイアログを閉じる: Esc を送る（サイトが自分で閉じる）。 */
-  function closePopup() {
-    const t = document.activeElement || document.body;
-    for (const type of ['keydown', 'keyup']) t.dispatchEvent(new KeyboardEvent(type, { key: 'Escape', code: 'Escape', keyCode: 27, which: 27, bubbles: true, cancelable: true }));
-  }
-
-  function goBack() {
-    if (S.isRoot(location.pathname) || history.length <= 1) SV.goHub();
-    else history.back();
-  }
-
-  const click = (sel) => {
-    const b = document.querySelector(sel);
-    if (b) b.click();
-    return !!b;
-  };
-
-  // ---- 検索欄: React の入力欄に値を入れる（input イベントで知らせる）
-  function setInputValue(el, value) {
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value');
-    if (setter && setter.set) setter.set.call(el, value);
-    else el.value = value;
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-  }
-
-  function openOskFor(el) {
-    const spec = SV.osk.inputSpec(el);
-    if (!spec) return false;
-    ctl.osk.open({
-      ...spec,
-      title: '検索',
-      value: el.value,
-      doneLabel: '完了',
-      host: el.closest('[role="dialog"]'),
-      onChange: (text) => setInputValue(el, text), // Spotify の検索は、打つたびに結果が出る
-      onDone: () => el.dispatchEvent(new Event('change', { bubbles: true })),
-    });
-    return true;
-  }
-
-  function onOskKey(e, action) {
-    if (action === 'HOME') {
-      SV.consume(e);
-      if (!e.repeat) {
-        ctl.osk.close();
-        SV.goHub();
-      }
-      return;
-    }
-    if (action && !ctl.gate.allow(action, e)) {
-      SV.consume(e);
-      return;
-    }
-    ctl.osk.handleKey(e, action);
-  }
-
-  function onEditableKey(e, action) {
-    const el = e.target;
-    if (!action) return;
-    if (action === 'BACK') {
-      if (e.key === 'Escape') {
-        SV.consume(e);
-        el.blur();
-      }
-      return;
-    }
-    if (action === 'OK') {
-      if (e.repeat || !SV.osk.inputSpec(el)) return;
-      SV.consume(e);
-      openOskFor(el);
-      return;
-    }
-    if (!SV.keys.isDirection(action)) return;
-    if (action === 'LEFT' || action === 'RIGHT') {
-      const a = el.selectionStart;
-      const b = el.selectionEnd;
-      const len = String(el.value || '').length;
-      if (!(a != null && a === b && (action === 'LEFT' ? a === 0 : a === len))) return;
-    }
-    if (!ctl.gate.allow(action, e)) {
-      SV.consume(e);
-      return;
-    }
-    SV.consume(e);
-    ctl.userMoved = true;
-    ctl.nav.move(DIR[action], { repeat: e.repeat });
-  }
-
-  function onOk(e) {
-    const a = document.activeElement;
-    if (!ctl.nav.current()) {
-      SV.consume(e);
-      focusInitial();
-      return;
-    }
-    // 再生バーのジャケット: 再生中の大きな画面を開く（サイトの「再生中ビュー」は使わない）
-    if (a && a.matches && a.matches(SV.spotifyNp.SEL.coverButton)) {
-      SV.consume(e);
-      openNp();
-      return;
-    }
-    // 曲の行: OK で再生（サイトの再生ボタンを押す）。ほかのリンク・ボタンはブラウザ標準の Enter に任せる
-    if (a && a.matches && a.matches(S.SEL.row)) {
-      SV.consume(e);
-      if (a.matches(S.SEL.trackRow)) {
-        // 曲の行: 再生（サイトの再生ボタン。なければ、行のダブルクリック）
-        const play = a.querySelector('button[aria-label]');
-        if (play) play.click();
-        else a.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true }));
-      } else {
-        // 棚のカード: 開く（中のリンク）。なければ、中のボタン
-        const target = a.querySelector('a[href]') || a.querySelector('button');
-        if (target) target.click();
-      }
-    }
-  }
 
   /** 再生中の大きな画面を開く。サイトの作りが想定と違って失敗しても、キー操作は止めない（途中まで作った画面は閉じる）。 */
   function openNp() {
@@ -195,108 +44,27 @@
     }
   }
 
-  /** 再生中の大きな画面が開いている間のキー。すべてここで受ける（ページへは渡さない）。 */
-  function onNpKey(e, action) {
+  /** キー。すべてここで受ける（本来の画面へは渡さない）。 */
+  function onKeyDown(e) {
+    if (SV.keys.shouldIgnore(e)) return;
+    const action = ctl.matcher.match(e);
     SV.consume(e);
     if (!action) return;
     if (action === 'HOME') {
-      if (!e.repeat) SV.goHub(); // 再生中の画面は閉じない（戻ったとき、元の画面が出ないように）
+      if (!e.repeat) SV.goHub();
       return;
     }
-    if (action === 'BACK' || action === 'YELLOW') {
-      if (!e.repeat && ctl.np.hideBar()) return; // ボタンの列が出ているときは、まず隠す
-      // 常に再生中の画面（既定）では閉じない。一覧のページへ切り替える設定（browse）のときだけ閉じる
-      if (!e.repeat && ctl.settings.spotify.browse) ctl.np.close();
+    if (action === 'BACK') {
+      if (ctl.settings.holdBackToHome && ctl.hold.feed('BACK', e)) SV.goHub(); // 長押しでホーム
+      else if (!e.repeat) ctl.np.hideBar(); // ボタンの列が出ていれば隠す
       return;
     }
     if (!ctl.gate.allow(action, e)) return;
     ctl.np.handleAction(action);
   }
 
-  function onKeyDown(e) {
-    if (SV.keys.shouldIgnore(e)) return;
-    const action = ctl.matcher.match(e);
-    if (ctl.osk && ctl.osk.isOpen()) return onOskKey(e, action);
-    if (ctl.np && ctl.np.isOpen()) return onNpKey(e, action);
-    if (!action) return;
-    if (action === 'YELLOW') {
-      SV.consume(e);
-      if (!e.repeat) openNp();
-      return;
-    }
-
-    if (action === 'HOME') {
-      SV.consume(e);
-      if (!e.repeat) SV.goHub();
-      return;
-    }
-    if (SV.keys.isEditable(e.target)) {
-      onEditableKey(e, action);
-      return;
-    }
-    if (action === 'BACK' && ctl.settings.holdBackToHome && ctl.hold.feed('BACK', e)) {
-      SV.consume(e);
-      SV.goHub();
-      return;
-    }
-    if (!ctl.gate.allow(action, e)) {
-      SV.consume(e);
-      return;
-    }
-    // 再生位置・音量の棒: OK で「調整中」（← → で動かす）。↑ ↓・OK・戻るで調整を終える。調整中でなければ、← → は普通のフォーカス移動
-    const cur = document.activeElement;
-    const adjusting = cur && cur.hasAttribute && cur.hasAttribute('data-sv-adjusting');
-    if (adjusting) {
-      if (action === 'LEFT' || action === 'RIGHT') {
-        SV.consume(e);
-        S.stepSlider(cur, action === 'RIGHT' ? 1 : -1);
-        return;
-      }
-      cur.removeAttribute('data-sv-adjusting');
-      if (action === 'OK' || action === 'BACK') {
-        SV.consume(e);
-        return;
-      }
-    }
-    if (action === 'OK' && cur && cur.hasAttribute && cur.hasAttribute('data-sv-slider')) {
-      SV.consume(e);
-      cur.setAttribute('data-sv-adjusting', '');
-      return;
-    }
-    if (SV.keys.isDirection(action)) {
-      SV.consume(e);
-      ctl.userMoved = true;
-      ctl.nav.move(DIR[action], { repeat: e.repeat });
-      return;
-    }
-    if (action === 'OK') return onOk(e);
-    // 早送り・巻き戻しのキー: 再生位置を 10 秒動かす
-    if (action === 'SEEK_FWD' || action === 'SEEK_BACK') {
-      const box = document.querySelector('[data-sv-slider="seek"]');
-      if (box && S.stepSlider(box, action === 'SEEK_FWD' ? 1 : -1)) SV.consume(e);
-      return;
-    }
-    if (action === 'BACK') {
-      SV.consume(e);
-      if (e.repeat) return;
-      if (openPopup()) closePopup(); // メニュー・ダイアログが開いていれば、それを閉じる（ページは戻らない）
-      else goBack();
-      return;
-    }
-    // 再生の操作（サイトの操作ボタンを押す）
-    const transport = { PLAY_PAUSE: S.SEL.playPause, PLAY: S.SEL.playPause, PAUSE: S.SEL.playPause, NEXT: S.SEL.next, PREV: S.SEL.prev };
-    if (transport[action] && !e.repeat) {
-      if (click(transport[action])) SV.consume(e);
-    }
-  }
-
   function onKeyUp(e) {
-    const action = ctl.matcher.match(e);
-    if (ctl.osk && ctl.osk.isOpen() && (action === 'OK' || e.key === ' ')) {
-      SV.consume(e); // 押したキーのボタンが、離した時に二重に押されない
-      return;
-    }
-    if (action === 'BACK') ctl.hold.release('BACK');
+    if (ctl.matcher.match(e) === 'BACK') ctl.hold.release('BACK');
   }
 
   // サイトの作りが想定と違って例外になっても、原因が分かるように記録する（キー操作は 1 回ぶん失うだけ）
@@ -310,11 +78,6 @@
   window.addEventListener('keydown', guard(onKeyDown), true);
   window.addEventListener('keyup', guard(onKeyUp), true);
 
-  // ---- 初期フォーカス: 内容（main）の中に候補が描画されたら、1 回だけ
-  function focusInitial() {
-    return ctl.nav.focusInitial(['main ' + S.SEL.row, 'main [role="button"][tabindex="0"]', 'main a[href]', 'main button'], { within: S.SEL.main });
-  }
-
   /** 拡張が動いていることと版を、読み込み直後に 4 秒だけ出す（更新できているかの確認用）。 */
   function showBadge() {
     const b = document.createElement('div');
@@ -325,18 +88,6 @@
   }
 
   function init() {
-    ctl.nav = SV.nav.createNavigator({
-      // 曲の行・棚のカード（role=row）は、サイトが tabindex=-1 にしている。行を 1 つの候補にして、中のボタン・リンクは外す（OK で開く・再生する）
-      selector: SV.nav.DEFAULT_SELECTOR + ', ' + S.SEL.row,
-      // 開いているメニュー・ダイアログがあるときは、その中だけを動く（後ろのページへ行かない）
-      regionOf: (el) => {
-        const m = el.closest(POPUP);
-        return m && m === openPopup() ? 'modal' : 'content';
-      },
-      // 検索欄は文字入力欄だが、候補にする（OK で画面上のキーボード）
-      exclude: (el) => (el.matches(S.SEL.searchInput) ? S.isExcluded(el) : SV.nav.defaultExclude(el) || S.isExcluded(el) || el.matches(S.SEL.grid) || (!el.matches(S.SEL.row) && !!el.closest(S.SEL.row))),
-    });
-    ctl.osk = SV.osk.create({ document });
     ctl.np = SV.spotifyNp.create({
       document,
       getLyrics: () => ctl.settings.spotify.lyrics,
@@ -347,27 +98,13 @@
     });
     // 音楽を流したまま別のタブへ移れるよう、このタブは休止・破棄されないようにする
     SV.sendMessage({ type: 'sv:remoteKeep' });
-    const tryInitial = () => {
-      if (ctl.initialDone || ctl.userMoved) return;
-      if (ctl.nav.current()) {
-        ctl.initialDone = true;
-        return;
-      }
-      if (focusInitial()) ctl.initialDone = true;
-    };
-    // スマホから再生が始まった（曲が変わった）ら、background に知らせる。裏のタブなら、前面に出て、再生中の画面が開く（設定 spotify.standby）。
+
+    // スマホから再生が始まった（曲が変わった）ら、background に知らせる。裏のタブなら前面に出る。
     // 裏のタブはタイマーが間引かれる（5 分後から 1 分に 1 回）ので、タイマーではなく DOM の変化で見る。最初に読んだ曲は、基準にするだけ
     let lastTitle;
     const watchTrack = () => {
       const t = SV.spotifyNp.trackTitle(document);
-      if (lastTitle === undefined) {
-        lastTitle = t;
-        return;
-      }
-      if (t && t !== lastTitle) {
-        SV.sendMessage({ type: 'sv:spotifyWake' }); // 裏のタブなら、前面に出る
-        if (ctl.settings.spotify.standby || !ctl.settings.spotify.browse) openNp(); // スマホ主体の使い方（待機）のときは、前面でも、再生中の画面を出す
-      }
+      if (lastTitle !== undefined && t && t !== lastTitle) SV.sendMessage({ type: 'sv:spotifyWake' });
       lastTitle = t;
     };
     // ハブのタイルに出す状態（再生中・待機中・ログインしていない…）を、background に知らせる。変わったときだけ、500ms に 1 回まで
@@ -393,96 +130,39 @@
         /* 使えない環境では何もしない */
       }
     }
-    // 見張り。曲の変化・ハブに出す状態だけなら、再生バーの中だけを見れば足りる（ページ全体の変化を見ると、サイトの描画のたびに動いて重い）。
-    // 再生バーが現れるまでは、ページ全体の「要素の追加・削除」だけを見る。一覧のページを操作する設定（browse）のときだけ、従来どおり全体を見る
+
+    // 見張りは再生バーの中だけ（ページ全体を見ると、サイトの描画のたびに動いて重い）。バーが現れるまでは、要素の追加・削除だけ。250ms に 1 回まで
     let obs = null;
     let obsTarget = null;
     let lastRun = 0;
-    const lean = () => {
+    const tick = () => {
       const now = Date.now();
-      if (now - lastRun < 250) return; // 1 秒に数回で足りる
+      if (now - lastRun < 250) return;
       lastRun = now;
       watchTrack();
       reportState();
       ensureObserver();
     };
-    const full = () => {
-      S.markSliders(document);
-      S.markPanel(document);
-      watchTrack();
-      reportState();
-      tryInitial();
-    };
     function ensureObserver() {
-      const browse = !!ctl.settings.spotify.browse;
-      const bar = browse ? null : SV.spotifyNp.find(document, 'bar');
-      const target = browse ? document.body : bar || document.body;
+      const bar = SV.spotifyNp.find(document, 'bar');
+      const target = bar || document.body;
       if (obs && obsTarget === target && target.isConnected) return;
       if (obs) obs.disconnect();
       obsTarget = target;
-      if (browse) {
-        obs = new MutationObserver(full);
-        obs.observe(target, { childList: true, subtree: true, characterData: true });
-      } else {
-        obs = new MutationObserver(lean);
-        obs.observe(target, bar ? { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'src', 'href'] } : { childList: true, subtree: true });
-      }
+      obs = new MutationObserver(tick);
+      obs.observe(target, bar ? { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'src', 'href'] } : { childList: true, subtree: true });
     }
     ensureObserver();
     watchTrack();
     reportState();
 
-    // 一覧のページを十字キーで操作する設定（browse）のときだけ、初期フォーカス・画面倍率・棒の印などを動かす
-    let browseStarted = false;
-    function startBrowse() {
-      if (browseStarted) return;
-      browseStarted = true;
-      requestZoom();
-      S.markSliders(document);
-      S.markPanel(document);
-      // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
-      let path = location.pathname;
-      setInterval(() => {
-        if (location.pathname === path) return;
-        path = location.pathname;
-        ctl.initialDone = false;
-        ctl.userMoved = false;
-        tryInitial();
-      }, 300);
-      // 描画が終わっても DOM が変わらないことがあるので、落ち着くまで定期的にも試す
-      const retry = setInterval(() => {
-        tryInitial();
-        if (ctl.initialDone) clearInterval(retry);
-      }, 500);
-      tryInitial();
-      setTimeout(() => {
-        ctl.initialDone = true;
-        clearInterval(retry);
-      }, 15000);
-    }
-
-    // 常に再生中の画面（既定）: 読み込んだら開き、閉じない。元の画面は隠す（CSS: html.sv-sp:not(.sv-browse)）。
-    // browse のときだけ、元の画面を出し、待機の設定が入ったときに再生中の画面を開く
-    let wasStandby = false;
-    let wasBrowse = null;
-    const applyMode = (st) => {
-      const sp = (st && st.spotify) || {};
-      html.classList.toggle('sv-browse', !!sp.browse);
-      if (sp.browse) startBrowse();
-      else if (!zoomRequested) html.setAttribute('data-sv-zoom', 'skipped'); // 再生中の画面は vh の寸法なので、画面倍率は要らない
-      ensureObserver();
-      const on = !!sp.standby || !sp.browse;
-      if (on && (!wasStandby || wasBrowse !== !!sp.browse)) openNp(); // 開いていれば何もしない
-      wasStandby = on;
-      wasBrowse = !!sp.browse;
-    };
-    SV.settings.load().then(applyMode);
-    SV.settings.onChange(applyMode);
-    // 再生中の画面が開けなかったときは、元の画面を出す（何も操作できなくなるのを避ける）
+    openNp(); // 読み込んだら開き、閉じない
+    // 再生中の画面が開けなかったときだけ、本来の画面を出す（何も操作できなくなるのを避ける、最後の手段）
     setTimeout(() => {
-      if (!ctl.np.isOpen() && !html.classList.contains('sv-browse')) html.classList.add('sv-np-failed');
+      if (!ctl.np.isOpen()) html.classList.add('sv-np-failed');
     }, 10000);
     html.setAttribute('data-sv-ready', '1');
+    html.setAttribute('data-sv-zoom', 'skipped'); // 画面倍率は使わない（再生中の画面は vh の寸法）
     showBadge();
   }
 

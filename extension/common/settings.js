@@ -22,7 +22,6 @@
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
       lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
-      browse: false, // 再生中の画面をやめて、Spotify 本来の画面を十字キーで操作する（画面が変わって再生中の画面が動かないときの切り替え。ページの作り込みは後回し）
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
@@ -80,7 +79,6 @@
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
     out.spotify.lyrics = bool(sp.lyrics, d.spotify.lyrics);
-    out.spotify.browse = bool(sp.browse, d.spotify.browse);
 
     const y = isObj(s.youtube) ? s.youtube : {};
     out.youtube.redirect = bool(y.redirect, d.youtube.redirect);
