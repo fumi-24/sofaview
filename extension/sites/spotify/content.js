@@ -156,14 +156,62 @@
       obs.observe(target, bar ? { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'src', 'href'] } : { childList: true, subtree: true });
     }
     ensureObserver();
+    SV.spotifyNp.onSessionChange(tick); // 曲の情報・再生状態の変化（メディアセッション）でも見る。画面の要素を取り外していても気づける
     watchTrack();
     reportState();
 
+    // 本来の画面の要素は、歌詞を出さないとき、DOM からも取り外す（歌詞は、サイトの歌詞表示の「いまの行」を、画面にある要素の文字色で見分けるので、歌詞を出すときだけ戻す）。
+    // 取り外すのは、ログインしていて、曲の情報が取れる（メディアセッションがある）とき。音声（audio/video）を含むものは動かさない（外すと再生が止まる）。
+    // 外した後で再生が止まったり、30 秒以内に読み込み直されたら、戻して、それ以降は外さない（sessionStorage）
+    const holder = document.createDocumentFragment();
+    let detached = false;
+    const guardKey = 'svNoDetach';
+    const store = {
+      get: (k) => {
+        try {
+          return sessionStorage.getItem(k);
+        } catch (e) {
+          return null;
+        }
+      },
+      set: (k, v) => {
+        try {
+          sessionStorage.setItem(k, v);
+        } catch (e) {
+          /* 使えなければ、何もしない */
+        }
+      },
+    };
+    if (Date.now() - Number(store.get('svDetachAt') || 0) < 30000) store.set(guardKey, '1'); // 外した直後に読み込み直された
+    function restoreOriginal(permanent) {
+      if (permanent) store.set(guardKey, '1');
+      if (!detached) return;
+      detached = false;
+      const np = document.getElementById('sv-np');
+      document.body.insertBefore(holder, np || null);
+    }
+    function detachOriginal() {
+      if (detached || store.get(guardKey) || ctl.settings.spotify.lyrics) return;
+      if (!navigator.mediaSession || !navigator.mediaSession.metadata || !ctl.np.sessionReady()) return; // 曲の情報の読み取りと操作を、DOM に頼らずにできるときだけ（軽い判定を先に）
+      const d = ctl.np.status();
+      if (d.kind !== 'track') return; // ログインしていて、曲があるとき
+      const keep = (el) => el.id === 'sv-np' || el.id === 'sv-badge' || /^(SCRIPT|STYLE|LINK|NOSCRIPT)$/.test(el.tagName) || !!el.querySelector('audio, video') || /^(AUDIO|VIDEO)$/.test(el.tagName);
+      const wasPlaying = navigator.mediaSession.playbackState === 'playing';
+      for (const el of Array.from(document.body.children)) if (!keep(el)) holder.appendChild(el);
+      detached = true;
+      store.set('svDetachAt', String(Date.now()));
+      setTimeout(() => {
+        if (detached && wasPlaying && navigator.mediaSession.playbackState !== 'playing') restoreOriginal(true); // 外したら止まった
+      }, 3000);
+    }
+    const applyDetach = () => {
+      if (ctl.settings.spotify.lyrics) restoreOriginal(false);
+      else detachOriginal();
+    };
+    setInterval(applyDetach, 2000); // 条件がそろうのを待つ（軽い判定だけ）
+    SV.settings.onChange(applyDetach);
+
     openNp(); // 読み込んだら開き、閉じない
-    // 再生中の画面が開けなかったときだけ、本来の画面を出す（何も操作できなくなるのを避ける、最後の手段）
-    setTimeout(() => {
-      if (!ctl.np.isOpen()) html.classList.add('sv-np-failed');
-    }, 10000);
     html.setAttribute('data-sv-ready', '1');
     html.setAttribute('data-sv-zoom', 'skipped'); // 画面倍率は使わない（再生中の画面は vh の寸法）
     showBadge();

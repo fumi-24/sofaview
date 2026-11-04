@@ -63,7 +63,7 @@ export function spotifyHtml(opt) {
 </div>
 <script>
   document.querySelectorAll('[data-testid]').forEach((e) => { e.dataset.fx = e.dataset.testid; });
-  window.__fx = { log: [], inputs: [], setTrack: (t) => { document.querySelector('[data-testid="now-playing-widget-v2"] a').textContent = t; } };
+  window.__fx = { log: [], inputs: [], setTrack: (t) => { const a = document.querySelector('[data-fx="now-playing-widget-v2"] a, [data-testid="now-playing-widget-v2"] a'); if (a) a.textContent = t; if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] }); } };
   const log = (ev, d) => window.__fx.log.push({ ev, ...(d || {}) });
   const main = document.getElementById('main');
   function render() {
@@ -138,6 +138,19 @@ export function spotifyHtml(opt) {
   document.querySelectorAll('input[type=range]').forEach((r) => { r.addEventListener('input', () => window.__fx.log.push({ ev: 'range', kind: r.max === '1' ? 'volume' : 'seek', value: Number(r.value) })); });
   document.querySelector('[data-testid="search-input"]').addEventListener('input', (e) => window.__fx.inputs.push(e.target.value));
   render();
+  ${o.noSession || o.plain ? '' : `
+  // 実サイトと同じく、メディアセッションに、曲の情報・再生状態・再生位置・操作の処理（ハンドラ）を登録する
+  const ms = navigator.mediaSession;
+  const L = (a, d) => window.__fx.log.push(Object.assign({ ev: 'ms', action: a }, d || {}));
+  ${o.noTrack ? '' : `ms.metadata = new MediaMetadata({ title: 'テスト曲のタイトル', artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] });`}
+  ms.playbackState = 'paused';
+  ms.setActionHandler('play', () => { ms.playbackState = 'playing'; L('play'); });
+  ms.setActionHandler('pause', () => { ms.playbackState = 'paused'; L('pause'); });
+  ms.setActionHandler('nexttrack', () => L('next'));
+  ms.setActionHandler('previoustrack', () => L('prev'));
+  ms.setActionHandler('seekto', (d) => { ms.setPositionState({ duration: 175.797, position: d.seekTime, playbackRate: 1 }); L('seekto', { time: d.seekTime }); });
+  ms.setPositionState({ duration: 175.797, position: 50, playbackRate: 1 });
+  `}
   ${o.plain ? `
   // 「サイトの作りが変わった」再現: 目印（data-testid）を全部外し、クラス名も意味のないものにする。曲の情報は mediaSession と audio、操作はボタンの表示名と範囲入力の並びだけで見つかる
   const strip = () => document.querySelectorAll('[data-testid]').forEach((e) => { e.removeAttribute('data-testid'); e.className = 'x' + Math.random().toString(36).slice(2, 7); });

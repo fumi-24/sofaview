@@ -68,9 +68,10 @@ test('Spotify: 開いている Spotify がなければ、ハブのタイルは�
   await hub.close();
 });
 
-test('Spotify: 再生中の画面（曲名・アーティスト・歌詞・再生位置）が読み込むと開く。操作でボタンの列が出て、← → で選んで OK。↑ ↓ 音量。戻るで列が隠れる（画面は閉じない）', async () => {
+test('Spotify: （メディアセッションがないときの代わり）再生中の画面（曲名・アーティスト・歌詞・再生位置）が読み込むと開く。操作でボタンの列が出て、← → で選んで OK。↑ ↓ 音量。戻るで列が隠れる（画面は閉じない）', async () => {
   for (const p of env.ctx.pages()) if (p.url().startsWith('https://open.spotify.com/')) await p.close().catch(() => {});
-  const page = await open();
+  await setSp({ lyrics: true });
+  const page = await openVariant({ noSession: true }); // メディアセッションがない作り: 画面のボタン・範囲入力にさがる
   const np = page.locator('#sv-np');
   await until(async () => /テスト曲のタイトル/.test(await np.innerText()), { message: '曲名' });
   assert.equal(await np.getAttribute('data-view'), 'track');
@@ -245,14 +246,14 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   assert.match(await np.locator('[data-id="lyrics"]').innerText(), /オフ/);
   const saved = () => env.sw.evaluate(() => new Promise((r) => chrome.storage.local.get('sv.settings', (v) => r(v['sv.settings'].spotify.lyrics))));
   await until(async () => (await saved()) === false, { message: '設定に保存される' });
-  assert.equal(await page.locator('[data-testid="lyrics-button"]').getAttribute('aria-pressed'), 'false', 'サイトの歌詞表示も閉じる');
+  assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'lyrics').pop().on, false, 'サイトの歌詞表示も閉じる');
   await press(page, 'Enter');
   await until(async () => (await np.locator('.sv-np-line').count()) === 6, { message: '歌詞がまた出る' });
   await until(async () => (await saved()) === true);
   // 設定がオフなら、最初から出さない
   await page.close();
   await setSp({ lyrics: false });
-  const p2 = await open();
+  const p2 = await openVariant({ noSession: true });
   await until(async () => (await p2.locator('#sv-np').count()) === 1);
   await p2.waitForTimeout(800);
   assert.equal(await p2.locator('#sv-np .sv-np-lyrics').isVisible(), false);
@@ -265,6 +266,7 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
 });
 
 test('Spotify: サイトの作りが変わっても（目印の data-testid・クラス名が全部なくなっても）、再生中の画面は動く。曲の情報は再生情報（mediaSession）、再生位置は音声、操作はボタンの表示名と範囲入力の並びで見つける', async () => {
+  await setSp({ lyrics: true });
   const page = await openVariant({ plain: true });
   const errors = [];
   page.on('pageerror', (e) => errors.push(String(e)));
@@ -299,4 +301,59 @@ test('Spotify: サイトの作りが変わっても（目印の data-testid・�
   await press(out, 'Enter');
   await until(async () => (await fx(out, 'log')).some((l) => l.ev === 'login'), { message: 'ログインのボタンが押される' });
   await out.close();
+});
+
+test('Spotify: 操作は、メディアセッション（OS のメディアキーと同じ標準の API）のハンドラを直接呼ぶ。画面のボタンは押さない。再生位置は setPositionState から', async () => {
+  await setSp({ lyrics: true });
+  const page = await open();
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.getAttribute('data-kind')) === 'track', { message: '曲の画面' });
+  assert.match(await np.innerText(), /テスト曲のタイトル/);
+  assert.match(await np.innerText(), /0:50/, '再生位置は setPositionState から');
+  const mark = (await fx(page, 'log')).length;
+  await press(page, 'Enter'); // 列を出す
+  await press(page, 'Enter'); // 再生
+  await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '再生状態は mediaSession.playbackState から' });
+  await press(page, 'Enter'); // 一時停止（再生中なので pause）
+  await press(page, 'ArrowRight');
+  await press(page, 'Enter'); // +10 秒 → seekto 60
+  await press(page, 'ArrowRight');
+  await press(page, 'Enter'); // 次の曲
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await press(page, 'Enter'); // 前の曲
+  const log = (await fx(page, 'log')).slice(mark);
+  assert.deepEqual(
+    log.filter((l) => l.ev === 'ms').map((l) => l.action + (l.time != null ? ':' + Math.round(l.time) : '')),
+    ['play', 'pause', 'seekto:60', 'next', 'prev'],
+  );
+  assert.equal(log.filter((l) => l.ev === 'click').length, 0, '画面のボタンは押さない');
+  assert.equal(log.filter((l) => l.ev === 'range').length, 0, '画面の範囲入力も動かさない');
+  await page.close();
+});
+
+test('Spotify: 歌詞を出さないとき（既定）、本来の画面の要素は DOM からも取り外す（操作はメディアセッションなので、動く）。歌詞を出すときだけ戻す', async () => {
+  await setSp({ lyrics: false });
+  const page = await open();
+  const np = page.locator('#sv-np');
+  await until(async () => (await np.getAttribute('data-kind')) === 'track', { message: '曲の画面' });
+  await until(async () => (await page.evaluate(() => document.querySelector('main, [data-testid="now-playing-bar"]'))) === null, { timeout: 8000, message: '本来の画面の要素が取り外される' });
+  assert.deepEqual(await page.evaluate(() => Array.from(document.body.children).map((e) => e.id || e.tagName).filter((t) => !/SCRIPT|sv-badge/.test(t))), ['sv-np'], 'body には再生中の画面だけ');
+  // 取り外したあとも、操作できる
+  const mark = (await fx(page, 'log')).length;
+  await press(page, 'Enter');
+  await press(page, 'Enter');
+  await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '取り外したあとでも再生できる' });
+  assert.deepEqual((await fx(page, 'log')).slice(mark).filter((l) => l.ev === 'ms').map((l) => l.action), ['play']);
+  // 歌詞をオン → 本来の画面を戻して、歌詞が出る
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'Enter');
+  await until(async () => (await page.evaluate(() => !!document.querySelector('main'))) === true, { timeout: 8000, message: '本来の画面が戻る' });
+  await until(async () => (await np.locator('.sv-np-line').count()) === 6, { timeout: 8000, message: '歌詞が出る' });
+  await page.close();
+  await setSp({ lyrics: true });
 });

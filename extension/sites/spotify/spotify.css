@@ -1,13 +1,14 @@
 /*
  * Spotify: 本来の画面は、完全に差し替える（見せない・描画しない・触れない）。
  * body 直下の、拡張の要素以外は display: none（レイアウトも描画もしない）。DOM は残る（音楽を鳴らす再生エンジンで、
- * 曲の情報の読み取りとボタンの押下に使う）。再生中の画面を開けなかったとき（html.sv-np-failed）だけ、最後の手段として出す。
+ * 曲の情報の読み取りとボタンの押下に使う）。
  */
-html.sv-sp:not(.sv-np-failed) {
+html.sv-sp {
   background: #000;
 }
 
-html.sv-sp:not(.sv-np-failed) body > :not(#sv-np):not(#sv-badge) {
+html.sv-sp > :not(head):not(body),
+html.sv-sp body > :not(#sv-np):not(#sv-badge) {
   display: none !important;
 }
 

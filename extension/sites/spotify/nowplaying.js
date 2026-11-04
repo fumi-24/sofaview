@@ -98,16 +98,46 @@
     return first;
   }
 
-  /** ブラウザの再生情報（曲名・アーティスト・ジャケット）。Spotify が OS のメディアキー用に出している。 */
+  /**
+   * ブラウザの標準の「メディアセッション」API（Spotify が OS のメディアキー用に出している）。画面の作りが変わっても変わらないので、最優先で使う。
+   *   読み取り: 曲名・アーティスト・ジャケット・再生状態（navigator.mediaSession から直接）
+   *   再生位置・操作: ページ側の橋（session-main.js）が覚えた setPositionState と、登録されたハンドラ（play・pause・previoustrack・nexttrack・seekto など）
+   */
   function session(doc) {
     try {
-      const m = doc.defaultView.navigator.mediaSession.metadata;
+      const s = doc.defaultView.navigator.mediaSession;
+      const m = s.metadata;
       if (!m || !m.title) return null;
       const art = m.artwork && m.artwork.length ? m.artwork[m.artwork.length - 1].src : '';
-      return { title: String(m.title), artist: String(m.artist || ''), cover: art || '' };
+      return { title: String(m.title), artist: String(m.artist || ''), cover: art || '', state: s.playbackState || 'none' };
     } catch (e) {
       return null;
     }
+  }
+
+  const bridge = { actions: new Set(), pos: null, vol: null, onChange: null };
+  /** 登録された処理があれば呼ぶ（OS のメディアキーが押されたのと同じ）。呼べたら true。 */
+  function callSession(action, details) {
+    if (!bridge.actions.has(action) || typeof root.postMessage !== 'function') return false;
+    root.postMessage({ svMsCall: action, details: details || {} }, root.location.origin);
+    return true;
+  }
+  /** setPositionState から、いまの再生位置（秒）。再生中は、時間の経過ぶん進める。なければ null。 */
+  function sessionPosition(playing) {
+    const p = bridge.pos;
+    if (!p || !(p.duration > 0)) return null;
+    const t = p.position + (playing ? ((Date.now() - p.at) / 1000) * p.rate : 0);
+    return { position: Math.min(p.duration, Math.max(0, t)), duration: p.duration };
+  }
+  if (typeof root.addEventListener === 'function' && root.location) {
+    root.addEventListener('message', (e) => {
+      if (e.source !== root || !e.data || e.data.svMs !== 'caps') return;
+      bridge.actions = new Set(e.data.actions || []);
+      bridge.pos = e.data.pos || null;
+      bridge.vol = typeof e.data.vol === 'number' ? e.data.vol : null;
+      if (bridge.onChange) bridge.onChange();
+    });
+    root.postMessage({ svMsHello: 1 }, root.location.origin);
   }
 
   /** 秒 → m:ss（サイトの表示と同じ形）。 */
@@ -156,38 +186,47 @@
 
   /** いま再生中の曲名だけ（軽い読み取り。曲が変わったかの確認用）。 */
   function trackTitle(doc) {
-    const w = doc.querySelector(SEL.widget);
-    const t = text(w && w.querySelector(SEL.title));
-    if (t) return t;
     const m = session(doc);
-    return m ? m.title : '';
+    if (m) return m.title;
+    const w = doc.querySelector(SEL.widget);
+    return text(w && w.querySelector(SEL.title));
   }
 
-  /** 再生バーから、いま再生中の曲の情報を読む（DOM に触るのは読むだけ）。曲の情報は 目印 → 再生情報、再生位置は 音声 → 画面の順。 */
+  /**
+   * いま再生中の曲の情報を読む（DOM に触るのは読むだけ）。優先順は、変わりにくい順:
+   *   曲の情報: メディアセッション → 画面の目印    再生状態: メディアセッション → 音声 → ボタンの表示名
+   *   再生位置: メディアセッションの再生位置 → 音声（audio/video）→ 画面（範囲入力・時間の表示）
+   */
   function read(doc) {
+    const ses = session(doc);
     const w = doc.querySelector(SEL.widget);
-    let title = text(w && w.querySelector(SEL.title));
-    let artists = text(w && w.querySelector(SEL.byline));
     const img = w && w.querySelector(SEL.cover);
-    let cover = img ? img.currentSrc || img.src || '' : '';
-    if (!title) {
-      const m = session(doc);
-      if (m) {
-        title = m.title;
-        artists = artists || m.artist;
-        cover = cover || m.cover;
-      }
-    }
+    const title = (ses && ses.title) || text(w && w.querySelector(SEL.title));
+    const artists = (ses && ses.artist) || text(w && w.querySelector(SEL.byline));
+    const cover = (ses && ses.cover) || (img ? img.currentSrc || img.src || '' : '');
     const au = media(doc);
+    const pp = find(doc, 'playPause');
+    const label = (pp && pp.getAttribute('aria-label')) || '';
+    const playing = ses && ses.state === 'playing' ? true : ses && ses.state === 'paused' ? false : au ? !au.paused && !au.ended : /一時停止|pause/i.test(label);
     const seek = range(doc, 'seek');
     const max = seek ? Number(seek.max) : 0;
     let position = text(doc.querySelector(SEL.position));
     let duration = text(doc.querySelector(SEL.duration));
     let ratio = seek && max > 0 ? Math.min(1, Math.max(0, Number(seek.value) / max)) : 0;
-    if (au) {
-      position = fmt(au.currentTime);
-      duration = fmt(au.duration);
-      ratio = Math.min(1, Math.max(0, au.currentTime / au.duration));
+    let positionSec = null;
+    let durationSec = null;
+    const sp = sessionPosition(playing);
+    if (sp) {
+      positionSec = sp.position;
+      durationSec = sp.duration;
+    } else if (au) {
+      positionSec = au.currentTime;
+      durationSec = au.duration;
+    }
+    if (positionSec != null) {
+      position = fmt(positionSec);
+      duration = fmt(durationSec);
+      ratio = Math.min(1, Math.max(0, positionSec / durationSec));
     } else if ((!position || !duration) && seek) {
       const m = /(\d+:\d+(?::\d+)?)\s*\/\s*(\d+:\d+(?::\d+)?)/.exec(seek.getAttribute('aria-valuetext') || '');
       if (m) {
@@ -195,19 +234,19 @@
         duration = duration || m[2];
       }
     }
-    const pp = find(doc, 'playPause');
-    const label = (pp && pp.getAttribute('aria-label')) || '';
     const vol = range(doc, 'volume');
     return {
       hasTrack: !!title,
       title,
       artists,
       cover,
-      playing: au ? !au.paused && !au.ended : /一時停止|pause/i.test(label),
+      playing,
       position,
       duration,
+      positionSec,
+      durationSec,
       ratio,
-      volume: vol && Number(vol.max) > 0 ? Number(vol.value) / Number(vol.max) : null,
+      volume: vol && Number(vol.max) > 0 ? Number(vol.value) / Number(vol.max) : bridge.vol != null ? bridge.vol : au ? au.volume : null,
     };
   }
 
@@ -269,7 +308,7 @@
     let drm = null;
     let lock = null;
     let fi = 2; // ボタンの列で、フォーカスがある位置（初めは再生/一時停止）
-    let lyricsSynced = false; // サイトの歌詞表示を、設定に合わせたか
+    let lastSyncAt = 0;
     let lyricHint = 0;
     let lyricSig = '';
     let lyricCur = -2;
@@ -302,7 +341,34 @@
       if (node.textContent !== v) node.textContent = v;
     };
 
-    /** 範囲入力を、決まった幅（再生位置は 10 秒、音量は 10%）だけ動かす。サイトの React が input イベントで気づく。入力がなければ、再生位置だけ音声を直接動かす。 */
+    /**
+     * 操作は、変わりにくい順に試す: メディアセッションのハンドラ（OS のメディアキーと同じ）→ 画面のボタン・範囲入力 → 音声を直接。
+     */
+    function playPause() {
+      const playing = read(doc).playing;
+      if (callSession(playing ? 'pause' : 'play')) return;
+      click('playPause');
+    }
+    function skip(dir) {
+      if (callSession(dir > 0 ? 'nexttrack' : 'previoustrack')) return;
+      click(dir > 0 ? 'next' : 'prev');
+    }
+    /** 再生位置を 10 秒動かす。 */
+    function seekBy(dir) {
+      const i = read(doc);
+      if (i.positionSec != null && callSession('seekto', { seekTime: Math.min(i.durationSec, Math.max(0, i.positionSec + dir * 10)) })) return;
+      if (callSession(dir > 0 ? 'seekforward' : 'seekbackward', { seekOffset: 10 })) return;
+      stepRange('seek', dir);
+    }
+    /** 音量を 10% 動かす（メディアセッションに音量はないので、範囲入力 → 音声を直接）。 */
+    function volumeBy(dir) {
+      stepRange('volume', dir);
+    }
+
+    /** メディアセッションで、再生・一時停止・前・次・シークを操作できるか（本来の画面の要素を取り外してよいかの条件）。 */
+    const sessionReady = () => ['play', 'pause', 'nexttrack', 'previoustrack'].every((a) => bridge.actions.has(a)) && (bridge.actions.has('seekto') || (bridge.actions.has('seekforward') && bridge.actions.has('seekbackward')));
+
+    /** 範囲入力を、決まった幅（再生位置は 10 秒、音量は 10%）だけ動かす。サイトの React が input イベントで気づく。入力がなければ、音声を直接動かす。 */
     function stepRange(kind, dir) {
       const r = range(doc, kind);
       if (r) {
@@ -315,12 +381,15 @@
         r.dispatchEvent(new Event('change', { bubbles: true }));
         return true;
       }
-      const m = kind === 'seek' ? media(doc) : null;
-      if (m) {
-        m.currentTime = Math.min(m.duration, Math.max(0, m.currentTime + dir * 10));
+      if (kind === 'volume' && bridge.vol != null) {
+        root.postMessage({ svMsVolume: Math.round((bridge.vol + dir * 0.1) * 10) / 10 }, root.location.origin);
         return true;
       }
-      return false;
+      const m = media(doc);
+      if (!m) return false;
+      if (kind === 'seek') m.currentTime = Math.min(m.duration, Math.max(0, m.currentTime + dir * 10));
+      else m.volume = Math.min(1, Math.max(0, Math.round((m.volume + dir * 0.1) * 10) / 10));
+      return true;
     }
 
     // 保護機能の確認は 1 回だけ（結果は画面に反映する）
@@ -369,17 +438,19 @@
       box.querySelector('.sv-np-s-hint').textContent = t.hint;
     }
 
-    /** サイトの歌詞表示を、設定に合わせる（歌詞は、サイトの歌詞表示が開いているときだけ DOM にある）。ボタンが現れたら 1 回だけ合わせる */
-    function syncLyrics(force) {
-      if (!el || (lyricsSynced && !force)) return;
+    /** サイトの歌詞表示を、設定に合わせる（歌詞は、サイトの歌詞表示が開いているときだけ DOM にある）。画面が見えないので、ボタンを押すのは拡張だけ。押しすぎないよう、1.5 秒に 1 回まで */
+    function syncLyrics() {
+      const now = Date.now();
+      if (!el || now - lastSyncAt < 1500) return;
       const lb = find(doc, 'lyricsButton');
-      if (!lb) return;
-      lyricsSynced = true;
+      if (!lb) return; // 本来の画面の要素が取り外されているとき（歌詞を出さない）は、ない
       const pressed = lb.getAttribute('aria-pressed') === 'true';
       if (wantLyrics() && !pressed) {
+        lastSyncAt = now;
         lb.click();
         openedLyrics = true;
       } else if (!wantLyrics() && pressed && openedLyrics) {
+        lastSyncAt = now;
         lb.click();
         openedLyrics = false;
       }
@@ -453,15 +524,16 @@
       if (b) b.focus({ preventScroll: true });
     }
     function activate(id) {
-      if (id === 'prev') click('prev');
-      else if (id === 'next') click('next');
-      else if (id === 'play') click('playPause');
-      else if (id === 'back') stepRange('seek', -1);
-      else if (id === 'fwd') stepRange('seek', 1);
+      if (id === 'prev') skip(-1);
+      else if (id === 'next') skip(1);
+      else if (id === 'play') playPause();
+      else if (id === 'back') seekBy(-1);
+      else if (id === 'fwd') seekBy(1);
       else if (id === 'lyrics') {
         const v = !wantLyrics();
         if (opts && opts.onLyrics) opts.onLyrics(v);
-        syncLyrics(true);
+        lastSyncAt = 0;
+        syncLyrics();
         toast('歌詞 ' + (v ? 'オン' : 'オフ'));
         lastLyricAt = 0;
         refresh();
@@ -559,7 +631,6 @@
       clearInterval(timer);
       clearTimeout(toastTimer);
       clearTimeout(barTimer);
-      lyricsSynced = false;
       lyricSig = '';
       lyricCur = -2;
       el.remove();
@@ -588,14 +659,14 @@
         return false;
       }
       // 再生・次・前のキー（リモコンのメディアキー）は、ボタンを出さずにそのまま
-      if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click('playPause');
-      else if (action === 'NEXT') click('next');
-      else if (action === 'PREV') click('prev');
+      if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') playPause();
+      else if (action === 'NEXT') skip(1);
+      else if (action === 'PREV') skip(-1);
       else if (action === 'SEEK_BACK') activate('back');
       else if (action === 'SEEK_FWD') activate('fwd');
       else if (action === 'UP' || action === 'DOWN') {
         // 音量は、ボタンの列が出ていなくても、すぐ動かす
-        stepRange('volume', action === 'UP' ? 1 : -1);
+        volumeBy(action === 'UP' ? 1 : -1);
         setTimeout(() => {
           const v = read(doc).volume;
           if (v != null) toast('音量 ' + Math.round(v * 100) + '%');
@@ -613,9 +684,9 @@
       return true;
     }
 
-    return { open, close, refresh, handleAction, hideBar, isOpen: () => !!el, status: () => detect(doc, drm, waited()) };
+    return { open, close, refresh, handleAction, hideBar, sessionReady, isOpen: () => !!el, status: () => detect(doc, drm, waited()) };
   }
 
-  SV.spotifyNp = { SEL, LABEL, fmt, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, find, create };
+  SV.spotifyNp = { onSessionChange: (fn) => { bridge.onChange = fn; }, SEL, LABEL, fmt, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, find, create };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyNp;
 })(typeof self !== 'undefined' ? self : globalThis);
