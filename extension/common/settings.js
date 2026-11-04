@@ -21,6 +21,7 @@
     },
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
+      lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
       browse: false, // 一覧のページ（検索・プレイリストなど）を十字キーで操作できる状態にも切り替える。画面には出さない（今は常に再生中の画面。ページの作り込みは後回し）
     },
     youtube: {
@@ -78,6 +79,7 @@
 
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
+    out.spotify.lyrics = bool(sp.lyrics, d.spotify.lyrics);
     out.spotify.browse = bool(sp.browse, d.spotify.browse);
 
     const y = isObj(s.youtube) ? s.youtube : {};

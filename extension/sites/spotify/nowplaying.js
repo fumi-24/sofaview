@@ -1,7 +1,7 @@
 /*
  * Spotify: 再生中の画面（テレビに出す専用の画面）。スマホから再生して、テレビには「いま何が流れているか」を大きく出す使い方が主。
  * 画面は拡張が作る（Spotify 自身の「再生中ビュー」は、サイトの内側の作りに依存するので使わない）。読み取り・操作は、再生バーの data-testid だけ。
- *   曲があるとき: ジャケット・曲名・アーティスト・歌詞・再生位置。OK 再生/一時停止、← → 10 秒、↑ ↓ 音量。
+ *   曲があるとき: ジャケット・曲名・アーティスト・歌詞・再生位置。操作されたとき（← → OK）にボタンの列（前・10 秒戻る・再生/一時停止・10 秒進む・次・歌詞）を出し、5 秒で隠す。↑ ↓ は音量。歌詞は設定 spotify.lyrics（ボタンでも切り替え）。
  *   曲がないとき（状態の画面）: 読み込み中／ログインしていない／再生できない（Widevine がない）／スマホから再生するのを待っている、を、理由とやることつきで出す。
  *   開く: 再生バーのジャケット（cover-art-button）で OK／黄色キー／スマホから再生が始まったとき／待機の設定のとき（読み込み時）
  */
@@ -147,6 +147,18 @@
     let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか（閉じるときに戻す）
     let drm = null;
     let lock = null;
+    let barTimer = 0;
+    let fi = 2; // ボタンの列で、フォーカスがある位置（初めは再生/一時停止）
+    let lyricsSynced = false; // サイトの歌詞表示を、設定に合わせたか
+    const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
+    const BUTTONS = [
+      { id: 'prev', text: '⏮', label: '前の曲' },
+      { id: 'back', text: '−10秒', label: '10 秒戻る' },
+      { id: 'play', text: '⏯', label: '再生/一時停止' },
+      { id: 'fwd', text: '+10秒', label: '10 秒進む' },
+      { id: 'next', text: '⏭', label: '次の曲' },
+      { id: 'lyrics', text: '歌詞', label: '歌詞の表示' },
+    ];
 
     const mk = (tag, cls, txt) => {
       const e = doc.createElement(tag);
@@ -204,14 +216,89 @@
       box.querySelector('.sv-np-s-hint').textContent = t.hint;
     }
 
+    /** サイトの歌詞表示を、設定に合わせる（歌詞は、サイトの歌詞表示が開いているときだけ DOM にある）。ボタンが現れたら 1 回だけ合わせる */
+    function syncLyrics(force) {
+      if (!el || (lyricsSynced && !force)) return;
+      const lb = doc.querySelector(SEL.lyricsButton);
+      if (!lb) return;
+      lyricsSynced = true;
+      const pressed = lb.getAttribute('aria-pressed') === 'true';
+      if (wantLyrics() && !pressed) {
+        lb.click();
+        openedLyrics = true;
+      } else if (!wantLyrics() && pressed && openedLyrics) {
+        lb.click();
+        openedLyrics = false;
+      }
+    }
+
+    function paintButtons(i) {
+      const bar = el.querySelector('.sv-np-controls');
+      const play = bar.querySelector('[data-id="play"]');
+      play.textContent = i.playing ? '⏸' : '▶';
+      play.setAttribute('aria-label', i.playing ? '一時停止' : '再生');
+      const ly = bar.querySelector('[data-id="lyrics"]');
+      ly.textContent = '歌詞 ' + (wantLyrics() ? 'オン' : 'オフ');
+      ly.setAttribute('aria-pressed', wantLyrics() ? 'true' : 'false');
+    }
+
+    function barVisible() {
+      return !!el && !el.querySelector('.sv-np-controls').hidden;
+    }
+    function hideBar() {
+      if (!el) return false;
+      clearTimeout(barTimer);
+      const bar = el.querySelector('.sv-np-controls');
+      const was = !bar.hidden;
+      bar.hidden = true;
+      el.querySelector('.sv-np-hint').hidden = false;
+      return was;
+    }
+    /** 操作されたとき、ボタンの列を出して、しばらく（5 秒）操作がなければ隠す。 */
+    function showBar() {
+      if (!el) return;
+      const bar = el.querySelector('.sv-np-controls');
+      const was = !bar.hidden;
+      bar.hidden = false;
+      el.querySelector('.sv-np-hint').hidden = true;
+      if (!was) focusButton(fi);
+      clearTimeout(barTimer);
+      barTimer = setTimeout(hideBar, 5000);
+    }
+    function focusButton(k) {
+      fi = (k + BUTTONS.length) % BUTTONS.length;
+      const b = el.querySelector('.sv-np-controls [data-id="' + BUTTONS[fi].id + '"]');
+      if (b) b.focus({ preventScroll: true });
+    }
+    function activate(id) {
+      const step = (box, dir) => {
+        if (SV.spotify) SV.spotify.markSliders(doc);
+        const b = doc.querySelector(box);
+        return b ? SV.spotify.stepSlider(b, dir) : false;
+      };
+      if (id === 'prev') click(SEL.prev);
+      else if (id === 'next') click(SEL.next);
+      else if (id === 'play') click(SEL.playPause);
+      else if (id === 'back') step(SEL.seekBox, -1);
+      else if (id === 'fwd') step(SEL.seekBox, 1);
+      else if (id === 'lyrics') {
+        const v = !wantLyrics();
+        if (opts && opts.onLyrics) opts.onLyrics(v);
+        syncLyrics(true);
+        toast('歌詞 ' + (v ? 'オン' : 'オフ'));
+        refresh();
+      }
+    }
+
     function refresh() {
       if (!el) return;
       const d = detect(doc, drm);
       el.setAttribute('data-kind', d.kind);
       const trackView = d.kind === 'track';
       el.setAttribute('data-view', trackView ? 'track' : 'status');
-      el.querySelector('.sv-np-hint').textContent = trackView ? 'OK 再生/一時停止　← → 10 秒　↑ ↓ 音量　戻る Spotify の画面' : '';
+      el.querySelector('.sv-np-hint').textContent = trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '';
       if (!trackView) {
+        hideBar();
         paintStatus(d.kind);
         return;
       }
@@ -226,7 +313,9 @@
         el.querySelector('.sv-np-bg').style.backgroundImage = 'url("' + i.cover.replace(/"/g, '%22') + '")';
       }
       cover.hidden = !i.cover;
-      const ly = readLyrics(doc);
+      syncLyrics();
+      paintButtons(i);
+      const ly = wantLyrics() ? readLyrics(doc) : null;
       const box = el.querySelector('.sv-np-lyrics');
       box.hidden = !ly;
       if (ly) {
@@ -264,15 +353,20 @@
       status.append(mk('div', 'sv-np-s-icon'), mk('h1', 'sv-np-s-head'), mk('div', 'sv-np-s-lines'), mk('div', 'sv-np-s-hint'));
       const toastEl = mk('div', 'sv-np-toast');
       toastEl.hidden = true;
-      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, mk('div', 'sv-np-hint'));
+      const controls = mk('div', 'sv-np-controls');
+      controls.hidden = true;
+      controls.setAttribute('role', 'toolbar');
+      BUTTONS.forEach((b) => {
+        const btn = mk('button', 'sv-np-btn', b.text);
+        btn.type = 'button';
+        btn.setAttribute('data-id', b.id);
+        btn.setAttribute('aria-label', b.label);
+        btn.tabIndex = -1;
+        controls.appendChild(btn);
+      });
+      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, controls, mk('div', 'sv-np-hint'));
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
-      // 歌詞は、サイトの歌詞表示が開いているときだけ DOM にある。閉じていれば、開く（閉じるときに戻す）
-      const lb = doc.querySelector(SEL.lyricsButton);
-      if (lb && lb.getAttribute('aria-pressed') === 'false') {
-        lb.click();
-        openedLyrics = true;
-      }
       if (SV.spotify) SV.spotify.markSliders(doc);
       refresh();
       acquireLock();
@@ -283,6 +377,8 @@
       if (!el) return;
       clearInterval(timer);
       clearTimeout(toastTimer);
+      clearTimeout(barTimer);
+      lyricsSynced = false;
       el.remove();
       el = null;
       doc.documentElement.classList.remove('sv-np-open');
@@ -300,34 +396,40 @@
     /** 開いている間の、決定・方向のキー（action は SV.keys の論理名）。処理したら true。 */
     function handleAction(action) {
       if (!el) return false;
-      const step = (box, dir) => {
-        if (SV.spotify) SV.spotify.markSliders(doc);
-        const b = doc.querySelector(box);
-        return b ? SV.spotify.stepSlider(b, dir) : false;
-      };
       const kind = el.getAttribute('data-kind');
-      if (action === 'OK') {
-        if (kind === 'loggedOut') click(SEL.login);
-        else if (kind === 'track') click(SEL.playPause);
-      } else if (kind !== 'track') {
-        return false; // 曲がないときは、ほかの操作はない
-      } else if (action === 'LEFT' || action === 'SEEK_BACK') step(SEL.seekBox, -1);
-      else if (action === 'RIGHT' || action === 'SEEK_FWD') step(SEL.seekBox, 1);
+      if (kind !== 'track') {
+        if (action === 'OK' && kind === 'loggedOut') click(SEL.login); // 曲がないときは、ほかの操作はない
+        return action === 'OK' && kind === 'loggedOut';
+      }
+      // 再生・次・前のキー（リモコンのメディアキー）は、ボタンを出さずにそのまま
+      if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(SEL.playPause);
+      else if (action === 'NEXT') click(SEL.next);
+      else if (action === 'PREV') click(SEL.prev);
+      else if (action === 'SEEK_BACK') activate('back');
+      else if (action === 'SEEK_FWD') activate('fwd');
       else if (action === 'UP' || action === 'DOWN') {
-        step(SEL.volumeBox, action === 'UP' ? 1 : -1);
+        // 音量は、ボタンの列が出ていなくても、すぐ動かす
+        if (SV.spotify) SV.spotify.markSliders(doc);
+        const vb = doc.querySelector(SEL.volumeBox);
+        if (vb) SV.spotify.stepSlider(vb, action === 'UP' ? 1 : -1);
         setTimeout(() => {
           const v = read(doc).volume;
           if (v != null) toast('音量 ' + Math.round(v * 100) + '%');
         }, 150);
-      } else if (action === 'PLAY_PAUSE' || action === 'PLAY' || action === 'PAUSE') click(SEL.playPause);
-      else if (action === 'NEXT') click(SEL.next);
-      else if (action === 'PREV') click(SEL.prev);
-      else return false;
+      } else if (action === 'LEFT' || action === 'RIGHT' || action === 'OK') {
+        // 最初の 1 回は、ボタンの列を出すだけ（うっかり押して止まらないように）
+        if (!barVisible()) showBar();
+        else {
+          showBar();
+          if (action === 'OK') activate(BUTTONS[fi].id);
+          else focusButton(fi + (action === 'RIGHT' ? 1 : -1));
+        }
+      } else return false;
       setTimeout(refresh, 150);
       return true;
     }
 
-    return { open, close, refresh, handleAction, isOpen: () => !!el, status: () => detect(doc, drm) };
+    return { open, close, refresh, handleAction, hideBar, isOpen: () => !!el, status: () => detect(doc, drm) };
   }
 
   SV.spotifyNp = { SEL, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, create };

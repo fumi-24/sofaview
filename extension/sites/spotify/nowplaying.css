@@ -199,3 +199,54 @@
   font-size: 2.2vh;
   color: #8a8a8a;
 }
+
+/* ---- 操作されたときに出るボタンの列（5 秒で隠れる）---- */
+#sv-np .sv-np-controls {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 5vh;
+  display: flex;
+  justify-content: center;
+  gap: 2.4vh;
+}
+
+#sv-np .sv-np-controls[hidden],
+#sv-np .sv-np-hint[hidden] {
+  display: none;
+}
+
+#sv-np .sv-np-btn {
+  min-width: 10vh;
+  height: 10vh;
+  padding: 0 2.4vh;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 5vh;
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font: inherit;
+  font-size: 4vh;
+  cursor: default;
+}
+
+#sv-np .sv-np-btn[data-id="play"] {
+  min-width: 14vh;
+  font-size: 5vh;
+}
+
+#sv-np .sv-np-btn[data-id="lyrics"],
+#sv-np .sv-np-btn[data-id="back"],
+#sv-np .sv-np-btn[data-id="fwd"] {
+  font-size: 3vh;
+}
+
+#sv-np .sv-np-btn[data-id="lyrics"][aria-pressed="false"] {
+  color: #b7b7b7;
+}
+
+#sv-np .sv-np-btn:focus {
+  outline: 0.6vh solid #fff;
+  outline-offset: 0.4vh;
+  background: rgba(255, 255, 255, 0.34);
+}

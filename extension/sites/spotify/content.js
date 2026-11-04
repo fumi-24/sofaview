@@ -207,6 +207,7 @@
       return;
     }
     if (action === 'BACK' || action === 'YELLOW') {
+      if (!e.repeat && ctl.np.hideBar()) return; // ボタンの列が出ているときは、まず隠す
       // 常に再生中の画面（既定）では閉じない。一覧のページへ切り替える設定（browse）のときだけ閉じる
       if (!e.repeat && ctl.settings.spotify.browse) ctl.np.close();
       return;
@@ -339,7 +340,14 @@
       exclude: (el) => (el.matches(S.SEL.searchInput) ? S.isExcluded(el) : SV.nav.defaultExclude(el) || S.isExcluded(el) || el.matches(S.SEL.grid) || (!el.matches(S.SEL.row) && !!el.closest(S.SEL.row))),
     });
     ctl.osk = SV.osk.create({ document });
-    ctl.np = SV.spotifyNp.create({ document });
+    ctl.np = SV.spotifyNp.create({
+      document,
+      getLyrics: () => ctl.settings.spotify.lyrics,
+      onLyrics: (v) => {
+        ctl.settings.spotify.lyrics = v; // すぐ反映する（保存の反映を待たない）
+        SV.settings.save({ spotify: { lyrics: v } });
+      },
+    });
     requestZoom();
     // 音楽を流したまま別のタブへ移れるよう、このタブは休止・破棄されないようにする
     SV.sendMessage({ type: 'sv:remoteKeep' });

@@ -29,6 +29,7 @@
     { id: 'youtube.redirect', type: 'switch', label: '通常の URL を /tv へ転送', sub: 'watch?v=… と youtu.be のリンクも /tv で開きます' },
     { id: 'youtube.receiver', type: 'switch', label: 'キャスト待機：裏で開いておく', sub: 'スマホから送ると、自動で前面に出て再生します' },
     { group: 'Spotify' },
+    { id: 'spotify.lyrics', type: 'switch', label: 'Spotify の歌詞を出す', sub: '再生中の画面のボタンでも切り替えられます' },
     { id: 'spotify.standby', type: 'switch', label: '裏で開いておく（スマホから再生で再生中の画面）', sub: 'スマホの Spotify の再生先に「Web Player」を選びます' },
   ];
 
