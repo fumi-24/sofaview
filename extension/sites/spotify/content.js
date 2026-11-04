@@ -64,6 +64,8 @@
   }
 
   function onKeyUp(e) {
+    if (SV.keys.shouldIgnore(e)) return;
+    SV.consume(e); // 離したときも、本来の画面には渡さない（サイトが keyup で動くことがあっても、干渉させない）
     if (ctl.matcher.match(e) === 'BACK') ctl.hold.release('BACK');
   }
 
@@ -77,6 +79,7 @@
   };
   window.addEventListener('keydown', guard(onKeyDown), true);
   window.addEventListener('keyup', guard(onKeyUp), true);
+  window.addEventListener('keypress', guard((e) => !SV.keys.shouldIgnore(e) && SV.consume(e)), true);
 
   /** 拡張が動いていることと版を、読み込み直後に 4 秒だけ出す（更新できているかの確認用）。 */
   function showBadge() {

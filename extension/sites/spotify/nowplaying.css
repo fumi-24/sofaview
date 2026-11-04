@@ -277,3 +277,12 @@
   background: rgba(255, 255, 255, 0.34);
   transform: scale(1.08);
 }
+
+/* 版（更新できているかの確認用。いつも右下に小さく） */
+#sv-np .sv-np-ver {
+  position: absolute;
+  right: 2vh;
+  bottom: 1.4vh;
+  font-size: 1.8vh;
+  color: #6f6f6f;
+}

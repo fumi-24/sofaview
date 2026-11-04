@@ -208,9 +208,13 @@ test('Spotify: 元の画面は完全に差し替える（描画もレイアウ�
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid="now-playing-bar"]').length), 1, 'DOM は残る（再生エンジンとして）');
   assert.equal(await np.evaluate((e) => getComputedStyle(e).display), 'block');
   assert.equal(await page.evaluate(() => document.documentElement.dataset.svZoom), 'skipped');
+  // 本来の画面（ページ側）には、keydown・keyup・keypress のどれも届かない
+  await page.evaluate(() => { window.__seen = []; for (const t of ['keydown', 'keyup', 'keypress']) window.addEventListener(t, (e) => window.__seen.push(t + ':' + e.key)); document.addEventListener('keydown', (e) => window.__seen.push('doc-keydown:' + e.key), true); });
   const before = (await fx(page, 'log')).length;
   await press(page, 'ArrowLeft');
   await press(page, 'ArrowRight');
+  assert.deepEqual(await page.evaluate(() => window.__seen), [], '← → は本来の画面（サイト）に届かない');
+  assert.match(await np.locator('.sv-np-ver').innerText(), /SofaView v\d+\.\d+\.\d+/, '版がいつも右下に出る');
   assert.equal((await fx(page, 'log')).slice(before).filter((l) => l.ev === 'range').length, 0, '最初の ← → は、元の画面の再生位置を動かさない（ボタンの列を出すだけ）');
   await press(page, 'ArrowUp');
   await until(async () => /音量 \d+%/.test(await page.locator('.sv-np-toast').innerText()), { message: '音量の表示' });

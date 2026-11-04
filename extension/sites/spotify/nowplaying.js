@@ -544,7 +544,7 @@
         btn.tabIndex = -1;
         controls.appendChild(btn);
       });
-      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, controls, mk('div', 'sv-np-hint'));
+      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
       refresh();
