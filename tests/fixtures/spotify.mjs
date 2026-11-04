@@ -64,6 +64,22 @@ export function spotifyHtml(opt) {
 <script>
   document.querySelectorAll('[data-testid]').forEach((e) => { e.dataset.fx = e.dataset.testid; });
   window.__fx = { log: [], inputs: [], setTrack: (t) => { const a = document.querySelector('[data-fx="now-playing-widget-v2"] a, [data-testid="now-playing-widget-v2"] a'); if (a) a.textContent = t; if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] }); } };
+  // 歌詞の画面（React の部品）の再現: 本物の React と同じく、起動時に DevTools の入口へ自分を登録し、画面を更新するたびに根（FiberRoot）を知らせる。
+  // 歌詞の行の部品は、外側と内側が同じ props（text / start / onObserve）を持つ（本物と同じ）。歌詞を出す間だけ、部品の木に行がある
+  const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
+  const fakeRoot = { current: { memoizedProps: null, child: null, sibling: null } };
+  const rid = hook ? hook.inject({}) : 0;
+  if (hook) hook.onCommitFiberRoot(rid, fakeRoot);
+  function setLyrics(on) {
+    if (!hook) return;
+    const lines = on ? ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'].map((t, i) => {
+      const props = { text: t, start: i * 20000, onObserve() {}, translationText: undefined };
+      return { memoizedProps: props, child: { memoizedProps: props, child: null, sibling: null }, sibling: null };
+    }) : [];
+    lines.forEach((l, i) => { if (i) lines[i - 1].sibling = l; });
+    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: null }, sibling: null };
+    hook.onCommitFiberRoot(rid, fakeRoot);
+  }
   const log = (ev, d) => window.__fx.log.push({ ev, ...(d || {}) });
   const main = document.getElementById('main');
   function render() {
@@ -78,7 +94,8 @@ export function spotifyHtml(opt) {
         ${JSON.stringify([['b1', '人D'], ['b2', '人E'], ['b3', '人F']].map(([i, t]) => card(i, t)).join(''))} + '</div></div>';
     }
   }
-  document.addEventListener('click', (e) => {
+  const appRoot = document.querySelector('[data-testid="root"]'); // React 17+ は、根の要素でイベントを受ける（取り外された木の上でも動く）
+  appRoot.addEventListener('click', (e) => {
     const a = e.target.closest('a[href^="/"]');
     if (a && a.getAttribute('target') !== '_blank') {
       e.preventDefault();
@@ -112,21 +129,7 @@ export function spotifyHtml(opt) {
       // 歌詞は、歌詞ボタンが押されている間だけ DOM にある（サイトと同じ）。色の変数と、いまの行の色も同じ作り
       const on = b.getAttribute('aria-pressed') !== 'true';
       b.setAttribute('aria-pressed', String(on));
-      const old = document.getElementById('lyr');
-      if (old) old.remove();
-      if (on) {
-        const box = document.createElement('div');
-        box.id = 'lyr';
-        box.setAttribute('style', '--lyrics-color-active: rgba(255, 255, 255, 1); --lyrics-color-inactive: rgba(200, 209, 184, 1); position: fixed; left: -9999px');
-        ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'].forEach((t, i) => {
-          const l = document.createElement('div');
-          l.setAttribute(${JSON.stringify(o.plain ? 'data-fx' : 'data-testid')}, 'lyrics-line');
-          l.setAttribute('dir', 'auto');
-          l.innerHTML = '<div style="color: ' + (i === 2 ? 'rgb(255, 255, 255)' : 'rgb(200, 209, 184)') + '">' + t + '</div>';
-          box.appendChild(l);
-        });
-        document.body.appendChild(box);
-      }
+      setLyrics(on);
       log('lyrics', { on });
     }
     if (b && (b.hasAttribute('data-like') || b.dataset.fx === 'control-button-repeat')) b.setAttribute('aria-checked', String(b.getAttribute('aria-checked') !== 'true'));

@@ -21,7 +21,7 @@
     },
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
-      lyrics: false, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）。出すときだけ、Spotify 本来の画面の要素を DOM に残す（歌詞の読み取りに要る）
+      lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する

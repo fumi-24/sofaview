@@ -392,6 +392,8 @@ test('Spotify（ログアウト状態の Web プレーヤー）: 再生中の画
   await until(() => page.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 30000, message: 'logged-out status view' });
   assert.equal(await page.evaluate(() => document.querySelector('main').getClientRects().length), 0, '本来の画面は描画しない');
   await shot(page, 'spotify-0-np-loggedout');
+  // Spotify 自身の React（vendor の 18.3.1）が、先に置いた入口に登録され、画面の根を知らせてくる（歌詞の読み取りの土台）
+  assert.ok(await page.evaluate(() => window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size >= 1 && window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1).size >= 1), 'React が入口に登録される');
   assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
   await page.close();
 });

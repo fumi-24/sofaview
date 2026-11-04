@@ -160,9 +160,10 @@
     watchTrack();
     reportState();
 
-    // 本来の画面の要素は、歌詞を出さないとき、DOM からも取り外す（歌詞は、サイトの歌詞表示の「いまの行」を、画面にある要素の文字色で見分けるので、歌詞を出すときだけ戻す）。
-    // 取り外すのは、ログインしていて、曲の情報が取れる（メディアセッションがある）とき。音声（audio/video）を含むものは動かさない（外すと再生が止まる）。
-    // 外した後で再生が止まったり、30 秒以内に読み込み直されたら、戻して、それ以降は外さない（sessionStorage）
+    // 本来の画面の要素は、DOM からも取り外す（DocumentFragment に退避。Spotify の React は、取り外した木の上でも動き続ける）。
+    // 条件: 曲の情報が取れ、メディアセッションで再生・一時停止・前・次・シークができる（DOM に頼らずに操作できる）。音声（audio/video）を含むものは動かさない（外すと再生が止まる）。
+    // 外した後で再生が止まったら、戻して、それ以降は外さない。30 秒以内に読み込み直されても、外さない（sessionStorage）。
+    // 歌詞は、React の部品の木（react-main.js）から読むので、取り外したままでよい。歌詞ボタンだけは、退避先の中で探して押す（nowplaying.js の setExtraRoots）。
     const holder = document.createDocumentFragment();
     let detached = false;
     const guardKey = 'svNoDetach';
@@ -191,7 +192,7 @@
       document.body.insertBefore(holder, np || null);
     }
     function detachOriginal() {
-      if (detached || store.get(guardKey) || ctl.settings.spotify.lyrics) return;
+      if (detached || store.get(guardKey)) return;
       if (!navigator.mediaSession || !navigator.mediaSession.metadata || !ctl.np.sessionReady()) return; // 曲の情報の読み取りと操作を、DOM に頼らずにできるときだけ（軽い判定を先に）
       const d = ctl.np.status();
       if (d.kind !== 'track') return; // ログインしていて、曲があるとき
@@ -204,12 +205,8 @@
         if (detached && wasPlaying && navigator.mediaSession.playbackState !== 'playing') restoreOriginal(true); // 外したら止まった
       }, 3000);
     }
-    const applyDetach = () => {
-      if (ctl.settings.spotify.lyrics) restoreOriginal(false);
-      else detachOriginal();
-    };
-    setInterval(applyDetach, 2000); // 条件がそろうのを待つ（軽い判定だけ）
-    SV.settings.onChange(applyDetach);
+    SV.spotifyNp.setExtraRoots(() => (detached ? [holder] : []));
+    setInterval(detachOriginal, 2000); // 条件がそろうのを待つ（軽い判定だけ）
 
     openNp(); // 読み込んだら開き、閉じない
     html.setAttribute('data-sv-ready', '1');

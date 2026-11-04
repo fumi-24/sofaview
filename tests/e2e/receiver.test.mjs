@@ -93,6 +93,7 @@ test('裏で開く設定: /tv が 2 つになったら 1 つに整える。/tv �
 
 test('裏で開く設定がオフ（既定）のときは、何も開かず、タイルは今までどおり同じタブで開く', async () => {
   await env.sw.evaluate(() => new Promise((r) => chrome.storage.local.set({ 'sv.settings': { youtube: { receiver: false } } }, r)));
+  await new Promise((r) => setTimeout(r, 2500)); // 直前のテストで閉じたタブを、オンのうちに開き直す処理が、動いていれば終わるのを待つ（負荷が高いと、これが設定の切り替えより遅れる）
   for (const p of env.ctx.pages()) if (p.url().startsWith('https://www.youtube.com/tv')) await p.close();
   await new Promise((r) => setTimeout(r, 4000)); // 閉じても開き直さない
   assert.equal((await ytTabs()).length, 0);

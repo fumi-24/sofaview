@@ -46,13 +46,19 @@
     login: /^(ログイン|log ?in|sign ?in)$/i,
   };
   const found = new WeakMap(); // document → { key: 要素 }
+  let extraRoots = () => []; // 取り外した本来の画面（DocumentFragment）。歌詞ボタンを押すために、探す範囲に加える
 
   function find(doc, key) {
     let c = found.get(doc);
     if (!c) found.set(doc, (c = {}));
     const hit = c[key];
-    if (hit && hit.isConnected) return hit;
-    let el = doc.querySelector(SEL[key]);
+    if (hit && (hit.isConnected || extraRoots().some((r) => r.contains && r.contains(hit)))) return hit;
+    const roots = [doc].concat(extraRoots());
+    let el = null;
+    for (const r of roots) {
+      el = r.querySelector(SEL[key]);
+      if (el) break;
+    }
     if (el) {
       c[key] = el;
       return el;
@@ -64,8 +70,8 @@
     if (key === 'bar') el = Array.from(doc.querySelectorAll('footer, aside')).find((x) => x.querySelector('input[type="range"]')) || null;
     else if (LABEL[key]) {
       const scope = key === 'login' ? 'header, nav, [role="banner"]' : null; // ログインは上のバーにある（ページ全体は調べない）
-      const roots = scope ? Array.from(doc.querySelectorAll(scope)) : [find(doc, 'bar') || doc];
-      for (const b of roots.flatMap((r) => Array.from(r.querySelectorAll('button, [role="button"], a')))) {
+      const bases = scope ? Array.from(doc.querySelectorAll(scope)) : [find(doc, 'bar') || doc].concat(extraRoots());
+      for (const b of bases.flatMap((r) => Array.from(r.querySelectorAll('button, [role="button"], a')))) {
         const name = (b.getAttribute('aria-label') || (key === 'login' ? text(b) : '')).trim();
         if (name && LABEL[key].test(name)) {
           el = b;
@@ -234,6 +240,12 @@
         duration = duration || m[2];
       }
     }
+    if (positionSec == null) {
+      // 画面の時間の表示（m:ss）から。ほかに再生位置の読み取りがないときの代わり（歌詞のいまの行を決めるのに要る）
+      const toSec = (t) => (/^\d+:\d+(?::\d+)?$/.test(t) ? t.split(':').reduce((a, x) => a * 60 + Number(x), 0) : null);
+      positionSec = toSec(position);
+      durationSec = toSec(duration);
+    }
     const vol = range(doc, 'volume');
     return {
       hasTrack: !!title,
@@ -259,31 +271,25 @@
   }
 
   /**
-   * 歌詞（サイトの歌詞表示が開いているときだけ DOM にある）。いま歌っている行は、文字色で見分ける
-   * （サイトの色の変数 --lyrics-color-active の色で、普通の行（--lyrics-color-inactive）とは違うもの。クラス名のハッシュには頼らない）。
-   * 返す: { lines: [全部の行], cur: いまの行の位置 } か、歌詞がない・いまの行が分からないときは null（そのときは歌詞は出さない）。
+   * 歌詞。Spotify の React の部品の木から、行の文字と開始時刻を読む（react-main.js。画面の要素・色には頼らない）。
+   * いまの行は、再生位置（メディアセッション）と開始時刻を比べて決める。
+   *   lines: [{ text, start }]（start は ミリ秒。曲の長さより小さい値ばかりなら、秒とみなす）  positionSec / durationSec: 秒
+   * 返す: { lines: [文字], cur: いまの行の位置（まだ最初の行の前なら -1） }。時刻が付いていない（順に増えない）歌詞は null（そのときは歌詞を出さない）。
    */
-  function readLyrics(doc, hint) {
-    const nodes = Array.from(doc.querySelectorAll(SEL.lyricsLine));
-    const items = nodes.map((n) => ({ text: text(n), node: n })).filter((x) => x.text);
-    if (!items.length) return null;
-    const win = doc.defaultView;
-    const col = (n) => win.getComputedStyle(n.firstElementChild || n).color;
-    const cs = win.getComputedStyle(nodes[0]);
-    const norm = (c) => c.replace(/\s+/g, '').replace(/^rgba\((\d+),(\d+),(\d+),1\)$/, 'rgb($1,$2,$3)');
-    const active = norm(cs.getPropertyValue('--lyrics-color-active'));
-    const inactive = norm(cs.getPropertyValue('--lyrics-color-inactive'));
-    let cur = -1;
-    if (active && active !== inactive) {
-      // いまの行は 1 つだけ。前に見つけた位置から順に探して、見つかったら止める（全部の行の色を調べると重い）
-      const start = Math.max(0, Math.min(items.length - 1, hint == null ? 0 : hint));
-      for (let k = 0; k < items.length && cur < 0; k++) {
-        const j = (start + k) % items.length;
-        if (norm(col(items[j].node)) === active) cur = j;
-      }
-    }
-    if (cur < 0) return null; // いまの行が分からないときは、歌詞は出さない（ずれた行を出すより、出さない）
-    return { lines: items.map((x) => x.text), cur };
+  function lyricsAt(lines, positionSec, durationSec, hint) {
+    if (!lines || !lines.length) return null;
+    const starts = lines.map((l) => l.start);
+    if (starts.some((t) => !Number.isFinite(t))) return null;
+    for (let i = 1; i < starts.length; i++) if (starts[i] < starts[i - 1]) return null;
+    if (starts[starts.length - 1] <= 0) return null; // 時刻のない歌詞
+    const max = starts[starts.length - 1];
+    const unit = durationSec > 0 && max <= durationSec + 5 ? 1 : 1000; // 秒か、ミリ秒か
+    const t = positionSec == null ? 0 : positionSec * unit;
+    // いまの行 = 開始時刻が t 以下の、最後の行。前回の位置から探す（ほとんど同じか次の行）
+    let cur = Math.max(-1, Math.min(starts.length - 1, hint == null ? -1 : hint));
+    while (cur >= 0 && starts[cur] > t) cur--;
+    while (cur + 1 < starts.length && starts[cur + 1] <= t) cur++;
+    return { lines: lines.map((l) => l.text), cur };
   }
 
   /** 再生に必要な保護機能（Widevine）が使えるか。 */
@@ -309,10 +315,14 @@
     let lock = null;
     let fi = 2; // ボタンの列で、フォーカスがある位置（初めは再生/一時停止）
     let lastSyncAt = 0;
-    let lyricHint = 0;
+    let lyricHint = -1;
     let lyricSig = '';
     let lyricCur = -2;
-    let lastLyricAt = 0;
+    let lyricLines = []; // react-main.js から受け取った歌詞の行 [{ text, start }]
+    let lyricTitle = '';
+    let lyricTitleAt = 0;
+    let lyricOldSig = '';
+    let lyricAskAt = 0;
     let lastRatio = 0;
     const waited = () => Date.now() - createdAt > 8000; // 目印が変わっても、「読み込み中」のままにしない
     const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
@@ -456,10 +466,35 @@
       }
     }
 
-    /** 歌詞。全部の行を並べて、いまの行が真ん中に来るよう、列ごと滑らかに動かす（行の作り直しは、曲が変わったときだけ）。 */
-    function paintLyrics() {
+    const sigOf = (L) => L.length + '\n' + (L[0] ? L[0].text : '') + '\n' + (L.length ? L[L.length - 1].text : '');
+    win.addEventListener('message', (e) => {
+      if (e.source !== win || !e.data || e.data.svReact !== 'lyrics') return;
+      const L = Array.isArray(e.data.lines) ? e.data.lines : [];
+      // 曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
+      if (L.length && sigOf(L) === lyricOldSig && Date.now() - lyricTitleAt < 5000) return;
+      lyricLines = L;
+    });
+
+    /**
+     * 歌詞。React の部品の木から読んだ行（react-main.js）と、再生位置から、いまの行を決める。全部の行を並べて、
+     * いまの行が真ん中に来るよう、列ごと滑らかに動かす（行の作り直しは、曲が変わったときだけ）。
+     */
+    function paintLyrics(i) {
       const box = el.querySelector('.sv-np-lyrics');
-      const ly = wantLyrics() ? readLyrics(doc, lyricHint) : null;
+      const now = Date.now();
+      if (i.title !== lyricTitle) {
+        lyricTitle = i.title;
+        lyricTitleAt = now;
+        lyricOldSig = sigOf(lyricLines);
+        lyricLines = [];
+        lyricHint = -1;
+        lyricAskAt = 0;
+      }
+      if (wantLyrics() && !lyricLines.length && now - lyricAskAt > 1500) {
+        lyricAskAt = now;
+        win.postMessage({ svReactAsk: 'lyrics' }, win.location.origin); // 歌詞の画面が作られていれば、行が返ってくる
+      }
+      const ly = wantLyrics() ? lyricsAt(lyricLines, i.positionSec, i.durationSec, lyricHint) : null;
       box.hidden = !ly;
       if (!ly) return;
       lyricHint = ly.cur;
@@ -472,7 +507,7 @@
         track.textContent = '';
         L.forEach((t) => track.appendChild(mk('div', 'sv-np-line', t)));
         track.style.transition = 'none'; // 曲が変わったときは、滑らせずに合わせる
-        track.style.setProperty('--cur', String(ly.cur));
+        track.style.setProperty('--cur', String(Math.max(0, ly.cur)));
         void track.offsetWidth;
         track.style.transition = '';
       }
@@ -480,7 +515,7 @@
         const kids = track.children;
         if (kids[lyricCur]) kids[lyricCur].classList.remove('is-current');
         if (kids[ly.cur]) kids[ly.cur].classList.add('is-current');
-        track.style.setProperty('--cur', String(ly.cur));
+        track.style.setProperty('--cur', String(Math.max(0, ly.cur)));
         lyricCur = ly.cur;
       }
     }
@@ -535,7 +570,7 @@
         lastSyncAt = 0;
         syncLyrics();
         toast('歌詞 ' + (v ? 'オン' : 'オフ'));
-        lastLyricAt = 0;
+        lyricAskAt = 0;
         refresh();
       }
     }
@@ -565,11 +600,7 @@
       cover.hidden = !i.cover;
       syncLyrics();
       paintButtons(i);
-      const now = Date.now();
-      if (now - lastLyricAt >= 450) {
-        lastLyricAt = now;
-        paintLyrics();
-      }
+      paintLyrics(i);
       // 再生位置: 動かすのは transform だけ（レイアウトが走らない）。再生中の小さな進みは滑らかに、大きな飛び（シーク・曲の変わり目）は一気に
       const fill = el.querySelector('.sv-np-fill');
       const r = Math.round(i.ratio * 10000) / 10000;
@@ -687,6 +718,6 @@
     return { open, close, refresh, handleAction, hideBar, sessionReady, isOpen: () => !!el, status: () => detect(doc, drm, waited()) };
   }
 
-  SV.spotifyNp = { onSessionChange: (fn) => { bridge.onChange = fn; }, SEL, LABEL, fmt, STATUS_TEXT, statusOf, trackTitle, read, detect, readLyrics, checkWidevine, find, create };
+  SV.spotifyNp = { setExtraRoots: (fn) => { extraRoots = fn; }, lyricsAt, onSessionChange: (fn) => { bridge.onChange = fn; }, SEL, LABEL, fmt, STATUS_TEXT, statusOf, trackTitle, read, detect, checkWidevine, find, create };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyNp;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -46,3 +46,21 @@ test('秒の表示は m:ss（サイトの表示と同じ形）', () => {
   assert.equal(np.fmt(3600), '60:00');
   assert.equal(np.fmt(-3), '0:00');
 });
+
+test('歌詞のいまの行: 開始時刻（ミリ秒）と再生位置から決まる。最初の行の前は -1。時刻のない歌詞は出さない', () => {
+  const L = [0, 20000, 40000, 60000].map((start, i) => ({ text: '行' + i, start }));
+  assert.equal(np.lyricsAt(L, 0, 200, -1).cur, 0);
+  assert.equal(np.lyricsAt(L, 19.9, 200, -1).cur, 0);
+  assert.equal(np.lyricsAt(L, 20, 200, 0).cur, 1);
+  assert.equal(np.lyricsAt(L, 50, 200, -1).cur, 2);
+  assert.equal(np.lyricsAt(L, 500, 200, 1).cur, 3, '最後の行のまま');
+  assert.equal(np.lyricsAt(L, 10, 200, 3).cur, 0, '前へ戻したとき（シーク）も追える');
+  assert.equal(np.lyricsAt([{ text: 'a', start: 5000 }, { text: 'b', start: 9000 }], 2, 200, -1).cur, -1, '最初の行の前');
+  assert.deepEqual(np.lyricsAt(L, 50, 200, -1).lines, ['行0', '行1', '行2', '行3']);
+  assert.equal(np.lyricsAt([{ text: 'a', start: 0 }, { text: 'b', start: 0 }], 5, 200, -1), null, '時刻のない歌詞');
+  assert.equal(np.lyricsAt([{ text: 'a', start: 9 }, { text: 'b', start: 3 }], 5, 200, -1), null, '順に増えない');
+  assert.equal(np.lyricsAt([], 5, 200, -1), null);
+  // 値が秒の場合（曲の長さ以下の値ばかり）
+  const S = [0, 20, 40, 60].map((start, i) => ({ text: '行' + i, start }));
+  assert.equal(np.lyricsAt(S, 50, 200, -1).cur, 2, '秒とみなす');
+});

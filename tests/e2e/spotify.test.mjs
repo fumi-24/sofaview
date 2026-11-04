@@ -292,7 +292,7 @@ test('Spotify: サイトの作りが変わっても（目印の data-testid・�
   assert.deepEqual(log.filter((l) => l.ev === 'click').map((l) => l.id), ['control-button-playpause'], '再生ボタンだけが押される');
   assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'seek').map((l) => l.value), [60000]);
   assert.deepEqual(log.filter((l) => l.ev === 'range' && l.kind === 'volume').map((l) => l.value), [1, 0.9], '音量（上限では動かない）');
-  assert.equal(await np.locator('.sv-np-lyrics').isVisible(), false, '歌詞の目印がなければ、歌詞は出さない（落ちない）');
+  await until(async () => (await np.locator('.sv-np-line').count()) === 6, { timeout: 8000, message: '歌詞は、React の部品の props から読むので、目印・クラス名がなくても出る' });
   assert.deepEqual(errors, []);
   await page.close();
   // ログインしていない: ログインのボタンも、表示名で見つかる
@@ -334,26 +334,29 @@ test('Spotify: 操作は、メディアセッション（OS のメディアキ�
   await page.close();
 });
 
-test('Spotify: 歌詞を出さないとき（既定）、本来の画面の要素は DOM からも取り外す（操作はメディアセッションなので、動く）。歌詞を出すときだけ戻す', async () => {
+test('Spotify: 本来の画面の要素は DOM からも取り外す（操作はメディアセッション、歌詞は React の部品の props）。取り外したままで、歌詞ボタンも押せて、歌詞が出る', async () => {
   await setSp({ lyrics: false });
   const page = await open();
   const np = page.locator('#sv-np');
   await until(async () => (await np.getAttribute('data-kind')) === 'track', { message: '曲の画面' });
   await until(async () => (await page.evaluate(() => document.querySelector('main, [data-testid="now-playing-bar"]'))) === null, { timeout: 8000, message: '本来の画面の要素が取り外される' });
   assert.deepEqual(await page.evaluate(() => Array.from(document.body.children).map((e) => e.id || e.tagName).filter((t) => !/SCRIPT|sv-badge/.test(t))), ['sv-np'], 'body には再生中の画面だけ');
+  assert.equal(await np.locator('.sv-np-lyrics').isVisible(), false, '歌詞はオフ');
   // 取り外したあとも、操作できる
   const mark = (await fx(page, 'log')).length;
   await press(page, 'Enter');
   await press(page, 'Enter');
   await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '取り外したあとでも再生できる' });
   assert.deepEqual((await fx(page, 'log')).slice(mark).filter((l) => l.ev === 'ms').map((l) => l.action), ['play']);
-  // 歌詞をオン → 本来の画面を戻して、歌詞が出る
+  // 歌詞をオン → 取り外したまま、歌詞のボタンを押して、歌詞が出る（本来の画面は戻さない）
   await press(page, 'ArrowRight');
   await press(page, 'ArrowRight');
   await press(page, 'ArrowRight');
   await press(page, 'Enter');
-  await until(async () => (await page.evaluate(() => !!document.querySelector('main'))) === true, { timeout: 8000, message: '本来の画面が戻る' });
   await until(async () => (await np.locator('.sv-np-line').count()) === 6, { timeout: 8000, message: '歌詞が出る' });
+  assert.equal(await page.evaluate(() => !!document.querySelector('main')), false, '本来の画面は戻さない');
+  assert.match(await np.locator('.sv-np-line.is-current').innerText(), /三行目（いま）/, '再生位置（50 秒）といまの行の開始時刻（40 秒）から決まる');
+  assert.equal((await fx(page, 'log')).filter((l) => l.ev === 'lyrics').pop().on, true);
   await page.close();
   await setSp({ lyrics: true });
 });
