@@ -4,6 +4,21 @@
  * 曲がないとき（data-view="status"）: 理由とやることを、大きく中央に。
  * アニメーション・トランジションは付けない（/tv と同じ）。
  */
+/* 元の画面は完全に差し替える: 読み込みの最初から隠す（描画しないので軽い。DOM は残るので、曲の情報の読み取りと操作ボタンの押下はできる）。
+   一覧のページを操作する設定（html.sv-browse）のときと、再生中の画面を開けなかったとき（html.sv-np-failed）は、元の画面を出す */
+html.sv-sp:not(.sv-browse):not(.sv-np-failed) {
+  background: #000;
+}
+
+html.sv-sp:not(.sv-browse):not(.sv-np-failed) body {
+  visibility: hidden;
+}
+
+html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-np,
+html.sv-sp:not(.sv-browse):not(.sv-np-failed) #sv-badge {
+  visibility: visible;
+}
+
 #sv-np {
   position: fixed;
   inset: 0;
@@ -17,6 +32,7 @@
 #sv-np .sv-np-bg {
   position: absolute;
   inset: -10vh;
+  transform: translateZ(0); /* 1 回だけ描いて、使い回す（ぼかしは重いので、描き直させない） */
   background-size: cover;
   background-position: center;
   filter: blur(7vh) brightness(0.38) saturate(1.2);

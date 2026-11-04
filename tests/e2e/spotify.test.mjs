@@ -403,6 +403,14 @@ test('Spotify: 既定は「常に再生中の画面」。読み込むと開き�
   await press(page, 'Escape');
   await yellowKey(page);
   assert.equal(await np.count(), 1, '戻る・黄色キーでは閉じない');
+  // 元の画面は完全に差し替える: 描画しない（隠れている）。画面倍率の変更もしない。キーは元の画面に届かない
+  assert.equal(await page.evaluate(() => getComputedStyle(document.body).visibility), 'hidden', '元の画面は描画しない');
+  assert.equal(await np.evaluate((e) => getComputedStyle(e).visibility), 'visible');
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.svZoom), 'skipped');
+  const before = (await fx(page, 'log')).length;
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowRight');
+  assert.equal((await fx(page, 'log')).slice(before).filter((l) => l.ev === 'range').length, 0, '最初の ← → は、元の画面の再生位置を動かさない（ボタンの列を出すだけ）');
   await press(page, 'ArrowUp');
   await until(async () => /音量 \d+%/.test(await page.locator('.sv-np-toast').innerText()), { message: '音量の表示' });
   const v = await openVariant({ loggedOut: false, noTrack: true });

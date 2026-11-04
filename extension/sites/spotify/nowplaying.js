@@ -110,7 +110,7 @@
    * （サイトの色の変数 --lyrics-color-active の色で、普通の行（--lyrics-color-inactive）とは違うもの。クラス名のハッシュには頼らない）。
    * 返す: { lines: [表示する行（前 2・いま・次 3）], active: lines の中の位置 } か、歌詞がない・いまの行が分からないときは null。
    */
-  function readLyrics(doc) {
+  function readLyrics(doc, hint) {
     const nodes = Array.from(doc.querySelectorAll(SEL.lyricsLine));
     const items = nodes.map((n) => ({ text: text(n), node: n })).filter((x) => x.text);
     if (!items.length) return null;
@@ -121,11 +121,19 @@
     const active = norm(cs.getPropertyValue('--lyrics-color-active'));
     const inactive = norm(cs.getPropertyValue('--lyrics-color-inactive'));
     let cur = -1;
-    if (active && active !== inactive) items.forEach((x, i) => { if (norm(col(x.node)) === active) cur = i; });
+    if (active && active !== inactive) {
+      // いまの行は 1 つだけ。前に見つけた位置の近くから探して、見つかったら止める（全部の行の色を調べると重い）
+      const start = Math.max(0, Math.min(items.length - 1, hint == null ? 0 : hint));
+      for (let k = 0; k < items.length && cur < 0; k++) {
+        const j = k % 2 ? start - (k + 1) / 2 : start + k / 2;
+        if (j >= 0 && j < items.length && norm(col(items[j].node)) === active) cur = j;
+      }
+      if (cur < 0) items.forEach((x, i) => { if (cur < 0 && norm(col(x.node)) === active) cur = i; });
+    }
     if (cur < 0) return null; // いまの行が分からないときは、歌詞は出さない（ずれた行を出すより、出さない）
     const from = Math.max(0, cur - 2);
     const to = Math.min(items.length, cur + 4);
-    return { lines: items.slice(from, to).map((x) => x.text), active: cur - from };
+    return { lines: items.slice(from, to).map((x) => x.text), active: cur - from, cur };
   }
 
   /** 再生に必要な保護機能（Widevine）が使えるか。 */
@@ -191,7 +199,9 @@
       }
     }
     doc.addEventListener('visibilitychange', () => {
-      if (el) acquireLock();
+      if (!el) return;
+      acquireLock();
+      refresh();
     });
 
     function toast(msg) {
@@ -235,10 +245,10 @@
     function paintButtons(i) {
       const bar = el.querySelector('.sv-np-controls');
       const play = bar.querySelector('[data-id="play"]');
-      play.textContent = i.playing ? '⏸' : '▶';
+      put(play, i.playing ? '⏸' : '▶');
       play.setAttribute('aria-label', i.playing ? '一時停止' : '再生');
       const ly = bar.querySelector('[data-id="lyrics"]');
-      ly.textContent = '歌詞 ' + (wantLyrics() ? 'オン' : 'オフ');
+      put(ly, '歌詞 ' + (wantLyrics() ? 'オン' : 'オフ'));
       ly.setAttribute('aria-pressed', wantLyrics() ? 'true' : 'false');
     }
 
@@ -290,13 +300,19 @@
       }
     }
 
+    // 値が変わったときだけ書く（同じ文字を書き直すと、画面の再計算が毎回走って重い）
+    const put = (node, v) => {
+      if (node.textContent !== v) node.textContent = v;
+    };
+    let lyricHint = 0;
+
     function refresh() {
       if (!el) return;
       const d = detect(doc, drm);
       el.setAttribute('data-kind', d.kind);
       const trackView = d.kind === 'track';
       el.setAttribute('data-view', trackView ? 'track' : 'status');
-      el.querySelector('.sv-np-hint').textContent = trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '';
+      put(el.querySelector('.sv-np-hint'), trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '');
       if (!trackView) {
         hideBar();
         paintStatus(d.kind);
@@ -304,9 +320,9 @@
       }
       const i = d.info;
       el.setAttribute('data-state', i.playing ? 'playing' : 'paused');
-      el.querySelector('.sv-np-state').textContent = i.playing ? '▶ 再生中' : '⏸ 一時停止';
-      el.querySelector('.sv-np-title').textContent = i.title;
-      el.querySelector('.sv-np-artist').textContent = i.artists;
+      put(el.querySelector('.sv-np-state'), i.playing ? '▶ 再生中' : '⏸ 一時停止');
+      put(el.querySelector('.sv-np-title'), i.title);
+      put(el.querySelector('.sv-np-artist'), i.artists);
       const cover = el.querySelector('.sv-np-cover');
       if (i.cover && cover.getAttribute('src') !== i.cover) {
         cover.setAttribute('src', i.cover);
@@ -315,7 +331,8 @@
       cover.hidden = !i.cover;
       syncLyrics();
       paintButtons(i);
-      const ly = wantLyrics() ? readLyrics(doc) : null;
+      const ly = wantLyrics() ? readLyrics(doc, lyricHint) : null;
+      if (ly) lyricHint = ly.cur;
       const box = el.querySelector('.sv-np-lyrics');
       box.hidden = !ly;
       if (ly) {
@@ -326,9 +343,11 @@
           ly.lines.forEach((t, k) => box.appendChild(mk('div', 'sv-np-line' + (k === ly.active ? ' is-current' : ''), t)));
         }
       }
-      el.querySelector('.sv-np-fill').style.width = Math.round(i.ratio * 1000) / 10 + '%';
-      el.querySelector('.sv-np-pos').textContent = i.position;
-      el.querySelector('.sv-np-dur').textContent = i.duration;
+      const w = Math.round(i.ratio * 1000) / 10 + '%';
+      const fill = el.querySelector('.sv-np-fill');
+      if (fill.style.width !== w) fill.style.width = w;
+      put(el.querySelector('.sv-np-pos'), i.position);
+      put(el.querySelector('.sv-np-dur'), i.duration);
     }
 
     function open() {
@@ -370,7 +389,9 @@
       if (SV.spotify) SV.spotify.markSliders(doc);
       refresh();
       acquireLock();
-      timer = setInterval(refresh, 400);
+      timer = setInterval(() => {
+        if (doc.visibilityState === 'visible') refresh(); // 見えていないときは、描画を更新しない
+      }, 500);
     }
 
     function close() {

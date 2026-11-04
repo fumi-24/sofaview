@@ -200,10 +200,7 @@
     SV.consume(e);
     if (!action) return;
     if (action === 'HOME') {
-      if (!e.repeat) {
-        ctl.np.close();
-        SV.goHub();
-      }
+      if (!e.repeat) SV.goHub(); // 再生中の画面は閉じない（戻ったとき、元の画面が出ないように）
       return;
     }
     if (action === 'BACK' || action === 'YELLOW') {
@@ -348,7 +345,6 @@
         SV.settings.save({ spotify: { lyrics: v } });
       },
     });
-    requestZoom();
     // 音楽を流したまま別のタブへ移れるよう、このタブは休止・破棄されないようにする
     SV.sendMessage({ type: 'sv:remoteKeep' });
     const tryInitial = () => {
@@ -397,47 +393,93 @@
         /* 使えない環境では何もしない */
       }
     }
-    new MutationObserver(() => {
+    // 見張り。曲の変化・ハブに出す状態だけなら、再生バーの中だけを見れば足りる（ページ全体の変化を見ると、サイトの描画のたびに動いて重い）。
+    // 再生バーが現れるまでは、ページ全体の「要素の追加・削除」だけを見る。一覧のページを操作する設定（browse）のときだけ、従来どおり全体を見る
+    let obs = null;
+    let obsTarget = null;
+    let lastRun = 0;
+    const lean = () => {
+      const now = Date.now();
+      if (now - lastRun < 250) return; // 1 秒に数回で足りる
+      lastRun = now;
+      watchTrack();
+      reportState();
+      ensureObserver();
+    };
+    const full = () => {
       S.markSliders(document);
       S.markPanel(document);
       watchTrack();
       reportState();
       tryInitial();
-    }).observe(document.body, { childList: true, subtree: true, characterData: true });
+    };
+    function ensureObserver() {
+      const browse = !!ctl.settings.spotify.browse;
+      const bar = browse ? null : document.querySelector(SV.spotifyNp.SEL.bar);
+      const target = browse ? document.body : bar || document.body;
+      if (obs && obsTarget === target && target.isConnected) return;
+      if (obs) obs.disconnect();
+      obsTarget = target;
+      if (browse) {
+        obs = new MutationObserver(full);
+        obs.observe(target, { childList: true, subtree: true, characterData: true });
+      } else {
+        obs = new MutationObserver(lean);
+        obs.observe(target, bar ? { childList: true, subtree: true, characterData: true, attributes: true, attributeFilter: ['aria-label', 'src', 'href'] } : { childList: true, subtree: true });
+      }
+    }
+    ensureObserver();
     watchTrack();
     reportState();
-    S.markSliders(document);
-    S.markPanel(document);
-    // 待機（スマホ主体の使い方）の設定のとき、読み込んだら、再生中の画面（曲がなければ状態の画面）を出す。設定を切り替えたときも
+
+    // 一覧のページを十字キーで操作する設定（browse）のときだけ、初期フォーカス・画面倍率・棒の印などを動かす
+    let browseStarted = false;
+    function startBrowse() {
+      if (browseStarted) return;
+      browseStarted = true;
+      requestZoom();
+      S.markSliders(document);
+      S.markPanel(document);
+      // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
+      let path = location.pathname;
+      setInterval(() => {
+        if (location.pathname === path) return;
+        path = location.pathname;
+        ctl.initialDone = false;
+        ctl.userMoved = false;
+        tryInitial();
+      }, 300);
+      // 描画が終わっても DOM が変わらないことがあるので、落ち着くまで定期的にも試す
+      const retry = setInterval(() => {
+        tryInitial();
+        if (ctl.initialDone) clearInterval(retry);
+      }, 500);
+      tryInitial();
+      setTimeout(() => {
+        ctl.initialDone = true;
+        clearInterval(retry);
+      }, 15000);
+    }
+
+    // 常に再生中の画面（既定）: 読み込んだら開き、閉じない。元の画面は隠す（CSS: html.sv-sp:not(.sv-browse)）。
+    // browse のときだけ、元の画面を出し、待機の設定が入ったときに再生中の画面を開く
     let wasStandby = false;
-    // 常に再生中の画面（既定）: 読み込んだら開き、閉じない。browse のときだけ、待機の設定が入ったときに開く
-    const applyStandby = (st) => {
+    const applyMode = (st) => {
       const sp = (st && st.spotify) || {};
+      html.classList.toggle('sv-browse', !!sp.browse);
+      if (sp.browse) startBrowse();
+      else if (!zoomRequested) html.setAttribute('data-sv-zoom', 'skipped'); // 再生中の画面は vh の寸法なので、画面倍率は要らない
+      ensureObserver();
       const on = !!sp.standby || !sp.browse;
       if (on && !wasStandby) openNp();
       wasStandby = on;
     };
-    SV.settings.load().then(applyStandby);
-    SV.settings.onChange(applyStandby);
-    // ページの遷移（SPA）: 描画し直されたら、また初期フォーカス（操作の途中でなければ）
-    let path = location.pathname;
-    setInterval(() => {
-      if (location.pathname === path) return;
-      path = location.pathname;
-      ctl.initialDone = false;
-      ctl.userMoved = false;
-      tryInitial();
-    }, 300);
-    // 描画が終わっても DOM が変わらないことがあるので、落ち着くまで定期的にも試す
-    const retry = setInterval(() => {
-      tryInitial();
-      if (ctl.initialDone) clearInterval(retry);
-    }, 500);
-    tryInitial();
+    SV.settings.load().then(applyMode);
+    SV.settings.onChange(applyMode);
+    // 再生中の画面が開けなかったときは、元の画面を出す（何も操作できなくなるのを避ける）
     setTimeout(() => {
-      ctl.initialDone = true;
-      clearInterval(retry);
-    }, 15000);
+      if (!ctl.np.isOpen() && !html.classList.contains('sv-browse')) html.classList.add('sv-np-failed');
+    }, 10000);
     html.setAttribute('data-sv-ready', '1');
     showBadge();
   }
