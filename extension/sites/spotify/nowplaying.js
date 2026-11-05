@@ -296,11 +296,19 @@
    */
   function lyricsAt(lines, positionSec, durationSec, hint) {
     if (!lines || !lines.length) return null;
-    const starts = lines.map((l) => l.start);
-    if (starts.some((t) => !Number.isFinite(t))) return null;
-    for (let i = 1; i < starts.length; i++) if (starts[i] < starts[i - 1]) return null;
-    if (starts[starts.length - 1] <= 0) return null; // 時刻のない歌詞
-    const max = starts[starts.length - 1];
+    // 時刻のない行（空行・合間の記号など）は、直前の行の時刻とみなす。少しの逆転（訳の行など）は、それまでの最大に合わせる（1 行のために歌詞全体を捨てない）
+    const starts = [];
+    let run = 0;
+    let finite = 0;
+    for (const l of lines) {
+      if (Number.isFinite(l.start)) {
+        finite++;
+        run = Math.max(run, l.start);
+      }
+      starts.push(run);
+    }
+    if (finite < Math.ceil(lines.length / 2) || run <= 0) return null; // 時刻のない歌詞（行の半分以上に時刻がない・すべて 0）
+    const max = run;
     const unit = durationSec > 0 && max <= durationSec + 5 ? 1 : 1000; // 秒か、ミリ秒か
     const t = positionSec == null ? 0 : positionSec * unit;
     // いまの行 = 開始時刻が t 以下の、最後の行。前回の位置から探す（ほとんど同じか次の行）
@@ -341,8 +349,10 @@
     let lyricTitleAt = 0;
     let lyricOldSig = '';
     let lyricAskAt = 0;
-    let lyricAskGap = 1000;
+    let lyricAskGap = 500;
+    let lyricAsks = 0;
     let lyricWalkMs = 0;
+    let lyricState = 'オフ'; // 診断用: オフ / 待ち（n 回目）/ 時刻なし / n 行
     let perfObs = null;
     let refreshMs = 0; // 更新 1 回の時間（なだらかな平均）
     const longTasks = []; // 主スレッドが 50ms 以上ふさがった記録（Spotify 自身の処理も含む）
@@ -513,15 +523,19 @@
         lyricLines = [];
         lyricHint = -1;
         lyricAskAt = 0;
-        lyricAskGap = 1000;
+        lyricAskGap = 500;
+        lyricAsks = 0;
       }
       // 歌詞の画面が作られていれば、行が返ってくる。返ってこない（歌詞のない曲・画面がまだ）間は、間隔をあけていく（木をたどるのは、安くない）
       if (wantLyrics() && !lyricLines.length && now - lyricAskAt > lyricAskGap) {
         lyricAskAt = now;
-        lyricAskGap = Math.min(10000, lyricAskGap * 1.6);
+        lyricAsks++;
+        // 歌詞の画面が作られるのを待つ間は、最初は短い間隔（0.5 秒）で、長引いたら間隔を広げる（木をたどるのは、安くない）
+        lyricAskGap = lyricAsks < 6 ? 500 : lyricAsks < 12 ? 1500 : lyricAsks < 20 ? 4000 : 8000;
         win.postMessage({ svReactAsk: 'lyrics' }, win.location.origin);
       }
       const ly = wantLyrics() ? lyricsAt(lyricLines, i.positionSec, i.durationSec, lyricHint) : null;
+      lyricState = !wantLyrics() ? 'オフ' : ly ? ly.lines.length + '行' : lyricLines.length ? '時刻なし' : '待ち' + lyricAsks + '回';
       box.hidden = !ly;
       if (!ly) return;
       lyricHint = ly.cur;
@@ -588,7 +602,7 @@
       const t = performance.now();
       while (longTasks.length && t - longTasks[0].t > 10000) longTasks.shift();
       const max = longTasks.reduce((m, x) => Math.max(m, x.d), 0);
-      put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　歌詞読取 ' + lyricWalkMs.toFixed(0) + 'ms　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
+      put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　歌詞 ' + lyricState + '（読取 ' + lyricWalkMs.toFixed(0) + 'ms）　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
     }
 
     function paintButtons(i) {
@@ -642,6 +656,8 @@
         syncLyrics();
         toast('歌詞 ' + (v ? 'オン' : 'オフ'));
         lyricAskAt = 0;
+        lyricAsks = 0;
+        lyricAskGap = 500;
         refresh();
       }
     }

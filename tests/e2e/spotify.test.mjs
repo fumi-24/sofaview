@@ -348,6 +348,10 @@ test('Spotify: 本来の画面の要素は DOM からも取り外す（操作は
   await until(async () => (await page.evaluate(() => document.querySelector('main, [data-testid="now-playing-bar"]'))) === null, { timeout: 8000, message: '本来の画面の要素が取り外される' });
   assert.deepEqual(await page.evaluate(() => Array.from(document.body.children).map((e) => e.id || e.tagName).filter((t) => !/SCRIPT|sv-badge/.test(t))), ['sv-np'], 'body には再生中の画面だけ');
   assert.equal(await np.locator('.sv-np-lyrics').isVisible(), false, '歌詞はオフ');
+  // 取り外している間は、ページの requestAnimationFrame を間引く（見えない画面の毎フレームの更新で、主スレッドを占めない）。取り消しも効く
+  const frames = await page.evaluate(() => new Promise((res) => { let n = 0; const end = performance.now() + 1000; (function f() { n++; if (performance.now() < end) requestAnimationFrame(f); else res(n); })(); }));
+  assert.ok(frames <= 8, '1 秒に ' + frames + ' 回（間引かれていれば、数回）');
+  assert.equal(await page.evaluate(() => new Promise((res) => { let hit = false; const id = requestAnimationFrame(() => { hit = true; }); cancelAnimationFrame(id); setTimeout(() => res(hit), 500); })), false, 'cancelAnimationFrame が効く');
   // 取り外したあとも、操作できる
   const mark = (await fx(page, 'log')).length;
   await press(page, 'Enter');

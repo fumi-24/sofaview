@@ -58,9 +58,18 @@ test('歌詞のいまの行: 開始時刻（ミリ秒）と再生位置から決
   assert.equal(np.lyricsAt([{ text: 'a', start: 5000 }, { text: 'b', start: 9000 }], 2, 200, -1).cur, -1, '最初の行の前');
   assert.deepEqual(np.lyricsAt(L, 50, 200, -1).lines, ['行0', '行1', '行2', '行3']);
   assert.equal(np.lyricsAt([{ text: 'a', start: 0 }, { text: 'b', start: 0 }], 5, 200, -1), null, '時刻のない歌詞');
-  assert.equal(np.lyricsAt([{ text: 'a', start: 9 }, { text: 'b', start: 3 }], 5, 200, -1), null, '順に増えない');
+  assert.deepEqual(np.lyricsAt([{ text: 'a', start: 9000 }, { text: 'b', start: 3000 }], 12, 200, -1), { lines: ['a', 'b'], cur: 1 }, '順に増えなくても捨てない（逆転は、それまでの最大に合わせる）');
   assert.equal(np.lyricsAt([], 5, 200, -1), null);
   // 値が秒の場合（曲の長さ以下の値ばかり）
   const S = [0, 20, 40, 60].map((start, i) => ({ text: '行' + i, start }));
   assert.equal(np.lyricsAt(S, 50, 200, -1).cur, 2, '秒とみなす');
+});
+
+test('歌詞のいまの行: 時刻のない行・少しの逆転があっても、歌詞全体は捨てない。半分以上に時刻がなければ出さない', () => {
+  const L = [{ text: '前奏', start: undefined }, { text: 'a', start: 5000 }, { text: '', start: null }, { text: 'b', start: 4000 }, { text: 'c', start: 20000 }];
+  const r = np.lyricsAt(L, 6, 200, -1);
+  assert.deepEqual(r.lines, ['前奏', 'a', '', 'b', 'c']);
+  assert.equal(r.cur, 3, '逆転した行（b: 4000）は、それまでの最大（5000）に合わせる。6 秒の時点では、b の行');
+  assert.equal(np.lyricsAt(L, 25, 200, -1).cur, 4);
+  assert.equal(np.lyricsAt([{ text: 'a' }, { text: 'b' }, { text: 'c', start: 100 }], 5, 200, -1), null, '時刻のある行が半分に満たない');
 });

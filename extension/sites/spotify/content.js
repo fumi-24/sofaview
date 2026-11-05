@@ -188,6 +188,7 @@
       if (permanent) store.set(guardKey, '1');
       if (!detached) return;
       detached = false;
+      window.postMessage({ svThrottle: 0 }, location.origin); // 描画の間引きも戻す
       const np = document.getElementById('sv-np');
       document.body.insertBefore(holder, np || null);
     }
@@ -200,6 +201,7 @@
       const wasPlaying = navigator.mediaSession.playbackState === 'playing';
       for (const el of Array.from(document.body.children)) if (!keep(el)) holder.appendChild(el);
       detached = true;
+      window.postMessage({ svThrottle: 1 }, location.origin); // 見えない画面の描画の更新を間引く（session-main.js）
       store.set('svDetachAt', String(Date.now()));
       setTimeout(() => {
         if (detached && wasPlaying && navigator.mediaSession.playbackState !== 'playing') restoreOriginal(true); // 外したら止まった
