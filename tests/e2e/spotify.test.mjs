@@ -73,9 +73,56 @@ test('Spotify: 再生中の画面は自前ページ。Spotify の部品は 1 つ
   await closeAll();
 });
 
-test('Spotify: 操作は、メディアセッション（OS のメディアキーと同じ標準の API）のハンドラを直接呼ぶ。最初の ← → OK はボタンの列を出すだけ。画面のボタンは押さない。位置の棒は、残り時間をかけた直線の動きを 1 回だけ指示する', async () => {
+test('Spotify: 操作は、Spotify のアプリ自身のサービス（playerAPI・standalonePlayer）を呼ぶ。最初の ← → OK はボタンの列を出すだけ。画面のボタン・メディアセッション・範囲入力は使わない。音量も、アプリのサービスで動く', async () => {
   await setSp({ lyrics: true });
   const sp = await engine();
+  const np = await front();
+  const root = np.locator('#sv-np');
+  await until(async () => (await kindOf(np)) === 'track', { message: '曲の画面（アプリの状態から）' });
+  await until(async () => /経路 アプリ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: 'アプリのサービスから読んでいる' });
+  const controls = root.locator('.sv-np-controls');
+  assert.equal(await controls.isVisible(), false, '操作するまで、ボタンは出ない');
+  const mark = (await fx(sp, 'log')).length;
+  await press(np, 'Enter'); // 列を出すだけ
+  assert.equal(await controls.isVisible(), true);
+  assert.equal((await fx(sp, 'log')).slice(mark).filter((l) => l.ev === 'app').length, 0, '最初の OK は、何も操作しない');
+  const focused = () => np.evaluate(() => document.activeElement && document.activeElement.dataset.id);
+  assert.equal(await focused(), 'play');
+  await press(np, 'Enter'); // 再生（resume）
+  await until(async () => (await root.getAttribute('data-state')) === 'playing', { message: '再生状態はアプリの状態（isPaused）から' });
+  await until(async () => /^transform 12\d(\.\d+)?s linear$/.test(await root.locator('.sv-np-fill').evaluate((e) => e.style.transition)), { message: '残り時間をかけた直線の動き' });
+  const before = await root.locator('.sv-np-fill').evaluate((e) => e.style.transition);
+  await np.waitForTimeout(1200);
+  assert.equal(await root.locator('.sv-np-fill').evaluate((e) => e.style.transition), before, '指示は出し直されない（毎回書き換えない）');
+  await press(np, 'Enter'); // 一時停止（再生中なので pause）
+  await until(async () => (await root.getAttribute('data-state')) === 'paused', { message: '一時停止になる' });
+  await press(np, 'ArrowRight');
+  assert.equal(await focused(), 'fwd');
+  await press(np, 'Enter'); // +10 秒 → seekTo
+  await press(np, 'ArrowRight');
+  await press(np, 'Enter'); // 次の曲
+  for (let i = 0; i < 4; i++) await press(np, 'ArrowLeft');
+  assert.equal(await focused(), 'prev');
+  await press(np, 'Enter'); // 前の曲
+  await press(np, 'Escape');
+  await press(np, 'ArrowDown'); // 音量 −10%
+  await until(async () => (await fx(sp, 'log')).some((l) => l.ev === 'app' && l.action === 'volume'), { message: '音量が、アプリのサービスで動く' });
+  const log = (await fx(sp, 'log')).slice(mark);
+  const app = log.filter((l) => l.ev === 'app');
+  assert.deepEqual(app.map((l) => l.action), ['resume', 'pause', 'seekTo', 'next', 'prev', 'volume']);
+  const seekMs = app.find((l) => l.action === 'seekTo').arg;
+  assert.ok(seekMs >= 60000 && seekMs < 64000, '一時停止した位置 + 10 秒: ' + seekMs);
+  assert.equal(app.find((l) => l.action === 'volume').arg, 0.9);
+  assert.equal(log.filter((l) => l.ev === 'ms' || l.ev === 'click' || l.ev === 'range').length, 0, 'メディアセッション・画面のボタン・範囲入力は使わない');
+  // 戻るで、まず列が隠れる（画面は閉じない）
+  await press(np, 'ArrowRight');
+  await press(np, 'Escape');
+  assert.equal(await controls.isVisible(), false);
+});
+
+test('Spotify: （アプリのサービスが見つからないときの代わり）操作は、メディアセッション（OS のメディアキーと同じ標準の API）のハンドラを直接呼ぶ。最初の ← → OK はボタンの列を出すだけ。画面のボタンは押さない。位置の棒は、残り時間をかけた直線の動きを 1 回だけ指示する', async () => {
+  await setSp({ lyrics: true });
+  const sp = await engine({ noApp: true });
   const np = await front();
   const root = np.locator('#sv-np');
   await until(async () => (await kindOf(np)) === 'track', { message: '曲の画面' });
@@ -121,7 +168,7 @@ test('Spotify: 操作は、メディアセッション（OS のメディアキ�
 
 test('Spotify: （メディアセッションがないときの代わり）画面のボタン・範囲入力にさがる。位置は画面の時間の表示から', async () => {
   await setSp({ lyrics: true });
-  const sp = await engine({ noSession: true });
+  const sp = await engine({ noSession: true, noApp: true });
   const np = await front();
   const root = np.locator('#sv-np');
   await until(async () => (await kindOf(np)) === 'track', { message: '曲の画面' });
@@ -142,7 +189,7 @@ test('Spotify: （メディアセッションがないときの代わり）画�
 
 test('Spotify: サイトの作りが変わっても（目印の data-testid・クラス名が全部なくなっても）動く。曲の情報は再生情報（mediaSession）、再生位置は音声、操作はボタンの表示名と範囲入力の並び、歌詞は React の部品の props', async () => {
   await setSp({ lyrics: true });
-  const sp = await engine({ plain: true });
+  const sp = await engine({ plain: true, noApp: true });
   const errors = [];
   sp.on('pageerror', (e) => errors.push(String(e)));
   const np = await front();
@@ -301,7 +348,10 @@ test('Spotify 診断（読み取りだけ）: Spotify のタブから、アプ�
   const player = report.candidates.find((c) => c.prop === 'playerAPI');
   assert.ok(player, 'プレーヤーの API らしい部品が見つかる');
   for (const k of ['play', 'pause', 'resume', 'seekTo', 'skipToNext', 'skipToPrevious', 'getState']) assert.ok(Object.keys(player.shape).includes(k), 'メソッド ' + k);
-  assert.deepEqual(report.playerState, { isPaused: 'boolean', track: { uri: 'str' }, positionAsOfTimestamp: 'number' }, '状態の「形」だけ（値は入らない）');
+  assert.equal(report.playerState.isPaused, 'boolean', '状態の「形」だけ（値は入らない）');
+  assert.equal(report.playerState.positionAsOfTimestamp, 'number');
+  assert.equal(report.playerState.item.name, 'str');
+  assert.ok(report.volumeCandidates.some((c) => c.prop === 'standalonePlayer'), '音量のサービス');
   assert.ok(report.platform && report.platform.keys.includes('getRegistry'), 'プラットフォームの部品');
   assert.deepEqual(report.platform.Session, { isAnonymous: 'boolean', market: 'str' });
   const text = JSON.stringify(report);

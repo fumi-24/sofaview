@@ -12,8 +12,17 @@
 (function () {
   'use strict';
   const roots = new Set();
+  const svc = { player: null, engine: null, findAt: 0 };
+  let findTimer = 0;
   const track = (root) => {
     if (root && typeof root === 'object') roots.add(root);
+    // 部品の木ができたら、アプリのサービスを探して、状態をすぐ送る（1 秒おきの確認を待たない）
+    if (!findTimer && typeof pushState === 'function' && !(svc && svc.player)) {
+      findTimer = setTimeout(() => {
+        findTimer = 0;
+        pushState(true);
+      }, 500);
+    }
   };
 
   const existing = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
@@ -75,6 +84,120 @@
     return lines;
   }
 
+
+
+  // ================= アプリ自身のサービス（再生の状態・操作・音量）=================
+  // Spotify のアプリは、再生のサービス（playerAPI）と、音声の再生エンジン（standalonePlayer。音量を持つ）を、部品の props として持っている（実機の診断で確認）。
+  // これを部品の木から見つけて、状態を読み（getState）、操作する（pause・resume・skipToNext・skipToPrevious・seekTo・setVolume）。
+  // 呼ぶのは、アプリ自身のサービスだけ（画面のボタンを押すのと同じ。通信はアプリ自身が行い、認証情報には触らない）。
+
+  /** サービスを部品の木から探す（見つかるまで、2 秒に 1 回まで）。props の名前（playerAPI・standalonePlayer）ではなく、メソッドの名前で見分ける。 */
+  function findServices() {
+    const now = performance.now();
+    if ((svc.player && svc.engine) || now - svc.findAt < 2000) return;
+    svc.findAt = now;
+    const budget = now + 1500;
+    for (const root of roots) {
+      const stack = [root && root.current];
+      while (stack.length && performance.now() < budget) {
+        const n = stack.pop();
+        if (!n) continue;
+        if (n.sibling) stack.push(n.sibling);
+        if (n.child) stack.push(n.child);
+        const p = n.memoizedProps;
+        if (!p || typeof p !== 'object') continue;
+        for (const k of Object.keys(p).slice(0, 30)) {
+          const v = p[k];
+          if (!v || typeof v !== 'object' || Array.isArray(v)) continue;
+          if (!svc.player && typeof v.getState === 'function' && typeof v.seekTo === 'function' && typeof v.skipToNext === 'function' && playerish(v) >= 8) svc.player = v;
+          if (!svc.engine && typeof v.setVolume === 'function' && typeof v.getVolume === 'function' && typeof v.pause === 'function') svc.engine = v;
+        }
+        if (svc.player && svc.engine) return;
+      }
+    }
+  }
+
+  /** 状態を、画面に必要な分だけ取り出す（アプリの状態そのものは渡さない）。 */
+  function compact(st) {
+    const item = st && st.item;
+    const imgs = (item && item.album && item.album.images) || [];
+    let cover = '';
+    let bestW = -1;
+    for (const im of imgs) if (im && typeof im.url === 'string' && (im.width || 0) > bestW) {
+      bestW = im.width || 0;
+      cover = im.url;
+    }
+    return {
+      has: !!item,
+      paused: !!st.isPaused,
+      buffering: !!st.isBuffering,
+      positionMs: Number(st.positionAsOfTimestamp),
+      timestamp: Number(st.timestamp),
+      durationMs: Number(st.duration) || (item && item.duration && Number(item.duration.milliseconds)) || 0,
+      speed: Number(st.speed) || 1,
+      type: item ? String(item.type || '') : '',
+      mediaType: item ? String(item.mediaType || '') : '',
+      uri: item ? String(item.uri || '') : '',
+      title: item ? String(item.name || '') : '',
+      artists: item && Array.isArray(item.artists) ? item.artists.map((a) => String((a && a.name) || '')).filter(Boolean) : [],
+      cover,
+      canSeek: !!(st.restrictions && st.restrictions.canSeek),
+    };
+  }
+
+  let lastPush = '';
+  let lastSentAt = 0;
+  function pushState(force) {
+    try {
+      findServices();
+      if (!svc.player) {
+        if (lastPush !== 'none') window.postMessage({ svApp: 'none' }, location.origin);
+        lastPush = 'none';
+        return;
+      }
+      const state = compact(svc.player.getState() || {});
+      const send = (vol) => {
+        const sig = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, vol]);
+        if (!force && sig === lastPush && Date.now() - lastSentAt < 2000) return; // 変わらなくても、2 秒おきには送る（受け取り側が、生きているかを見分けるため）
+        lastPush = sig;
+        lastSentAt = Date.now();
+        window.postMessage({ svApp: 'state', state, vol, now: Date.now() }, location.origin);
+      };
+      if (svc.engine) {
+        Promise.resolve(svc.engine.getVolume()).then((v) => send(Number.isFinite(Number(v)) ? Number(v) : null), () => send(null));
+      } else send(null);
+    } catch (err) {
+      console.error('[SV] app state', err);
+    }
+  }
+  setInterval(() => pushState(false), 1000);
+
+  const CMD = {
+    pause: () => svc.player.pause(),
+    resume: () => svc.player.resume(),
+    next: () => svc.player.skipToNext(),
+    prev: () => svc.player.skipToPrevious(),
+    seek: (ms) => svc.player.seekTo(Math.max(0, Math.round(Number(ms)))),
+    volume: (v) => svc.engine.setVolume(Math.min(1, Math.max(0, Number(v)))),
+  };
+  window.addEventListener('message', (e) => {
+    if (e.source !== window || !e.data) return;
+    if (e.data.svAppAsk) {
+      pushState(true);
+      return;
+    }
+    const c = e.data.svAppCmd;
+    if (!c || !CMD[c]) return;
+    try {
+      findServices();
+      const r = (c === 'volume' ? svc.engine : svc.player) && CMD[c](e.data.arg);
+      Promise.resolve(r).catch((err) => console.error('[SV] app command', c, err));
+    } catch (err) {
+      console.error('[SV] app command', c, err);
+    }
+    setTimeout(() => pushState(true), 250);
+    setTimeout(() => pushState(true), 1000);
+  });
 
   // ================= 診断（読み取りだけ）=================
   // 「Spotify のアプリの内部に、どんな部品があるか」の形だけを集める（実機で一度取って、画面の差し替えの設計に使う）。

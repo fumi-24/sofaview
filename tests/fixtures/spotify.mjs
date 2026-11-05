@@ -63,11 +63,31 @@ export function spotifyHtml(opt) {
 </div>
 <script>
   document.querySelectorAll('[data-testid]').forEach((e) => { e.dataset.fx = e.dataset.testid; });
-  window.__fx = { log: [], inputs: [], setTrack: (t) => { const a = document.querySelector('[data-fx="now-playing-widget-v2"] a, [data-testid="now-playing-widget-v2"] a'); if (a) a.textContent = t; if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] }); } };
+  window.__fx = { log: [], inputs: [], setTrack: (t) => { AP.title = t; const a = document.querySelector('[data-fx="now-playing-widget-v2"] a, [data-testid="now-playing-widget-v2"] a'); if (a) a.textContent = t; if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] }); } };
   // 歌詞の画面（React の部品）の再現: 本物の React と同じく、起動時に DevTools の入口へ自分を登録し、画面を更新するたびに根（FiberRoot）を知らせる。
   // 歌詞の行の部品は、外側と内側が同じ props（text / start / onObserve）を持つ（本物と同じ）。歌詞を出す間だけ、部品の木に行がある
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
   const fakeRoot = { current: { memoizedProps: null, child: null, sibling: null } };
+  // アプリ自身のサービスの再現（状態を持つ）。playerAPI: getState・pause・resume・skipToNext・skipToPrevious・seekTo。standalonePlayer: getVolume・setVolume
+  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', vol: 1 };
+  const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
+  const appLog = (action, arg) => window.__fx.log.push({ ev: 'app', action, arg });
+  const playerAPI = {
+    getState() {
+      return {
+        isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
+        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: 'spotify:track:abc', name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=', width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
+        restrictions: { canSeek: true },
+      };
+    },
+    pause() { AP.pos = apNow(); AP.ts = Date.now(); AP.paused = true; appLog('pause'); },
+    resume() { AP.ts = Date.now(); AP.paused = false; appLog('resume'); },
+    skipToNext() { appLog('next'); },
+    skipToPrevious() { appLog('prev'); },
+    seekTo(ms) { AP.pos = ms; AP.ts = Date.now(); appLog('seekTo', ms); },
+    play() {}, skipTo() {}, seekForward() {}, seekBackward() {}, getQueue() {}, setShuffle() {}, setRepeat() {}, getEvents() {},
+  };
+  const standalonePlayer = { getVolume() { return Promise.resolve(AP.vol); }, setVolume(v) { AP.vol = v; appLog('volume', v); }, pause() {} };
   const rid = hook ? hook.inject({}) : 0;
   if (hook) hook.onCommitFiberRoot(rid, fakeRoot);
   function setLyrics(on) {
@@ -77,10 +97,10 @@ export function spotifyHtml(opt) {
       return { memoizedProps: props, child: { memoizedProps: props, child: null, sibling: null }, sibling: null };
     }) : [];
     lines.forEach((l, i) => { if (i) lines[i - 1].sibling = l; });
-    // 診断の確認用: アプリの内部の部品（プラットフォームの Context の値・プレーヤーの API を props に持つ部品）の再現。文字の値は、診断の報告に出てはいけない
+    // アプリの内部の部品の再現: プラットフォームの Context の値（診断用。文字の値は、診断の報告に出てはいけない）と、プレーヤーのサービス（playerAPI・standalonePlayer）を props に持つ部品
     const platform = { memoizedProps: { value: { getRegistry() { return { resolve() {} }; }, getSession() { return { isAnonymous: false, market: 'SECRET-MARKET' }; }, getTransport() { return {}; }, token: 'SECRET-TOKEN' } }, tag: 10, type: { _context: { displayName: 'PlatformContext' } }, child: null, sibling: null };
-    const playerComp = { memoizedProps: { playerAPI: { play() {}, pause() {}, resume() {}, seekTo() {}, skipToNext() {}, skipToPrevious() {}, getState() { return { isPaused: false, track: { uri: 'SECRET-URI' }, positionAsOfTimestamp: 5 }; } } }, tag: 0, type: { name: 'PlayerHost' }, child: null, sibling: platform };
-    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: playerComp }, sibling: null };
+    const playerComp = ${o.noApp ? 'null' : "{ memoizedProps: { playerAPI, standalonePlayer }, tag: 0, type: { name: 'PlayerHost' }, child: null, sibling: platform }"};
+    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: playerComp || platform }, sibling: null };
     hook.onCommitFiberRoot(rid, fakeRoot);
   }
   setLyrics(false); // 歌詞の行はまだない。アプリの内部の部品（診断用）だけが部品の木にある

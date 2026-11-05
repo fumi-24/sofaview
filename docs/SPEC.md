@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| バージョン | v1.0（拡張機能 v0.10.1 の実装を反映した版）|
+| バージョン | v1.0（拡張機能 v0.11.0 の実装を反映した版）|
 | 最終更新 | 2026-10-19 |
 | 対象 | テレビのリモコンだけで YouTube / TVer を操作できる Chromium 拡張機能 |
 | 状態 | **実装済み・自動テスト済み**。実機（日本国内IP・実際のリモコン・TVer の実プレイヤー）での確認は未実施（❔）|
@@ -425,7 +425,7 @@ YouTube /tv は公式の OSK を持つので、TVer だけ。リモコンに文�
 - **裏: Spotify のタブ（`open.spotify.com`）**。再生エンジンとしてだけ使う。画面は、いじらない・隠さない・取り外さない・描画を間引かない・キーも奪わない（Home だけ受ける）。Chrome が、見えないタブの描画を自分で止める。
 - **つなぎ（既存の通信）**：Spotify のタブの `content.js` が状態を読み、`sv:spState` で自前ページへ送る。自前ページは `sv:spCmd` で操作を依頼し、background が Spotify のタブへ転送する（`sv:ensureSpotifyEngine` で、Spotify のタブがなければ裏に作る）。
 
-**読み取り・操作の優先順（サイトの作りの変更への追従）**：メディアセッション API（曲の情報・再生状態は `navigator.mediaSession`、再生・一時停止・前・次・シークは登録されたハンドラを MAIN world の橋 `session-main.js` で呼ぶ、再生位置は `setPositionState`）→ 画面の目印・ボタンの表示名・範囲入力の並び → 音声の直接操作。**歌詞**は、Spotify の React の部品の木（React の入口 `__REACT_DEVTOOLS_GLOBAL_HOOK__` を `react-main.js` で先に置いて読む）から、歌詞の行の部品の props（`text`・`start`・`onObserve`）を読む。通信は Spotify のページ自身が行い、拡張は認証情報に触らない。歌詞の画面は、Spotify のタブの歌詞ボタンを押して作らせる（設定 `spotify.lyrics`）。
+**読み取り・操作の優先順（サイトの作りの変更への追従）**：**Spotify のアプリ自身のサービス**（`playerAPI`・`standalonePlayer`。React の部品の木から見つけて、状態の読み取り・再生・一時停止・次・前・シーク・音量を、アプリ自身の関数で行う。NOTES 3.15）→ メディアセッション API（曲の情報・再生状態は `navigator.mediaSession`、再生・一時停止・前・次・シークは登録されたハンドラを MAIN world の橋 `session-main.js` で呼ぶ、再生位置は `setPositionState`）→ 画面の目印・ボタンの表示名・範囲入力の並び → 音声の直接操作。**歌詞**は、Spotify の React の部品の木（React の入口 `__REACT_DEVTOOLS_GLOBAL_HOOK__` を `react-main.js` で先に置いて読む）から、歌詞の行の部品の props（`text`・`start`・`onObserve`）を読む。通信は Spotify のページ自身が行い、拡張は認証情報に触らない。歌詞の画面は、Spotify のタブの歌詞ボタンを押して作らせる（設定 `spotify.lyrics`）。
 
 **状態の送り方**：Spotify のタブは、状態が変わったとき・再生位置が飛んだとき（シーク）・5 秒おきに送る（再生位置は、そのときの値と時刻。自前ページが、再生中は経過時間で進める）。自前ページは、20 秒以上何も届かない（最初の 12 秒で届かない）と「Spotify のタブにつながっていません」を出し、3 秒おきに Spotify のタブを用意して状態を求める。
 

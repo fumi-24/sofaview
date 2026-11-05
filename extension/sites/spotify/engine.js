@@ -160,14 +160,70 @@
     root.postMessage({ svMsHello: 1 }, root.location.origin);
   }
 
+  /**
+   * アプリ自身のサービス（react-main.js。playerAPI・standalonePlayer）が送ってくる、再生の状態。最優先で使う。
+   *   state: { has, paused, buffering, positionMs, timestamp, durationMs, title, artists[], cover, uri, … }   vol: 音量（0〜1）
+   */
+  const app = { state: null, vol: null, recv: 0, onChange: null };
+  if (typeof root.addEventListener === 'function' && root.location) {
+    root.addEventListener('message', (e) => {
+      if (e.source !== root || !e.data) return;
+      if (e.data.svApp === 'state') {
+        app.state = e.data.state;
+        app.vol = typeof e.data.vol === 'number' ? e.data.vol : null;
+        app.recv = Date.now();
+        if (app.onChange) app.onChange();
+      } else if (e.data.svApp === 'none') {
+        app.state = null;
+      }
+    });
+    root.postMessage({ svAppAsk: 1 }, root.location.origin);
+  }
+  /** アプリのサービスから、最近（8 秒以内。変わらなくても 2 秒おきに届く）状態が届いているか。 */
+  const appOk = () => !!app.state && Date.now() - app.recv < 8000;
+  /** アプリの状態から、いまの再生位置（ミリ秒）。再生中は経過時間で進める。時計がずれていて、おかしな値になるときは、届いた時刻から進める。 */
+  function appPositionMs(now) {
+    const st = app.state;
+    if (!st || !Number.isFinite(st.positionMs)) return null;
+    if (st.paused) return Math.min(st.durationMs || Infinity, Math.max(0, st.positionMs));
+    let t = st.positionMs + (Number.isFinite(st.timestamp) ? now - st.timestamp : 0) * (st.speed || 1);
+    if (!(t >= -2000 && (!st.durationMs || t <= st.durationMs + 5000))) t = st.positionMs + (now - app.recv); // 時計が合わないとき
+    return Math.min(st.durationMs || Infinity, Math.max(0, t));
+  }
+  const appCmd = (cmd, arg) => root.postMessage({ svAppCmd: cmd, arg }, root.location.origin);
+
   const text = (el) => (el ? el.textContent.replace(/\s+/g, ' ').trim() : '');
 
   /** いま再生中の曲名だけ（軽い読み取り。曲が変わったかの確認用）。 */
   function trackTitle(doc) {
+    if (appOk()) return app.state.title;
     const m = session(doc);
     if (m) return m.title;
     const w = doc.querySelector(SEL.widget);
     return text(w && w.querySelector(SEL.title));
+  }
+
+  /** アプリ自身のサービスの状態から、画面に出す情報を作る。 */
+  function readApp() {
+    const st = app.state;
+    const now = Date.now();
+    const posMs = appPositionMs(now);
+    const durationSec = st.durationMs > 0 ? st.durationMs / 1000 : null;
+    const positionSec = posMs != null && durationSec != null ? posMs / 1000 : null;
+    return {
+      hasTrack: !!st.has && !!st.title,
+      title: st.title,
+      artists: st.artists.join(', '),
+      cover: st.cover,
+      playing: !st.paused,
+      position: positionSec != null ? fmt(positionSec) : '',
+      duration: durationSec != null ? fmt(durationSec) : '',
+      positionSec,
+      durationSec,
+      ratio: positionSec != null && durationSec ? Math.min(1, positionSec / durationSec) : 0,
+      volume: app.vol,
+      source: 'app',
+    };
   }
 
   /**
@@ -176,6 +232,7 @@
    *   再生位置: メディアセッションの再生位置 → 音声（audio/video）→ 画面（範囲入力・時間の表示）
    */
   function read(doc) {
+    if (appOk()) return readApp();
     const ses = session(doc);
     const w = doc.querySelector(SEL.widget);
     const img = w && w.querySelector(SEL.cover);
@@ -220,6 +277,7 @@
     }
     const vol = range(doc, 'volume');
     return {
+      source: ses ? 'session' : 'dom',
       hasTrack: !!title,
       title,
       artists,
@@ -238,7 +296,7 @@
   function detect(doc, drm, waited) {
     const info = read(doc);
     const loggedOut = !!find(doc, 'login') && !doc.querySelector(SEL.user);
-    const ready = !!find(doc, 'bar') || !!media(doc) || !!session(doc) || !!waited;
+    const ready = appOk() || !!find(doc, 'bar') || !!media(doc) || !!session(doc) || !!waited;
     return { kind: statusOf({ loggedOut, hasTrack: info.hasTrack, ready, drm }), info };
   }
 
@@ -263,6 +321,7 @@
     let drm = null;
     let openedLyrics = false; // 歌詞を出すために、こちらで歌詞ボタンを押したか
     let lastSyncAt = 0;
+    let lastAppAsk = 0;
     let lyricLines = []; // react-main.js から受け取った歌詞の行 [{ text, start }]
     let lyricTitle = '';
     let lyricTitleAt = 0;
@@ -288,16 +347,25 @@
      * 操作は、変わりにくい順に試す: メディアセッションのハンドラ（OS のメディアキーと同じ）→ 画面のボタン・範囲入力 → 音声を直接。
      */
     function playPause() {
+      if (appOk()) return appCmd(app.state.paused ? 'resume' : 'pause'); // アプリ自身のサービス（画面のボタンを押すのと同じ）
       const playing = read(doc).playing;
       if (callSession(playing ? 'pause' : 'play')) return;
       click('playPause');
     }
     function skip(dir) {
+      if (appOk()) return appCmd(dir > 0 ? 'next' : 'prev');
       if (callSession(dir > 0 ? 'nexttrack' : 'previoustrack')) return;
       click(dir > 0 ? 'next' : 'prev');
     }
     /** 再生位置を 10 秒動かす。 */
     function seekBy(dir) {
+      if (appOk() && app.state.canSeek !== false) {
+        const target = Math.min(app.state.durationMs, Math.max(0, (appPositionMs(Date.now()) || 0) + dir * 10000));
+        appCmd('seek', target);
+        // すぐ反映する（アプリが状態を出し直すのを待たない）
+        app.state = Object.assign({}, app.state, { positionMs: target, timestamp: Date.now() });
+        return;
+      }
       const i = read(doc);
       if (i.positionSec != null && callSession('seekto', { seekTime: Math.min(i.durationSec, Math.max(0, i.positionSec + dir * 10)) })) return;
       if (callSession(dir > 0 ? 'seekforward' : 'seekbackward', { seekOffset: 10 })) return;
@@ -305,6 +373,11 @@
     }
     /** 音量を 10% 動かす（メディアセッションに音量はないので、範囲入力 → 音声を直接）。 */
     function volumeBy(dir) {
+      if (appOk() && app.vol != null) {
+        const v = Math.min(1, Math.max(0, Math.round((app.vol + dir * 0.1) * 10) / 10));
+        app.vol = v;
+        return appCmd('volume', v);
+      }
       stepRange('volume', dir);
     }
 
@@ -401,6 +474,10 @@
 
     /** いまの状態。自前ページへ送る形（再生位置は、at（この時刻）の値。受け取り側が、再生中は経過時間で進める）。 */
     function snapshot() {
+      if (!appOk() && Date.now() - lastAppAsk > 2000) {
+        lastAppAsk = Date.now();
+        root.postMessage({ svAppAsk: 1 }, root.location.origin); // アプリのサービスの状態を、すぐ求める
+      }
       const d = detect(doc, drm, waited());
       const i = d.info;
       syncLyrics();
@@ -409,6 +486,7 @@
         kind: d.kind,
         drm,
         at: Date.now(),
+        source: i.source,
         info: {
           hasTrack: i.hasTrack,
           title: i.title,
@@ -437,8 +515,10 @@
     detect,
     checkWidevine,
     createReader,
+    appOk,
     onSessionChange: (fn) => {
       bridge.onChange = fn;
+      app.onChange = fn;
     },
   };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyEngine;
