@@ -53,22 +53,17 @@
     if (!c) found.set(doc, (c = {}));
     const hit = c[key];
     if (hit && (hit.isConnected || extraRoots().some((r) => r.contains && r.contains(hit)))) return hit;
-    const roots = [doc].concat(extraRoots());
+    // 見つからなかったものは、2 秒に 1 回まで探す（取り外した大きな木の中を、毎回調べない。ないものを探し続けるのが一番高くつく）
+    const now = Date.now();
+    if (now - (c['miss:' + key] || 0) < 2000) return null;
+    c['miss:' + key] = now;
     let el = null;
-    for (const r of roots) {
+    for (const r of [doc].concat(extraRoots())) {
       el = r.querySelector(SEL[key]);
       if (el) break;
     }
-    if (el) {
-      c[key] = el;
-      return el;
-    }
-    // 目印がないときの探し直し（全部のボタンを調べるので、3 秒に 1 回まで）
-    const now = Date.now();
-    if (now - (c['miss:' + key] || 0) < 3000) return null;
-    c['miss:' + key] = now;
-    if (key === 'bar') el = Array.from(doc.querySelectorAll('footer, aside')).find((x) => x.querySelector('input[type="range"]')) || null;
-    else if (LABEL[key]) {
+    if (!el && key === 'bar') el = Array.from(doc.querySelectorAll('footer, aside')).find((x) => x.querySelector('input[type="range"]')) || null;
+    else if (!el && LABEL[key]) {
       const scope = key === 'login' ? 'header, nav, [role="banner"]' : null; // ログインは上のバーにある（ページ全体は調べない）
       const bases = scope ? Array.from(doc.querySelectorAll(scope)) : [find(doc, 'bar') || doc].concat(extraRoots());
       for (const b of bases.flatMap((r) => Array.from(r.querySelectorAll('button, [role="button"], a')))) {
@@ -79,7 +74,10 @@
         }
       }
     }
-    if (el) c[key] = el;
+    if (el) {
+      c[key] = el;
+      c['miss:' + key] = 0;
+    }
     return el;
   }
 
@@ -121,25 +119,45 @@
     }
   }
 
-  const bridge = { actions: new Set(), pos: null, vol: null, onChange: null };
+  const bridge = { actions: new Set(), pos: null, vol: null, onChange: null, wasPlaying: null, posKey: '' };
   /** 登録された処理があれば呼ぶ（OS のメディアキーが押されたのと同じ）。呼べたら true。 */
   function callSession(action, details) {
     if (!bridge.actions.has(action) || typeof root.postMessage !== 'function') return false;
     root.postMessage({ svMsCall: action, details: details || {} }, root.location.origin);
+    // シークは、Spotify が再生位置を更新し直すのを待たず、すぐ反映する（待つと、棒と歌詞が遅れて見える）
+    if (action === 'seekto' && bridge.pos && details && Number.isFinite(details.seekTime)) bridge.pos = Object.assign({}, bridge.pos, { position: details.seekTime, at: Date.now() });
     return true;
   }
-  /** setPositionState から、いまの再生位置（秒）。再生中は、時間の経過ぶん進める。なければ null。 */
+  /**
+   * setPositionState から、いまの再生位置（秒）。再生中は、時間の経過ぶん進める。なければ null。
+   * 再生と一時停止が切り替わった瞬間に、その時点の位置に合わせ直す（Spotify が切り替えのたびに位置を出し直すとは限らないので、ずれて飛ばないように）。
+   */
   function sessionPosition(playing) {
     const p = bridge.pos;
     if (!p || !(p.duration > 0)) return null;
-    const t = p.position + (playing ? ((Date.now() - p.at) / 1000) * p.rate : 0);
+    const now = Date.now();
+    if (bridge.wasPlaying === null) {
+      bridge.wasPlaying = playing; // Spotify が出し直した位置は、そのまま信じる
+    } else if (bridge.wasPlaying !== playing) {
+      if (bridge.wasPlaying) p.position = Math.min(p.duration, p.position + ((now - p.at) / 1000) * p.rate); // 再生中 → 一時停止: 止まった位置に合わせる
+      p.at = now;
+      bridge.wasPlaying = playing;
+    }
+    const t = p.position + (playing ? ((now - p.at) / 1000) * p.rate : 0);
     return { position: Math.min(p.duration, Math.max(0, t)), duration: p.duration };
   }
   if (typeof root.addEventListener === 'function' && root.location) {
     root.addEventListener('message', (e) => {
       if (e.source !== root || !e.data || e.data.svMs !== 'caps') return;
       bridge.actions = new Set(e.data.actions || []);
-      bridge.pos = e.data.pos || null;
+      // 位置が前と同じ（曲の情報などの知らせに付いてきただけ）なら、こちらで合わせ直した位置を残す。Spotify が出し直した位置なら、置き換える
+      const np = e.data.pos || null;
+      const key = np ? np.at + ':' + np.position + ':' + np.duration : '';
+      if (key !== bridge.posKey) {
+        bridge.posKey = key;
+        bridge.pos = np ? Object.assign({}, np) : null;
+        bridge.wasPlaying = null;
+      }
       bridge.vol = typeof e.data.vol === 'number' ? e.data.vol : null;
       if (bridge.onChange) bridge.onChange();
     });
@@ -323,7 +341,12 @@
     let lyricTitleAt = 0;
     let lyricOldSig = '';
     let lyricAskAt = 0;
-    let lastRatio = 0;
+    let lyricAskGap = 1000;
+    let lyricWalkMs = 0;
+    let perfObs = null;
+    let refreshMs = 0; // 更新 1 回の時間（なだらかな平均）
+    const longTasks = []; // 主スレッドが 50ms 以上ふさがった記録（Spotify 自身の処理も含む）
+    let prog = { state: '', from: 0, at: 0, dur: 0 }; // 位置の棒の、いまの動きの指示
     const waited = () => Date.now() - createdAt > 8000; // 目印が変わっても、「読み込み中」のままにしない
     const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
     const BUTTONS = [
@@ -471,6 +494,7 @@
       if (e.source !== win || !e.data || e.data.svReact !== 'lyrics') return;
       const L = Array.isArray(e.data.lines) ? e.data.lines : [];
       // 曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
+      lyricWalkMs = Number(e.data.ms) || 0;
       if (L.length && sigOf(L) === lyricOldSig && Date.now() - lyricTitleAt < 5000) return;
       lyricLines = L;
     });
@@ -489,10 +513,13 @@
         lyricLines = [];
         lyricHint = -1;
         lyricAskAt = 0;
+        lyricAskGap = 1000;
       }
-      if (wantLyrics() && !lyricLines.length && now - lyricAskAt > 1500) {
+      // 歌詞の画面が作られていれば、行が返ってくる。返ってこない（歌詞のない曲・画面がまだ）間は、間隔をあけていく（木をたどるのは、安くない）
+      if (wantLyrics() && !lyricLines.length && now - lyricAskAt > lyricAskGap) {
         lyricAskAt = now;
-        win.postMessage({ svReactAsk: 'lyrics' }, win.location.origin); // 歌詞の画面が作られていれば、行が返ってくる
+        lyricAskGap = Math.min(10000, lyricAskGap * 1.6);
+        win.postMessage({ svReactAsk: 'lyrics' }, win.location.origin);
       }
       const ly = wantLyrics() ? lyricsAt(lyricLines, i.positionSec, i.durationSec, lyricHint) : null;
       box.hidden = !ly;
@@ -518,6 +545,50 @@
         track.style.setProperty('--cur', String(Math.max(0, ly.cur)));
         lyricCur = ly.cur;
       }
+    }
+
+    /**
+     * 再生位置の棒。再生中は、「いまの位置 → 最後」へ、残り時間をかけて直線で動かす指示を 1 回だけ出す（あとは描画側が自動で進める。毎回書き換えない）。
+     * 一時停止・シーク・曲の変わり目（見えている位置と実際の位置が 1.2% 以上ずれた）のときだけ、指示を出し直す。
+     * 動かすのは transform だけ（レイアウトが走らない）。
+     */
+    function paintProgress(i) {
+      const fill = el.querySelector('.sv-np-fill');
+      if (i.positionSec == null || !(i.durationSec > 0)) {
+        const r = Math.round(i.ratio * 1000) / 1000;
+        if (fill.getAttribute('data-r') !== String(r)) {
+          fill.setAttribute('data-r', String(r));
+          fill.style.transition = 'none';
+          fill.style.transform = 'scaleX(' + r + ')';
+        }
+        prog.state = '';
+        return;
+      }
+      const now = performance.now();
+      const cur = Math.min(1, i.positionSec / i.durationSec);
+      const shown = prog.state === 'play' ? Math.min(1, prog.from + (now - prog.at) / 1000 / prog.dur) : prog.from;
+      const state = i.playing ? 'play' : 'pause';
+      if (prog.state === state && prog.dur === i.durationSec && Math.abs(shown - cur) < 0.012) return;
+      prog = { state, from: cur, at: now, dur: i.durationSec };
+      fill.style.transition = 'none';
+      fill.style.transform = 'scaleX(' + cur + ')';
+      if (i.playing) {
+        void fill.offsetWidth; // 起点を確定させてから、終点への動きを指示する
+        fill.style.transition = 'transform ' + Math.max(0.1, i.durationSec - i.positionSec) + 's linear';
+        fill.style.transform = 'scaleX(1)';
+      }
+    }
+
+    /**
+     * 右下の、版と処理時間。重いとき、原因が拡張か Spotify 自身かを見分けるため。
+     *   更新: 再生中の画面の 1 回の更新の時間  歌詞: 歌詞の行を読む時間  停止: 主スレッドが 50ms 以上ふさがった回数（10 秒間）と最大
+     * 「停止」が多くて「更新」が小さいなら、重いのは Spotify 自身の処理。
+     */
+    function paintPerf() {
+      const t = performance.now();
+      while (longTasks.length && t - longTasks[0].t > 10000) longTasks.shift();
+      const max = longTasks.reduce((m, x) => Math.max(m, x.d), 0);
+      put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　歌詞読取 ' + lyricWalkMs.toFixed(0) + 'ms　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
     }
 
     function paintButtons(i) {
@@ -593,23 +664,12 @@
       put(el.querySelector('.sv-np-title'), i.title);
       put(el.querySelector('.sv-np-artist'), i.artists);
       const cover = el.querySelector('.sv-np-cover');
-      if (i.cover && cover.getAttribute('src') !== i.cover) {
-        cover.setAttribute('src', i.cover);
-        el.querySelector('.sv-np-bg').style.backgroundImage = 'url("' + i.cover.replace(/"/g, '%22') + '")';
-      }
+      if (i.cover && cover.getAttribute('src') !== i.cover) cover.setAttribute('src', i.cover); // 背景は、読み込みが終わったとき（load）に描く
       cover.hidden = !i.cover;
       syncLyrics();
       paintButtons(i);
       paintLyrics(i);
-      // 再生位置: 動かすのは transform だけ（レイアウトが走らない）。再生中の小さな進みは滑らかに、大きな飛び（シーク・曲の変わり目）は一気に
-      const fill = el.querySelector('.sv-np-fill');
-      const r = Math.round(i.ratio * 10000) / 10000;
-      if (fill.getAttribute('data-r') !== String(r)) {
-        fill.setAttribute('data-r', String(r));
-        fill.style.transition = i.playing && Math.abs(r - lastRatio) < 0.03 ? 'transform 0.3s linear' : 'none';
-        fill.style.transform = 'scaleX(' + r + ')';
-        lastRatio = r;
-      }
+      paintProgress(i);
       put(el.querySelector('.sv-np-pos'), i.position);
       put(el.querySelector('.sv-np-dur'), i.duration);
     }
@@ -632,6 +692,17 @@
       info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), lyrics, bar, times);
       const cover = mk('img', 'sv-np-cover');
       cover.alt = '';
+      // 背景は、ジャケットを 16×16 に縮めて、画面いっぱいに引き伸ばす（補間でぼける）。大きなぼかし（filter: blur）は、弱い GPU で重いので使わない。曲が変わったときに 1 回だけ描く
+      const bgc = mk('canvas', 'sv-np-bg');
+      bgc.width = 16;
+      bgc.height = 16;
+      cover.addEventListener('load', () => {
+        try {
+          bgc.getContext('2d').drawImage(cover, 0, 0, 16, 16);
+        } catch (e) {
+          /* 描けなければ、黒のまま */
+        }
+      });
       track.append(cover, info);
       const status = mk('div', 'sv-np-status');
       status.append(mk('div', 'sv-np-s-icon'), mk('h1', 'sv-np-s-head'), mk('div', 'sv-np-s-lines'), mk('div', 'sv-np-s-hint'));
@@ -647,19 +718,34 @@
         btn.tabIndex = -1;
         controls.appendChild(btn);
       });
-      el.append(mk('div', 'sv-np-bg'), track, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
+      el.append(bgc, track, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
       (doc.body || doc.documentElement).appendChild(el);
       doc.documentElement.classList.add('sv-np-open');
       refresh();
       acquireLock();
+      try {
+        const po = new win.PerformanceObserver((l) => {
+          for (const en of l.getEntries()) longTasks.push({ t: en.startTime, d: en.duration });
+        });
+        po.observe({ type: 'longtask' });
+        perfObs = po;
+      } catch (e) {
+        /* 測れない環境では、何もしない */
+      }
+      let n = 0;
       timer = setInterval(() => {
-        if (doc.visibilityState === 'visible') refresh(); // 見えていないときは、描画を更新しない
+        if (doc.visibilityState !== 'visible') return; // 見えていないときは、描画を更新しない
+        const t0 = performance.now();
+        refresh();
+        refreshMs = refreshMs * 0.8 + (performance.now() - t0) * 0.2;
+        if (++n % 8 === 0) paintPerf();
       }, 250);
     }
 
     function close() {
       if (!el) return;
       clearInterval(timer);
+      if (perfObs) perfObs.disconnect();
       clearTimeout(toastTimer);
       clearTimeout(barTimer);
       lyricSig = '';

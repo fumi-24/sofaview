@@ -149,7 +149,7 @@
     function ensureObserver() {
       const bar = SV.spotifyNp.find(document, 'bar');
       const target = bar || document.body;
-      if (obs && obsTarget === target && target.isConnected) return;
+      if (obs && obsTarget === target) return; // 取り外した本来の画面の中のバーでも、同じ要素なら作り直さない
       if (obs) obs.disconnect();
       obsTarget = target;
       obs = new MutationObserver(tick);

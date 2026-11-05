@@ -77,11 +77,12 @@
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data || e.data.svReactAsk !== 'lyrics') return;
     let lines = [];
+    const t0 = performance.now();
     try {
       lines = collectLyrics();
     } catch (err) {
       console.error('[SV] react lyrics', err);
     }
-    window.postMessage({ svReact: 'lyrics', lines }, location.origin);
+    window.postMessage({ svReact: 'lyrics', lines, ms: performance.now() - t0 }, location.origin);
   });
 })();

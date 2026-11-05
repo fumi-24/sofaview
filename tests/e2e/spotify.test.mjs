@@ -233,7 +233,7 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   const np = page.locator('#sv-np');
   await until(async () => (await np.locator('.sv-np-line').count()) === 6, { message: '歌詞が出る' });
   assert.equal(await np.locator('.sv-np-ly-track').evaluate((e) => e.style.getPropertyValue('--cur')), '2', 'いまの行（3 行目）が真ん中に来る位置（列ごと滑らかに動かす）');
-  assert.equal(await np.locator('.sv-np-fill').evaluate((e) => e.style.transform), 'scaleX(0.2844)', '再生位置は transform だけで動かす（レイアウトを走らせない）');
+  assert.match(await np.locator('.sv-np-fill').evaluate((e) => e.style.transform), /^scaleX\(0\.2844\d*\)$/, '再生位置は transform だけで動かす（レイアウトを走らせない）');
   const focused = () => page.evaluate(() => document.activeElement && document.activeElement.dataset.id);
   await press(page, 'ArrowRight'); // 列を出す
   await press(page, 'ArrowRight');
@@ -314,6 +314,12 @@ test('Spotify: 操作は、メディアセッション（OS のメディアキ�
   await press(page, 'Enter'); // 列を出す
   await press(page, 'Enter'); // 再生
   await until(async () => (await np.getAttribute('data-state')) === 'playing', { message: '再生状態は mediaSession.playbackState から' });
+  // 再生中の位置の棒は、「いまの位置 → 最後」へ、残り時間をかけて直線で動かす指示を 1 回だけ出す（250ms ごとに書き換えない）
+  await until(async () => /^transform 12\d(\.\d+)?s linear$/.test(await np.locator('.sv-np-fill').evaluate((e) => e.style.transition)), { message: '残り時間をかけた直線の動き' });
+  assert.equal(await np.locator('.sv-np-fill').evaluate((e) => e.style.transform), 'scaleX(1)');
+  const before = await np.locator('.sv-np-fill').evaluate((e) => e.style.transition);
+  await page.waitForTimeout(1200);
+  assert.equal(await np.locator('.sv-np-fill').evaluate((e) => e.style.transition), before, '指示は出し直されない（毎回書き換えない）');
   await press(page, 'Enter'); // 一時停止（再生中なので pause）
   await press(page, 'ArrowRight');
   await press(page, 'Enter'); // +10 秒 → seekto 60
@@ -325,10 +331,10 @@ test('Spotify: 操作は、メディアセッション（OS のメディアキ�
   await press(page, 'ArrowLeft');
   await press(page, 'Enter'); // 前の曲
   const log = (await fx(page, 'log')).slice(mark);
-  assert.deepEqual(
-    log.filter((l) => l.ev === 'ms').map((l) => l.action + (l.time != null ? ':' + Math.round(l.time) : '')),
-    ['play', 'pause', 'seekto:60', 'next', 'prev'],
-  );
+  const ms = log.filter((l) => l.ev === 'ms');
+  assert.deepEqual(ms.map((l) => l.action), ['play', 'pause', 'seekto', 'next', 'prev']);
+  const seekTime = ms.find((l) => l.action === 'seekto').time;
+  assert.ok(seekTime >= 60 && seekTime < 63, '再生した分（約 1〜2 秒）進んだ位置 + 10 秒: ' + seekTime);
   assert.equal(log.filter((l) => l.ev === 'click').length, 0, '画面のボタンは押さない');
   assert.equal(log.filter((l) => l.ev === 'range').length, 0, '画面の範囲入力も動かさない');
   await page.close();

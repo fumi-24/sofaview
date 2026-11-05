@@ -14,18 +14,22 @@
   overflow: hidden;
 }
 
+/* 背景: ジャケットを 16×16 に縮めた絵（canvas）を、画面いっぱいに引き伸ばす（補間でぼける）。暗くするのは、上に重ねた半透明の黒。
+   大きなぼかし（filter: blur）・マスク・大きな影は、弱い GPU で重いので使わない */
 #sv-np .sv-np-bg {
   position: absolute;
-  inset: -10vh;
-  transform: translateZ(0); /* 1 回だけ描いて、使い回す（ぼかしは重いので、描き直させない） */
-  background-size: cover;
-  background-position: center;
-  filter: blur(7vh) brightness(0.38) saturate(1.2);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.4;
+}
+
+#sv-np[data-view="status"] {
+  background: radial-gradient(ellipse at 50% 40%, #1d2b22 0%, #000 70%);
 }
 
 #sv-np[data-view="status"] .sv-np-bg {
-  background: radial-gradient(ellipse at 50% 40%, #1d2b22 0%, #000 70%);
-  filter: none;
+  display: none;
 }
 
 /* ---- 曲があるとき ---- */
@@ -49,7 +53,6 @@
   height: 56vh;
   object-fit: cover;
   border-radius: 1.2vh;
-  box-shadow: 0 2vh 6vh rgba(0, 0, 0, 0.6);
 }
 
 #sv-np .sv-np-info {
@@ -85,8 +88,6 @@
   margin-top: 3vh;
   height: 31.2vh; /* 5.2vh の行 × 6 */
   overflow: hidden;
-  -webkit-mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
-  mask-image: linear-gradient(transparent, #000 22%, #000 78%, transparent);
 }
 
 #sv-np .sv-np-lyrics[hidden] {
@@ -95,7 +96,7 @@
 
 #sv-np .sv-np-ly-track {
   transform: translateY(calc(13vh - var(--cur, 0) * 5.2vh));
-  transition: transform 0.5s cubic-bezier(0.2, 0.7, 0.2, 1);
+  transition: transform 0.4s ease-out;
   will-change: transform;
 }
 
@@ -108,14 +109,11 @@
   overflow: hidden;
   text-overflow: ellipsis;
   color: rgba(255, 255, 255, 0.5);
-  transform-origin: left center;
-  transition: transform 0.35s ease, color 0.35s ease;
 }
 
 #sv-np .sv-np-line.is-current {
   color: #fff;
   font-weight: 700;
-  transform: scale(1.15);
 }
 
 /* 再生位置 */
@@ -253,7 +251,6 @@
   font: inherit;
   font-size: 4vh;
   cursor: default;
-  transition: transform 0.12s ease-out, background-color 0.12s ease-out;
 }
 
 #sv-np .sv-np-btn[data-id="play"] {
@@ -275,7 +272,6 @@
   outline: 0.6vh solid #fff;
   outline-offset: 0.4vh;
   background: rgba(255, 255, 255, 0.34);
-  transform: scale(1.08);
 }
 
 /* 版（更新できているかの確認用。いつも右下に小さく） */
