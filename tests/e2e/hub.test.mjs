@@ -44,9 +44,9 @@ test('ハブ: 初期フォーカスは YouTube タイル、十字キーでタイ
   await press(page, 'ArrowDown'); // 下段の小さなタイルへ
   const small = await active(page);
   assert.match(small.cls, /tile/);
-  assert.ok(['diag', 'settings'].includes(small.sv), `small tile: ${small.sv}`);
+  assert.ok(['diag', 'spdiag', 'settings'].includes(small.sv), `small tile: ${small.sv}`);
 
-  await press(page, 'ArrowLeft');
+  for (let i = 0; i < 3 && (await active(page)).sv !== 'diag'; i++) await press(page, 'ArrowLeft'); // 下段は、キー診断・Spotify 診断・設定
   assert.equal((await active(page)).sv, 'diag');
   await press(page, 'ArrowUp'); // diag の上は YouTube タイル
   assert.match((await active(page)).cls, /tile-yt/);

@@ -335,6 +335,7 @@
 
     const sigOf = (L) => L.length + '\n' + (L[0] ? L[0].text : '') + '\n' + (L.length ? L[L.length - 1].text : '');
     root.addEventListener('message', (e) => {
+      if (e.source === root && e.data && e.data.svReact === 'diag' && opts && opts.onDiag) opts.onDiag(e.data.report); // 診断の報告（読み取りだけ。react-main.js）
       if (e.source !== root || !e.data || e.data.svReact !== 'lyrics') return;
       const L = Array.isArray(e.data.lines) ? e.data.lines : [];
       // 曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
@@ -388,6 +389,7 @@
       else if (cmd === 'seek') seekBy(arg > 0 ? 1 : -1);
       else if (cmd === 'volume') volumeBy(arg > 0 ? 1 : -1);
       else if (cmd === 'login') click('login');
+      else if (cmd === 'diag') root.postMessage({ svReactAsk: 'diag' }, root.location.origin);
       else if (cmd === 'lyrics') {
         lastSyncAt = 0;
         lyricAskAt = 0;

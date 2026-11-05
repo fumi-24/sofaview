@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ja" class="sv-hub" data-page="sub">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SofaView – Spotify 診断</title>
+  <link rel="stylesheet" href="../common/tokens.css">
+  <link rel="stylesheet" href="../common/base.css">
+  <link rel="stylesheet" href="hub.css">
+</head>
+<body>
+  <main class="main" data-sv-region="content" style="margin-left: var(--sv-safe)">
+    <header class="top"><h1>Spotify 診断</h1></header>
+    <div class="panel">
+      <p class="note">Spotify のアプリの内部の<strong>「形」だけ</strong>（部品の名前・種類・メソッドの名前・通信先の名前）を調べます。
+        <strong>文字の値（ログイン情報・曲名・ID など）は集めません</strong>。<br>
+        使い方: ①スマホから Spotify を再生して、曲が流れている状態にする　②歌詞のある曲なら、この画面の前に、再生中の画面で「歌詞 オン」にしておく　③「診断を取る」を押す　④「ファイルに保存」で、できたファイルを、開発者に渡す。</p>
+      <div class="tiles small" style="margin: 12px 0">
+        <button class="tile" id="run" type="button"><strong>診断を取る</strong><span id="run-sub">Spotify のタブから、形を集めます</span></button>
+        <button class="tile" id="save" type="button" disabled><strong>ファイルに保存</strong><span>sofaview-spotify-diag.json</span></button>
+      </div>
+      <dl class="kv" id="summary"></dl>
+      <div class="section-title">報告（中身）</div>
+      <pre id="out" style="white-space: pre-wrap; word-break: break-all; font-size: 12px; max-height: 40vh; overflow: auto">まだ取っていません</pre>
+    </div>
+    <footer class="hints">Esc　戻る　／　Home　ホーム</footer>
+  </main>
+  <script src="../common/sv.js"></script>
+  <script src="../common/cursor.js"></script>
+  <script src="../common/settings.js"></script>
+  <script src="../common/keys.js"></script>
+  <script src="../common/spatial-nav.js"></script>
+  <script src="spotify-diag.js"></script>
+  <script src="hub.js"></script>
+</body>
+</html>

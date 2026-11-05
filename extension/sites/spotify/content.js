@@ -39,7 +39,12 @@
   );
 
   function init() {
-    const reader = (ctl.reader = E.createReader({ document, getLyrics: () => ctl.settings.spotify.lyrics, onDrm: () => check(true) }));
+    const reader = (ctl.reader = E.createReader({
+      document,
+      getLyrics: () => ctl.settings.spotify.lyrics,
+      onDrm: () => check(true),
+      onDiag: (report) => SV.sendMessage({ type: 'sv:spDiag', report }), // 診断の報告を、診断ページへ送る
+    }));
     SV.sendMessage({ type: 'sv:remoteKeep' }); // 音楽を流したまま別のタブへ移れるよう、このタブは休止・破棄されないようにする
     if (SV.hasChrome()) {
       try {
@@ -87,6 +92,10 @@
         if (!msg || msg.type !== 'sv:spCmd') return false;
         try {
           if (msg.cmd !== 'hello') reader.command(msg.cmd, msg.arg);
+          if (msg.cmd === 'diag') {
+            sendResponse({ ok: true });
+            return false;
+          }
           check(true);
           // 操作の結果（Spotify が位置・状態を出し直す）を、すぐ後にも送る
           setTimeout(() => check(true), 300);

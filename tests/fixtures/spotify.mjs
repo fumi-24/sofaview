@@ -77,9 +77,13 @@ export function spotifyHtml(opt) {
       return { memoizedProps: props, child: { memoizedProps: props, child: null, sibling: null }, sibling: null };
     }) : [];
     lines.forEach((l, i) => { if (i) lines[i - 1].sibling = l; });
-    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: null }, sibling: null };
+    // 診断の確認用: アプリの内部の部品（プラットフォームの Context の値・プレーヤーの API を props に持つ部品）の再現。文字の値は、診断の報告に出てはいけない
+    const platform = { memoizedProps: { value: { getRegistry() { return { resolve() {} }; }, getSession() { return { isAnonymous: false, market: 'SECRET-MARKET' }; }, getTransport() { return {}; }, token: 'SECRET-TOKEN' } }, tag: 10, type: { _context: { displayName: 'PlatformContext' } }, child: null, sibling: null };
+    const playerComp = { memoizedProps: { playerAPI: { play() {}, pause() {}, resume() {}, seekTo() {}, skipToNext() {}, skipToPrevious() {}, getState() { return { isPaused: false, track: { uri: 'SECRET-URI' }, positionAsOfTimestamp: 5 }; } } }, tag: 0, type: { name: 'PlayerHost' }, child: null, sibling: platform };
+    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: playerComp }, sibling: null };
     hook.onCommitFiberRoot(rid, fakeRoot);
   }
+  setLyrics(false); // 歌詞の行はまだない。アプリの内部の部品（診断用）だけが部品の木にある
   const log = (ev, d) => window.__fx.log.push({ ev, ...(d || {}) });
   const main = document.getElementById('main');
   function render() {

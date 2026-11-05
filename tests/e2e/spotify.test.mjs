@@ -287,3 +287,25 @@ test('Spotify: 「裏で開いておく」をオンにすると、Spotify が裏
   await setSp({ standby: false });
   await closeAll();
 });
+
+test('Spotify 診断（読み取りだけ）: Spotify のタブから、アプリの内部の「形」（部品の名前・種類・メソッド名）だけを集めて、診断ページに出す。文字の値（トークン・ID・曲名など）は含めない', async () => {
+  await setSp({ lyrics: false });
+  const sp = await engine();
+  const page = await env.ctx.newPage();
+  await page.goto(env.hubUrl.replace('index.html', 'spotify-diag.html'));
+  await ready(page).catch(() => {});
+  await page.bringToFront();
+  await page.click('#run');
+  await until(async () => /部品の数/.test(await page.locator('#summary').innerText()), { timeout: 15000, message: '報告が出る' });
+  const report = JSON.parse(await page.locator('#out').innerText());
+  const player = report.candidates.find((c) => c.prop === 'playerAPI');
+  assert.ok(player, 'プレーヤーの API らしい部品が見つかる');
+  for (const k of ['play', 'pause', 'resume', 'seekTo', 'skipToNext', 'skipToPrevious', 'getState']) assert.ok(Object.keys(player.shape).includes(k), 'メソッド ' + k);
+  assert.deepEqual(report.playerState, { isPaused: 'boolean', track: { uri: 'str' }, positionAsOfTimestamp: 'number' }, '状態の「形」だけ（値は入らない）');
+  assert.ok(report.platform && report.platform.keys.includes('getRegistry'), 'プラットフォームの部品');
+  assert.deepEqual(report.platform.Session, { isAnonymous: 'boolean', market: 'str' });
+  const text = JSON.stringify(report);
+  assert.ok(!/SECRET/.test(text), '文字の値（トークン・ID・市場など）は報告に含まれない');
+  assert.equal(await page.locator('#save').isDisabled(), false, '保存できる');
+  await sp.close();
+});
