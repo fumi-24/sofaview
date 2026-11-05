@@ -2,7 +2,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 require('../../extension/common/sv.js');
-const np = require('../../extension/sites/spotify/nowplaying.js');
+const core = require('../../extension/sites/spotify/core.js');
+const engine = require('../../extension/sites/spotify/engine.js');
+const np = { ...core, LABEL: engine.LABEL };
 
 const base = { loggedOut: false, hasTrack: false, ready: true, drm: true };
 
@@ -26,7 +28,7 @@ test('状態の画面の文言: loggedOut は OK の案内つき。idle は 3 �
   assert.match(np.STATUS_TEXT.loggedOut.hint, /OK/);
   assert.equal(np.STATUS_TEXT.idle.lines.length, 3);
   assert.match(np.STATUS_TEXT.noDrm.lines.join(' '), /Widevine/);
-  for (const k of ['loading', 'loggedOut', 'noDrm', 'idle']) assert.ok(np.STATUS_TEXT[k].head.length > 0, k);
+  for (const k of ['loading', 'loggedOut', 'noDrm', 'idle', 'noEngine']) assert.ok(np.STATUS_TEXT[k].head.length > 0, k);
 });
 
 test('表示名での探し方（目印がなくなったときの代わり）: 再生/一時停止・前へ・次へ・歌詞・ログインだけに当たり、カードの「〜を再生」には当たらない', () => {
@@ -72,4 +74,14 @@ test('歌詞のいまの行: 時刻のない行・少しの逆転があっても
   assert.equal(r.cur, 3, '逆転した行（b: 4000）は、それまでの最大（5000）に合わせる。6 秒の時点では、b の行');
   assert.equal(np.lyricsAt(L, 25, 200, -1).cur, 4);
   assert.equal(np.lyricsAt([{ text: 'a' }, { text: 'b' }, { text: 'c', start: 100 }], 5, 200, -1), null, '時刻のある行が半分に満たない');
+});
+
+test('再生位置: 届いた位置から、再生中は経過時間で進め、一時停止中は進めない。曲の長さを超えない', () => {
+  const st = (playing) => ({ at: 1000, info: { positionSec: 50, durationSec: 100, playing } });
+  assert.equal(np.positionNow(st(true), 1000), 50);
+  assert.equal(np.positionNow(st(true), 4500), 53.5);
+  assert.equal(np.positionNow(st(false), 9000), 50);
+  assert.equal(np.positionNow(st(true), 500000), 100, '長さまで');
+  assert.equal(np.positionNow({ at: 0, info: { positionSec: null } }, 5), null);
+  assert.equal(np.positionNow(null, 5), null);
 });

@@ -383,17 +383,24 @@ test('実際の TVer のプレイヤー（再生 API だけ偽）で、視聴画
   await page.close();
 });
 
-test('Spotify（ログアウト状態の Web プレーヤー）: 再生中の画面だけを出す。本来の画面は描画せず、ログインしていない状態の画面を出す（実サイトで、ログインのボタンが見つかること）', opts, async () => {
-  const page = await env.ctx.newPage();
+test('Spotify（ログアウト状態の Web プレーヤー）: Spotify のタブは手を加えず（画面はそのまま見える）、前面の自前ページ（再生中の画面）が、ログインしていない状態を出す。Spotify 自身の React が、先に置いた入口に登録される', opts, async () => {
+  const sp = await env.ctx.newPage();
   const errors = [];
-  page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await until(() => page.evaluate(() => document.documentElement.dataset.svReady === '1'), { timeout: 30000, message: 'sv ready' });
-  await until(() => page.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 30000, message: 'logged-out status view' });
-  assert.equal(await page.evaluate(() => document.querySelector('main').getClientRects().length), 0, '本来の画面は描画しない');
-  await shot(page, 'spotify-0-np-loggedout');
+  sp.on('pageerror', (e) => errors.push(e.message));
+  await sp.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await until(() => sp.evaluate(() => document.documentElement.dataset.svReady === '1'), { timeout: 30000, message: 'sv ready' });
+  // Spotify のタブは、手を加えない
+  await until(() => sp.evaluate(() => !!document.querySelector('main') && document.querySelector('main').getClientRects().length > 0), { timeout: 30000, message: 'Spotify の画面が見える' });
+  assert.equal(await sp.evaluate(() => document.documentElement.classList.contains('sv-sp')), false);
   // Spotify 自身の React（vendor の 18.3.1）が、先に置いた入口に登録され、画面の根を知らせてくる（歌詞の読み取りの土台）
-  assert.ok(await page.evaluate(() => window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size >= 1 && window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1).size >= 1), 'React が入口に登録される');
+  assert.ok(await sp.evaluate(() => window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size >= 1 && window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1).size >= 1), 'React が入口に登録される');
+  // 前面の自前ページ
+  const np = await env.ctx.newPage();
+  await np.goto(env.hubUrl.replace('hub/index.html', 'spotify/np.html'));
+  await np.bringToFront();
+  await until(() => np.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 30000, message: 'logged-out status view' });
+  await shot(np, 'spotify-0-np-loggedout');
   assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
-  await page.close();
+  await np.close();
+  await sp.close();
 });

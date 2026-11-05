@@ -1,7 +1,7 @@
 /*
  * Spotify のページ側（MAIN world、document_start）。ブラウザの標準の「メディアセッション」API（OS のメディアキー・ロック画面の操作用）を橋にする。
  * Spotify は、ここに再生・一時停止・前・次・シークの処理（ハンドラ）を登録する。画面の作り（ボタン・目印）が変わっても、この API は変わらない。
- *  - 登録されるハンドラを覚えて、拡張側（nowplaying.js）の依頼で呼ぶ（OS のメディアキーが押されたのと同じ）
+ *  - 登録されるハンドラを覚えて、拡張側（engine.js）の依頼で呼ぶ（OS のメディアキーが押されたのと同じ）
  *  - setPositionState（再生位置・長さ）を覚えて、拡張側へ知らせる（再生位置の読み取り用）
  * 音量だけはメディアセッションにないので、最後に再生された音声の volume を（画面の音量の棒がないときの最後の手段として）直接動かせるようにする。
  * メタデータ（曲名・アーティスト・ジャケット）と再生状態は、拡張側が navigator.mediaSession から直接読める。
@@ -42,43 +42,6 @@
     return origPos.apply(this, arguments);
   };
 
-  /**
-   * 本来の画面を取り外している間（拡張が依頼する）は、ページの requestAnimationFrame（描画の更新の呼び出し）を、まとめて 250ms に 1 回に間引く。
-   * 見えない画面の、毎フレームの更新（棒・アニメーション）が、弱い機器では主スレッドを占める。音の再生・通信・React の更新には影響しない。
-   */
-  let throttled = false;
-  let pending = new Map();
-  let timer = 0;
-  let nextId = 1e9;
-  const origRaf = window.requestAnimationFrame;
-  const origCancel = window.cancelAnimationFrame;
-  const flush = () => {
-    timer = 0;
-    const list = pending;
-    pending = new Map();
-    const t = performance.now();
-    for (const cb of list.values()) {
-      try {
-        cb(t);
-      } catch (err) {
-        setTimeout(() => {
-          throw err;
-        });
-      }
-    }
-  };
-  window.requestAnimationFrame = function (cb) {
-    if (!throttled) return origRaf.call(window, cb);
-    const id = ++nextId;
-    pending.set(id, cb);
-    if (!timer) timer = setTimeout(flush, 250);
-    return id;
-  };
-  window.cancelAnimationFrame = function (id) {
-    if (pending.delete(id)) return;
-    return origCancel.call(window, id);
-  };
-
   // 曲の情報・再生状態が変わったことも知らせる（画面の DOM が変わらなくても、曲の変化に気づけるように）
   for (const name of ['metadata', 'playbackState']) {
     const d = Object.getOwnPropertyDescriptor(proto, name);
@@ -97,14 +60,6 @@
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data) return;
     if (e.data.svMsHello) return announce();
-    if (e.data.svThrottle != null) {
-      throttled = !!e.data.svThrottle;
-      if (!throttled && timer) {
-        clearTimeout(timer);
-        flush(); // 戻したときは、溜まった分をすぐ実行する
-      }
-      return;
-    }
     if (e.data.svMsVolume != null) {
       if (media) media.volume = Math.min(1, Math.max(0, Number(e.data.svMsVolume) || 0));
       return;

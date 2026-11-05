@@ -1,9 +1,17 @@
 /*
- * Spotify: 再生中の画面（#sv-np）。テレビの大きな画面で、離れて見る前提。寸法は画面の高さ（vh）の倍数。
+ * Spotify: 再生中の画面（拡張の自前ページ。#sv-np）。テレビの大きな画面で、離れて見る前提。寸法は画面の高さ（vh）の倍数。
  * 曲があるとき（data-view="track"）: ジャケットをぼかした暗い背景に、ジャケット・曲名・アーティスト・歌詞・再生位置。
  * 曲がないとき（data-view="status"）: 理由とやることを、大きく中央に。
  * アニメーション・トランジションは付けない（/tv と同じ）。
  */
+html.sv-np-page,
+html.sv-np-page body {
+  margin: 0;
+  height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
 #sv-np {
   position: fixed;
   inset: 0;

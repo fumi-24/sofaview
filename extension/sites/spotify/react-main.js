@@ -6,7 +6,7 @@
  *
  * 歌詞: 歌詞の 1 行ごとの部品は、props（部品への入力）に text（文字）・start（開始時刻）・onObserve を持つ。props の名前は、圧縮されても変わらない。
  * 画面の要素の名前（data-testid）・クラス名・文字の色・要素が文書の中にあるか、には頼らない。
- * 拡張側（nowplaying.js）が { svReactAsk: 'lyrics' } を送ると、{ svReact: 'lyrics', lines: [{ text, start }] } を返す（歌詞の画面が作られていなければ、空）。
+ * 拡張側（engine.js）が { svReactAsk: 'lyrics' } を送ると、{ svReact: 'lyrics', lines: [{ text, start }] } を返す（歌詞の画面が作られていなければ、空）。
  */
 (function () {
   'use strict';

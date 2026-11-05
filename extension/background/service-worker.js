@@ -15,6 +15,17 @@ const ytTabs = () => chrome.tabs.query({ url: YT_TV + '*' });
 const isYt = (t) => !!t && (t.url || t.pendingUrl || '').startsWith(YT_TV);
 const SPOTIFY = 'https://open.spotify.com/';
 const isSpotify = (t) => !!t && (t.url || t.pendingUrl || '').startsWith(SPOTIFY);
+const NP_URL = chrome.runtime.getURL('spotify/np.html'); // Spotify の再生中の画面（拡張の自前ページ。前面）。Spotify のタブは、再生エンジンとして、裏に置く
+/** 再生中の画面のタブ（tabs 権限がないと、拡張のページの url は分からないので、ページが開いたとき知らせてきた id で探す）。 */
+async function npTabs() {
+  const { svNpTab } = await chrome.storage.session.get('svNpTab');
+  if (svNpTab == null) return [];
+  try {
+    return [await chrome.tabs.get(svNpTab)];
+  } catch (e) {
+    return [];
+  }
+}
 
 /** タブを前面に出す（ウィンドウも）。 */
 async function activate(tab) {
@@ -49,19 +60,28 @@ async function ensureReceiver() {
 }
 
 /**
+ * Spotify を、再生エンジンとして、裏のタブで開いておく（なければ作る。前面は奪わない）。Web プレーヤーは、開いているタブごとに「再生先」になる。
+ * ほかのタブを閉じたり、重複を整えたりはしない（音楽が止まる）。再生中の画面（自前ページ）が開いたとき・ハブの Spotify タイルから呼ばれる。
+ */
+async function ensureSpotifyEngine(sender) {
+  if (sender && sender.tab && sender.tab.id != null) await chrome.storage.session.set({ svNpTab: sender.tab.id }); // 再生中の画面のページが開いた（このメッセージを送るのは、そのページだけ）
+  if ((await chrome.tabs.query({ url: SPOTIFY + '*' })).length) return { ok: true, created: false };
+  const { svSpotifyAt } = await chrome.storage.session.get('svSpotifyAt');
+  if (svSpotifyAt && Date.now() - svSpotifyAt < 15000) return { ok: true, created: false };
+  await chrome.storage.session.set({ svSpotifyAt: Date.now() });
+  const tab = await chrome.tabs.create({ url: SPOTIFY, active: false });
+  await chrome.storage.session.set({ svSpotifyTab: tab.id });
+  return { ok: true, created: true };
+}
+
+/**
  * スマホの Spotify から再生を始めたとき（Spotify Connect）に、再生中の画面を出せるよう、Spotify を裏のタブで開いておく（設定 spotify.standby）。
- * Web プレーヤーは、開いているタブごとに「再生先」になる。ほかのタブを閉じたり、重複を整えたりはしない（音楽が止まる）。
  */
 async function ensureSpotifyStandby() {
   const s = await SV.settings.load();
   if (!s.spotify.standby) return { ok: true, on: false };
-  if ((await chrome.tabs.query({ url: SPOTIFY + '*' })).length) return { ok: true, on: true, created: false };
-  const { svSpotifyAt } = await chrome.storage.session.get('svSpotifyAt');
-  if (svSpotifyAt && Date.now() - svSpotifyAt < 15000) return { ok: true, on: true, created: false };
-  await chrome.storage.session.set({ svSpotifyAt: Date.now() });
-  const tab = await chrome.tabs.create({ url: SPOTIFY, active: false });
-  await chrome.storage.session.set({ svSpotifyTab: tab.id });
-  return { ok: true, on: true, created: true };
+  const r = await ensureSpotifyEngine();
+  return { ok: true, on: true, created: r.created };
 }
 
 /** どちらの待機タブも整える（YouTube /tv・Spotify）。 */
@@ -72,15 +92,27 @@ async function ensureStandby() {
 }
 
 /**
- * Spotify のタブで曲が変わった（スマホから再生が始まった）とき、タブが裏なら前面に出して、再生中の画面を開かせる。
- * 前面のときは何もしない（操作中の画面を奪わない）。
+ * Spotify のタブで曲が変わった（スマホから再生が始まった）とき、再生中の画面（自前ページ）を前面に出す（なければ開く）。設定 spotify.standby のとき。
+ * すでに前面なら何もしない（操作中の画面を奪わない）。
  */
-async function spotifyWake(sender) {
+async function spotifyWake() {
   const s = await SV.settings.load();
-  if (!s.spotify.standby || !sender.tab || sender.tab.active) return { ok: true, woke: false };
-  await activate(sender.tab);
-  chrome.tabs.sendMessage(sender.tab.id, { type: 'sv:openNp' }, () => void chrome.runtime.lastError);
+  if (!s.spotify.standby) return { ok: true, woke: false };
+  const tabs = await npTabs();
+  if (tabs.some((t) => t.active)) return { ok: true, woke: false };
+  if (tabs[0]) await activate(tabs[0]);
+  else await chrome.tabs.create({ url: NP_URL, active: true });
   return { ok: true, woke: true };
+}
+
+/** 再生中の画面（自前ページ）からの操作の依頼を、Spotify のタブへ転送する。login は、Spotify のタブ（ログイン画面）を前面に出す。 */
+async function spotifyCmd(msg) {
+  const tabs = await chrome.tabs.query({ url: SPOTIFY + '*' });
+  if (!tabs.length) return { ok: false, error: 'no-engine' };
+  const send = (t) => new Promise((res) => chrome.tabs.sendMessage(t.id, { type: 'sv:spCmd', cmd: msg.cmd, arg: msg.arg }, (r) => res(chrome.runtime.lastError ? null : r)));
+  await Promise.all(tabs.map(send));
+  if (msg.cmd === 'login') await activate(tabs[0]);
+  return { ok: true };
 }
 
 /** Spotify のタブの状態（曲・待機中・ログインしていない…）を覚える。ハブのタイルに出す。 */
@@ -108,14 +140,6 @@ async function openYoutube() {
   if (tabs[0]) await activate(tabs[0]);
   else await chrome.tabs.create({ url: YT_TV, active: true });
   await chrome.storage.session.set({ svOpenLast: { at: Date.now(), how: tabs[0] ? 'activate' : 'create' } });
-  return { ok: true };
-}
-
-/** ハブの Spotify タイル: 開いている Spotify のタブがあれば、それを前面に出す（音楽を止めない）。なければ、ハブ側が同じタブで開く。 */
-async function openSpotify() {
-  const tabs = await chrome.tabs.query({ url: SPOTIFY + '*' });
-  if (!tabs[0]) return { ok: false };
-  await activate(tabs[0]);
   return { ok: true };
 }
 
@@ -249,13 +273,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       p = spotifyStatus();
       break;
     case 'sv:spotifyWake':
-      p = spotifyWake(sender);
+      p = spotifyWake();
+      break;
+    case 'sv:spCmd':
+      p = spotifyCmd(msg);
+      break;
+    case 'sv:ensureSpotifyEngine':
+      p = ensureSpotifyEngine(sender);
       break;
     case 'sv:openYoutube':
       p = openYoutube();
-      break;
-    case 'sv:openSpotify':
-      p = openSpotify();
       break;
     case 'sv:wake':
       p = wake(sender);
