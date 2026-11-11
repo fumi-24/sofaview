@@ -172,7 +172,7 @@
     let lyricTitleAt = 0;
     let lyricOldSig = '';
     let lyricAskAt = 0;
-    let lyricAskGap = 500;
+    let lyricAskGap = 250;
     let lyricAsks = 0;
     let lyricViewWant = null;
     let lyricViewAt = 0;
@@ -218,7 +218,15 @@
 
     // ---- 歌詞 ----
     const sigOf = (L) => L.length + '\n' + (L[0] ? L[0].text : '') + '\n' + (L.length ? L[L.length - 1].text : '');
+    // 実際に鳴っている音声の位置と、アプリの再生位置の差（秒。診断用）。音声の位置が曲の中の位置でないとき（差が大きすぎる）は null
+    let mediaDiff = null;
+    let mediaAskAt = 0;
     root.addEventListener('message', (e) => {
+      if (e.source === root && e.data && e.data.svMs === 'media') {
+        const pm = app.state && appOk() && !app.state.paused ? appPositionMs(Date.now()) : null;
+        const d = pm != null && Number.isFinite(e.data.ct) && e.data.paused === false ? pm / 1000 - e.data.ct : null;
+        mediaDiff = d != null && Math.abs(d) < 30 ? d : null;
+      }
       if (e.source === root && e.data && e.data.svReact === 'diag' && opts && opts.onDiag) opts.onDiag(e.data.report); // 診断の報告（読み取りだけ。react-main.js）
       if (e.source !== root || !e.data || e.data.svReact !== 'lyrics') return;
       const L = Array.isArray(e.data.lines) ? e.data.lines : [];
@@ -252,14 +260,14 @@
         lyricDbg = null;
         lyricViewTries = 0;
         lyricAskAt = 0;
-        lyricAskGap = 500;
+        lyricAskGap = 250;
         lyricAsks = 0;
       }
       if (wantLyrics() && !lyricLines.length && now - lyricAskAt > lyricAskGap) {
         lyricAskAt = now;
         lyricAsks++;
-        lyricAskGap = lyricAsks < 6 ? 500 : lyricAsks < 12 ? 1500 : lyricAsks < 20 ? 4000 : 8000;
-        root.postMessage({ svReactAsk: 'lyrics' }, root.location.origin);
+        lyricAskGap = lyricAsks < 24 ? 250 : lyricAsks < 34 ? 1000 : lyricAsks < 44 ? 3000 : 8000; // 曲が変わった直後の 6 秒は、0.25 秒おき（歌詞の出方を速く）。出なければ、間隔を広げる
+        root.postMessage({ svReactAsk: 'lyrics', n: lyricAsks }, root.location.origin);
       }
     }
 
@@ -277,13 +285,17 @@
         lyricViewTries = 0;
         lyricAskAt = 0;
         lyricAsks = 0;
-        lyricAskGap = 500;
+        lyricAskGap = 250;
         syncLyricsView();
       } else if (cmd === 'diag') root.postMessage({ svReactAsk: 'diag' }, root.location.origin);
     }
 
     /** いまの状態（画面に出す形）。 */
     function snapshot() {
+      if (Date.now() - mediaAskAt > 2000) {
+        mediaAskAt = Date.now();
+        root.postMessage({ svMsAsk: 1 }, root.location.origin); // 実際の音声の位置を求める（診断用）
+      }
       if (!appOk() && Date.now() - lastAppAsk > 2000) {
         lastAppAsk = Date.now();
         root.postMessage({ svAppAsk: 1 }, root.location.origin); // アプリのサービスの状態を、すぐ求める
@@ -309,6 +321,7 @@
           volume: i.volume,
         },
         lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries },
+        mediaDiff,
       };
     }
 

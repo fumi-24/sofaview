@@ -223,6 +223,8 @@
   }
 
   let lastPush = '';
+  let lastBase = '';
+  let lastFullAt = 0;
   let lastSentAt = 0;
   /** ログインしていないか（プラットフォームのセッション）。分からなければ null。 */
   function anonymous() {
@@ -244,9 +246,16 @@
         lastPush = sig;
         return;
       }
+      subscribeUpdates();
       const state = compact(svc.player.getState() || {});
+      // 変わっていなければ、ここで終わる（音量の問い合わせまで進むのは、変わったときと、1 秒に 1 回だけ）
+      const base = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, anon]);
+      const t = Date.now();
+      if (!force && base === lastBase && t - lastFullAt < 1000) return;
+      lastBase = base;
+      lastFullAt = t;
       const send = (vol) => {
-        const sig = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, vol, anon]);
+        const sig = base + JSON.stringify(vol);
         if (!force && sig === lastPush && Date.now() - lastSentAt < 2000) return; // 変わらなくても、2 秒おきには送る（受け取り側が、生きているかを見分けるため）
         lastPush = sig;
         lastSentAt = Date.now();
@@ -259,7 +268,19 @@
       console.error('[SV] app state', err);
     }
   }
-  setInterval(() => pushState(false), 1000);
+  // アプリの再生サービスの更新イベント（再生・一時停止・シーク・曲の変わり目）を購読して、すぐ送る。購読できなくても、下の短い間隔の確認が代わりをする
+  let subscribed = false;
+  function subscribeUpdates() {
+    if (subscribed || !svc.player) return;
+    subscribed = true;
+    try {
+      const ev = typeof svc.player.getEvents === 'function' ? svc.player.getEvents() : null;
+      if (ev && typeof ev.addListener === 'function') ev.addListener('update', () => setTimeout(() => pushState(false), 0));
+    } catch (e) {
+      /* 購読できなければ、短い間隔の確認だけ */
+    }
+  }
+  setInterval(() => pushState(false), 250);
 
   const CMD = {
     pause: () => svc.player.pause(),
@@ -642,7 +663,7 @@
     }
     let dbg = null;
     try {
-      dbg = lines.length ? null : lyricsDebug();
+      dbg = lines.length || !(e.data.n >= 6) ? null : lyricsDebug(); // 診断は、しばらく出ないときだけ
     } catch (err) {
       dbg = { error: String(err && err.message).slice(0, 60) };
     }

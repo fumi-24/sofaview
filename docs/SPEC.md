@@ -2,7 +2,7 @@
 
 | 項目 | 内容 |
 |---|---|
-| バージョン | v1.0（拡張機能 v0.12.1 の実装を反映した版）|
+| バージョン | v1.0（拡張機能 v0.12.2 の実装を反映した版）|
 | 最終更新 | 2026-10-19 |
 | 対象 | テレビのリモコンだけで YouTube / TVer を操作できる Chromium 拡張機能 |
 | 状態 | **実装済み・自動テスト済み**。実機（日本国内IP・実際のリモコン・TVer の実プレイヤー）での確認は未実施（❔）|
@@ -420,12 +420,12 @@ YouTube /tv は公式の OSK を持つので、TVer だけ。リモコンに文�
 
 ### 7.8 Spotify（`sites/spotify/`）
 
-**作り（v0.12.1・要望「普通のUIを置き換える。見た目だけじゃなく実際に。実際の Spotify から見た動作は普通のまま」）**：**タブは 1 つ**。`open.spotify.com` のページが、そのまま、自前の再生中の画面になる。
+**作り（v0.12.2・要望「普通のUIを置き換える。見た目だけじゃなく実際に。実際の Spotify から見た動作は普通のまま」）**：**タブは 1 つ**。`open.spotify.com` のページが、そのまま、自前の再生中の画面になる。
 - **起動の入口 `boot-main.js`（MAIN world・document_start）**：Spotify のアプリは、起動のとき、通信・再生・状態のサービスを作り、そのあと React の根を 1 つ作って画面全体を 1 回だけ描く。react-dom の入口（`createRoot`）をモジュールの読み込みの時点で包み、**Spotify 自身の画面の描画先を、文書の外の空の要素に替える**。Spotify の画面は文書に出ない（レイアウトも描画もしない）が、アプリの動作（通信・再生・状態・Connect への登録）はそのまま。描画先を替えたら `<html data-sv-detached="1">` を付ける。`render` の引数から、プラットフォーム（`getRegistry` を持つ値）を取り出し、名前つきのサービスを引く。
 - **自前の画面 `ui.js`・`ui.css`**：全画面の `#sv-np`。キーは `window` の捕捉で受け、Spotify のページには届かせない。画面を点けたままにする（Wake Lock）。
 - **ログイン画面**（`accounts.spotify.com`）は別サイトなので、拡張は何もしない。
 
-**読み取り・操作の優先順（サイトの作りの変更への追従）**：**Spotify のアプリ自身のサービス**（登録簿の `PlayerAPI`・`PlaybackAPI`、部品の props の `standalonePlayer`。状態の読み取り・再生・一時停止・次・前・シーク・音量を、アプリ自身の関数で行う。NOTES 3.15）→ メディアセッション API（曲の情報・再生状態は `navigator.mediaSession`、再生・一時停止・前・次・シークは登録されたハンドラを MAIN world の橋 `session-main.js` で呼ぶ、再生位置は `setPositionState`）→ 画面の目印・ボタンの表示名。**歌詞**は、Spotify の React の部品の木（React の入口 `__REACT_DEVTOOLS_GLOBAL_HOOK__` を `react-main.js` で先に置いて読む）から、歌詞の行の部品の props（`text`・`start`・`onObserve`）を読む。歌詞の画面は、アプリ自身の歌詞ボタン（`data-testid="lyrics-button"` の props の `href`／`onClick`。なければ履歴で `接頭辞/lyrics`）で作らせ（設定 `spotify.lyrics`）、行の部品が見つからないときは、入れ物の props（`data.lyrics`）から読む。待ち中は、右下の表示に診断を出す。通信は Spotify のページ自身が行い、**拡張は認証情報に触らない・非公開の通信を自分で起こさない**。
+**読み取り・操作の優先順（サイトの作りの変更への追従）**：**Spotify のアプリ自身のサービス**（登録簿の `PlayerAPI`・`PlaybackAPI`、部品の props の `standalonePlayer`。状態の読み取り・再生・一時停止・次・前・シーク・音量を、アプリ自身の関数で行う。NOTES 3.15）→ メディアセッション API（曲の情報・再生状態は `navigator.mediaSession`、再生・一時停止・前・次・シークは登録されたハンドラを MAIN world の橋 `session-main.js` で呼ぶ、再生位置は `setPositionState`）→ 画面の目印・ボタンの表示名。**歌詞**は、Spotify の React の部品の木（React の入口 `__REACT_DEVTOOLS_GLOBAL_HOOK__` を `react-main.js` で先に置いて読む）から、歌詞の行の部品の props（`text`・`start`・`onObserve`）を読む。歌詞の画面は、アプリ自身の歌詞ボタン（`data-testid="lyrics-button"` の props の `href`／`onClick`。なければ履歴で `接頭辞/lyrics`）で作らせ（設定 `spotify.lyrics`）、行の部品が見つからないときは、入れ物の props（`data.lyrics`）から読む。待ち中は、右下の表示に診断を出す（歌詞の状況、アプリの再生位置と実際の音声の差）。状態は、アプリの更新イベントの購読と 250ms おきの確認で、変化をすぐ受け取る。通信は Spotify のページ自身が行い、**拡張は認証情報に触らない・非公開の通信を自分で起こさない**。
 
 **音を出す**：Chrome の自動再生の規則で、ページが一度もユーザー操作を受けていないと、音声の再生が止められる。**最初のキー操作で `activateElement()`（アプリ自身の関数）を呼ぶ**。
 

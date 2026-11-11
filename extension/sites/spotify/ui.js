@@ -115,6 +115,12 @@
     box.querySelector('.sv-np-s-hint').textContent = t.hint;
   }
 
+  /** アプリの再生位置 − 実際に鳴っている音声の位置（秒）。0 に近ければ、位置は正しい。 */
+  function mediaDiffText() {
+    const d = state.st && state.st.mediaDiff;
+    return d == null ? '–' : (d >= 0 ? '+' : '') + d.toFixed(1) + '秒';
+  }
+
   /** 歌詞が出ないときの診断（右下の表示）: 依頼の回数・いまのパス・歌詞ボタンの有無・歌詞の行の要素の数・Spotify の画面の大きさ。 */
   function dbgText(lyr) {
     const d = lyr.dbg;
@@ -197,7 +203,7 @@
     while (longTasks.length && t - longTasks[0].t > 10000) longTasks.shift();
     const max = longTasks.reduce((m, x) => Math.max(m, x.d), 0);
     const age = state.st ? Math.max(0, (Date.now() - state.st.at) / 1000).toFixed(0) + '秒前' : '–';
-    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　取得 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
+    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　音声差 ' + mediaDiffText() + '　取得 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
   }
 
   function paintButtons(i) {

@@ -45,7 +45,7 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   await until(async () => (await kindOf(page)) === 'track', { message: '曲の画面' });
   assert.match(await root.innerText(), /テスト曲のタイトル/);
   assert.match(await root.innerText(), /テスト歌手/);
-  assert.match(await root.innerText(), /0:5\d/, '再生位置は、アプリの状態（positionAsOfTimestamp）から。経過時間で進む');
+  await until(async () => /0:5\d/.test(await root.innerText()), { timeout: 5000, message: '再生位置は、アプリの状態（positionAsOfTimestamp）から。経過時間で進む' });
   assert.match(await root.innerText(), /2:55/);
   await until(async () => /経路 アプリ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: 'アプリのサービスから読んでいる' });
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 10000, message: '歌詞（React の部品の props から）' });
@@ -54,6 +54,10 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   assert.deepEqual(await fx(page, 'rendered'), { containerConnected: false, containerIsMain: false }, 'Spotify の画面の描画先は、文書の外');
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid], main').length), 0, '文書に、Spotify の要素はない');
   await until(async () => (await page.evaluate(() => document.getElementById('main').children.length)) === 0, { timeout: 12000, message: '読み込みの骨組みも取り除く' });
+  // アプリの更新イベントを購読している（曲が変わる・再生/一時停止・シークを、すぐ受け取る）。変わったら、すぐ画面に出る
+  assert.ok((await fx(page, 'log')).some((l) => l.ev === 'app' && l.action === 'subscribe:update'), '更新イベントを購読');
+  await page.evaluate(() => window.__fx.setTrack('次の曲'));
+  await until(async () => /次の曲/.test(await root.innerText()), { timeout: 1500, message: '曲が変わったら、1.5 秒以内に画面に出る' });
 });
 
 test('Spotify: 操作は、Spotify のアプリ自身のサービス（PlayerAPI・PlaybackAPI）を呼ぶ。最初の ← → OK はボタンの列を出すだけ。最初のキーで、音を有効にする（activateElement）。メディアセッションは使わない', async () => {

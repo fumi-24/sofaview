@@ -16,7 +16,7 @@ export function spotifyHtml(opt) {
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
   // ---- アプリ自身のサービス（状態を持つ）----
-  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', vol: 1 };
+  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', vol: 1, listeners: [] };
   const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
   const appLog = (action, arg) => log('app', { action, arg });
   const playerAPI = {
@@ -32,7 +32,8 @@ export function spotifyHtml(opt) {
     skipToNext() { appLog('next'); },
     skipToPrevious() { appLog('prev'); },
     seekTo(ms) { AP.pos = ms; AP.ts = Date.now(); appLog('seekTo', ms); },
-    play() {}, skipTo() {}, seekForward() {}, seekBackward() {}, getQueue() {}, setShuffle() {}, setRepeat() {}, getEvents() {},
+    play() {}, skipTo() {}, seekForward() {}, seekBackward() {}, getQueue() {}, setShuffle() {}, setRepeat() {},
+    getEvents() { return { addListener(type, cb) { appLog('subscribe:' + type); AP.listeners.push(cb); } }; },
   };
   const playbackAPI = { getVolume() { return Promise.resolve(AP.vol); }, setVolume(v) { AP.vol = v; appLog('volume', v); } };
   const standalonePlayer = { getVolume() { return Promise.resolve(AP.vol); }, setVolume() {}, pause() {}, activateElement() { appLog('activate'); } };
@@ -71,6 +72,7 @@ export function spotifyHtml(opt) {
 
   window.__fx.setTrack = (t) => {
     AP.title = t;
+    AP.listeners.forEach((cb) => cb({ data: {} })); // アプリの更新イベント
     if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] });
   };
 

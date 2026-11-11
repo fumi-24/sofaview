@@ -60,6 +60,11 @@
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data) return;
     if (e.data.svMsHello) return announce();
+    if (e.data.svMsAsk) {
+      // 実際に鳴っている音声の位置（診断用。アプリの再生位置とのずれを調べる）
+      window.postMessage({ svMs: 'media', ct: media ? media.currentTime : null, dur: media && Number.isFinite(media.duration) ? media.duration : null, paused: media ? media.paused : null, rate: media ? media.playbackRate : null }, location.origin);
+      return;
+    }
     if (e.data.svMsVolume != null) {
       if (media) media.volume = Math.min(1, Math.max(0, Number(e.data.svMsVolume) || 0));
       return;
