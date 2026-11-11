@@ -93,6 +93,22 @@
     return Math.min(i.durationSec > 0 ? i.durationSec : Infinity, Math.max(0, t));
   }
 
-  SV.spotifyCore = { fmt, statusOf, STATUS_TEXT, lyricsAt, positionNow };
+  /**
+   * 歌詞の位置の補正（秒）。samples は「アプリの再生位置 − 実際に鳴っている音声の位置」（秒）の最近の値。
+   * 安定している（3 個以上で、ばらつきが 0.6 秒未満）ときだけ、その中央値を打ち消す値を返す（±5 秒まで）。安定していなければ null（前の補正のまま）。
+   * アプリの位置が音声より遅れていれば（差が負）、歌詞の位置をその分進める。
+   */
+  function lyricShift(samples) {
+    if (!samples || samples.length < 3) return null;
+    const mx = Math.max.apply(null, samples);
+    const mn = Math.min.apply(null, samples);
+    if (mx - mn >= 0.6) return null;
+    const sorted = samples.slice().sort((a, b) => a - b);
+    const med = sorted[sorted.length >> 1];
+    const v = Math.round(-med * 10) / 10;
+    return Math.max(-5, Math.min(5, v)) || 0; // -0 を 0 に
+  }
+
+  SV.spotifyCore = { fmt, statusOf, STATUS_TEXT, lyricsAt, positionNow, lyricShift };
   if (typeof module === 'object' && module.exports) module.exports = SV.spotifyCore;
 })(typeof self !== 'undefined' ? self : globalThis);

@@ -16,7 +16,7 @@ export function spotifyHtml(opt) {
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
   // ---- アプリ自身のサービス（状態を持つ）----
-  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, listeners: [] };
+  const AP = { paused: true, pos: ${o.pos || 50000}, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, listeners: [] };
   const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
   const appLog = (action, arg) => log('app', { action, arg });
   const playerAPI = {
@@ -49,13 +49,14 @@ export function spotifyHtml(opt) {
   const queries = [];
   const qcache = { getAll() { return queries; }, subscribe(cb) { subs.push(cb); return () => {}; } };
   const queryClient = { getQueryCache() { return qcache; } };
-  const LYRIC_TEXTS = ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'];
+  const LYRIC_TEXTS = ${o.fineLyrics ? "Array.from({ length: 120 }, (_, i) => '行' + i)" : "['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞']"};
+  const STEP = ${o.fineLyrics ? 1000 : 20000};
   const putQuery = (queryKey, data) => {
     const q = { queryKey, state: { data, dataUpdatedAt: Date.now() } };
     queries.push(q);
     subs.forEach((cb) => cb({ type: 'updated', query: q }));
   };
-  window.__fx.cacheLyrics = (uri, texts) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: true, isTimeSynced: true, lyrics: (texts || LYRIC_TEXTS).map((t, i) => ({ start: i * 20000, end: (i + 1) * 20000, text: t })) });
+  window.__fx.cacheLyrics = (uri, texts) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: true, isTimeSynced: true, lyrics: (texts || LYRIC_TEXTS).map((t, i) => ({ start: i * STEP, end: (i + 1) * STEP, text: t })) });
   window.__fx.cacheAvail = (uri, v) => putQuery(['useLyricsAvailability', uri], v);
   window.__fx.cacheNone = (uri) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: false });
 
@@ -93,6 +94,15 @@ export function spotifyHtml(opt) {
     AP.listeners.forEach((cb) => cb({ data: {} })); // アプリの更新イベント
     if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] });
   };
+
+  // ---- 実際に鳴っている音声の要素。アプリの再生位置より mediaLag 秒だけ先に進んでいる（アプリの位置が遅れている状態）----
+  ${o.mediaLag ? `
+  const au = new Audio();
+  Object.defineProperty(au, 'currentTime', { get() { return apNow() / 1000 + ${o.mediaLag}; } });
+  Object.defineProperty(au, 'paused', { get() { return AP.paused; } });
+  Object.defineProperty(au, 'duration', { get() { return 175.797; } });
+  try { Promise.resolve(HTMLMediaElement.prototype.play.call(au)).catch(() => {}); } catch (e) { /* 音声がなくても、play が呼ばれたことだけ分かればよい */ }
+  ` : ''}
 
   // ---- メディアセッション（実サイトと同じく、曲の情報・再生状態・再生位置・処理を登録する）----
   ${o.noSession ? '' : `

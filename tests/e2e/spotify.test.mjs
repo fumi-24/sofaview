@@ -234,6 +234,23 @@ test('Spotify: 歌詞は、アプリの問い合わせキャッシュ（曲ご�
   await until(async () => /歌詞 なし/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: '歌詞がないと表示される' });
 });
 
+test('Spotify: 歌詞の位置は、実際に鳴っている音声に合わせて補正する。アプリの再生位置が音声より遅れていたら（右下の「音声差」が負）、その分だけ歌詞を進める。止まっても補正は保つ', async () => {
+  await setSp({ lyrics: true });
+  const page = await open({ mediaLag: 3, fineLyrics: true, pos: 20000 });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 120, { timeout: 12000, message: '歌詞が出る（1 秒ごとの 120 行）' });
+  await press(page, 'Enter'); // 列を出す
+  await press(page, 'Enter'); // 再生
+  await until(async () => /音声差 -3\.\d秒（歌詞を \+3\.\d秒補正）/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 20000, message: '音声差が分かり、歌詞が補正される' });
+  await press(page, 'Enter'); // 一時停止
+  await until(async () => (await root.getAttribute('data-state')) === 'paused', { message: '一時停止' });
+  const sec = await root.locator('.sv-np-pos').evaluate((e) => { const m = e.textContent.match(/^(\d+):(\d+)$/); return Number(m[1]) * 60 + Number(m[2]); });
+  const cur = Number(await root.locator('.sv-np-ly-track').evaluate((e) => e.style.getPropertyValue('--cur')));
+  assert.ok(cur - sec >= 2 && cur - sec <= 4, 'いまの行は、アプリの位置より約 3 秒先: 位置 ' + sec + ' 秒、行 ' + cur);
+  await page.waitForTimeout(1500);
+  assert.match(await root.locator('.sv-np-ver').innerText(), /歌詞を \+3\.\d秒補正/, '止まっても補正は保たれる');
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

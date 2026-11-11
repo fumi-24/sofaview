@@ -74,3 +74,13 @@ test('再生位置: 届いた位置から、再生中は経過時間で進め、
   assert.equal(np.positionNow({ at: 0, info: { positionSec: null } }, 5), null);
   assert.equal(np.positionNow(null, 5), null);
 });
+
+test('歌詞の位置の補正: 差のサンプルが安定しているときだけ、その中央値を打ち消す。±5 秒まで。ばらつくときは決めない', () => {
+  assert.equal(np.lyricShift([-3.1, -3.0, -3.05]), 3.1, "中央値 3.05 を 0.1 秒に丸める");
+  assert.equal(np.lyricShift([0.2, 0.25, 0.22]), -0.2, 'アプリの位置が少し進んでいれば、歌詞を少し戻す');
+  assert.equal(np.lyricShift([-9, -9.1, -9.05]), 5, '±5 秒まで');
+  assert.equal(np.lyricShift([0, 0, 0]), 0);
+  assert.equal(np.lyricShift([-3, -2, -4]), null, 'ばらつくとき');
+  assert.equal(np.lyricShift([-3, -3]), null, '3 個未満');
+  assert.equal(np.lyricShift([]), null);
+});

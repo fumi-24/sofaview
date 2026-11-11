@@ -3,7 +3,7 @@
  * 状態・操作・音量は、変わりにくい順に:
  *   1) Spotify のアプリ自身のサービス（react-main.js。登録簿の PlayerAPI・PlaybackAPI）。状態は svApp で届き、操作は svAppCmd で依頼する
  *   2) メディアセッション（標準の API。session-main.js が、登録された処理と再生位置を覚える）
- * 歌詞は、Spotify の React の部品の props（react-main.js）から読む。歌詞の画面は、アプリ内の移動（/lyrics）で作らせる。
+ * 歌詞は、Spotify の問い合わせキャッシュ（react-main.js）から受け取る。歌詞の画面は、アプリ自身の歌詞ボタンの移動で作らせる。歌詞の位置は、実際に鳴っている音声に合わせて補正する。
  * 呼ぶのはアプリ自身のサービスだけ。通信はアプリ自身が行い、拡張は認証情報に触らない。
  */
 (function (root) {
@@ -11,6 +11,7 @@
 
   const SV = (root.SV = root.SV || {});
   const { fmt, statusOf } = SV.spotifyCore;
+  const core = SV.spotifyCore;
 
   // ---- 1) アプリ自身のサービス ----
   const app = { state: null, vol: null, anonymous: null, recv: 0, onChange: null };
@@ -224,11 +225,22 @@
     // 実際に鳴っている音声の位置と、アプリの再生位置の差（秒。診断用）。音声の位置が曲の中の位置でないとき（差が大きすぎる）は null
     let mediaDiff = null;
     let mediaAskAt = 0;
+    const mediaSamples = [];
+    let lyricShift = 0; // 歌詞の位置の補正（秒。時計のずれ・アプリの位置の遅れを、実際の音声に合わせる）
     root.addEventListener('message', (e) => {
       if (e.source === root && e.data && e.data.svMs === 'media') {
-        const pm = app.state && appOk() && !app.state.paused ? appPositionMs(Date.now()) : null;
-        const d = pm != null && Number.isFinite(e.data.ct) && e.data.paused === false ? pm / 1000 - e.data.ct : null;
+        // 実際に鳴っている音声の位置と、アプリの再生位置の差。アプリの位置が遅れているなら、歌詞の位置をその分進める（歌詞は、聞こえている音に合わせる）
+        const playing = app.state && appOk() && !app.state.paused && !app.state.buffering;
+        const pm = playing ? appPositionMs(Date.now()) : null;
+        const ct = Number.isFinite(e.data.ct) && e.data.paused === false ? e.data.ct : null;
+        const d = pm != null && ct != null ? pm / 1000 - ct : null;
         mediaDiff = d != null && Math.abs(d) < 30 ? d : null;
+        if (mediaDiff != null && Math.abs(mediaDiff) <= 8) {
+          mediaSamples.push(mediaDiff);
+          if (mediaSamples.length > 5) mediaSamples.shift();
+          const sh = core.lyricShift(mediaSamples);
+          if (sh != null) lyricShift = sh;
+        } else mediaSamples.length = 0; // 止まっている・曲の変わり目などは、集め直す（補正は前のまま）
       }
       if (e.source === root && e.data && e.data.svReact === 'diag' && opts && opts.onDiag) opts.onDiag(e.data.report); // 診断の報告（読み取りだけ。react-main.js）
       if (e.source !== root || !e.data || e.data.svReact !== 'lyrics') return;
@@ -315,7 +327,7 @@
 
     /** いまの状態（画面に出す形）。 */
     function snapshot() {
-      if (Date.now() - mediaAskAt > 2000) {
+      if (Date.now() - mediaAskAt > 1000) {
         mediaAskAt = Date.now();
         root.postMessage({ svMsAsk: 1 }, root.location.origin); // 実際の音声の位置を求める（診断用）
       }
@@ -345,6 +357,7 @@
         },
         lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries, none: lyricNone, src: lyricSrc },
         mediaDiff,
+        lyricShift,
       };
     }
 
