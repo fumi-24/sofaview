@@ -4,13 +4,28 @@
  * 曲がないとき（data-view="status"）: 理由とやることを、大きく中央に。
  * アニメーション・トランジションは付けない（/tv と同じ）。
  */
-html.sv-np-page,
-html.sv-np-page body {
-  margin: 0;
-  height: 100%;
-  background: #000;
-  overflow: hidden;
+/* Spotify のページに重ねる自前の画面。Spotify 自身の画面は、文書の外に描かれる（boot-main.js）。起動のときの読み込みの骨組み（#main の中）は隠す */
+html.sv-sp,
+html.sv-sp body {
+  background: #000 !important;
+  overflow: hidden !important;
 }
+
+html.sv-sp #main {
+  display: none !important;
+}
+
+/* Spotify のページの全体の CSS が、自前の部品に影響しないようにする */
+#sv-np,
+#sv-np * {
+  box-sizing: border-box;
+}
+
+#sv-np button {
+  font-family: inherit;
+  margin: 0;
+}
+
 
 #sv-np {
   position: fixed;

@@ -3,8 +3,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 require('../../extension/common/sv.js');
 const core = require('../../extension/sites/spotify/core.js');
-const engine = require('../../extension/sites/spotify/engine.js');
-const np = { ...core, LABEL: engine.LABEL };
+const np = { ...core };
 
 const base = { loggedOut: false, hasTrack: false, ready: true, drm: true };
 
@@ -29,16 +28,6 @@ test('状態の画面の文言: loggedOut は OK の案内つき。idle は 3 �
   assert.equal(np.STATUS_TEXT.idle.lines.length, 3);
   assert.match(np.STATUS_TEXT.noDrm.lines.join(' '), /Widevine/);
   for (const k of ['loading', 'loggedOut', 'noDrm', 'idle', 'noEngine']) assert.ok(np.STATUS_TEXT[k].head.length > 0, k);
-});
-
-test('表示名での探し方（目印がなくなったときの代わり）: 再生/一時停止・前へ・次へ・歌詞・ログインだけに当たり、カードの「〜を再生」には当たらない', () => {
-  const { LABEL } = np;
-  for (const n of ['再生', '一時停止', 'Play', 'pause']) assert.ok(LABEL.playPause.test(n), n);
-  for (const n of ['曲Aを再生', 'Play 曲A', '再生中ビュー', '再生リスト']) assert.ok(!LABEL.playPause.test(n), n);
-  for (const n of ['前へ', '前の曲', 'Previous']) assert.ok(LABEL.prev.test(n), n);
-  for (const n of ['次へ', '次の曲', 'Next']) assert.ok(LABEL.next.test(n), n);
-  assert.ok(LABEL.lyricsButton.test('歌詞') && LABEL.lyricsButton.test('Lyrics'));
-  assert.ok(LABEL.login.test('ログイン') && LABEL.login.test('Log in') && !LABEL.login.test('ログインしてください'));
 });
 
 test('秒の表示は m:ss（サイトの表示と同じ形）', () => {

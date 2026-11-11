@@ -12,7 +12,7 @@
 (function () {
   'use strict';
   const roots = new Set();
-  const svc = { player: null, engine: null, findAt: 0 };
+  const svc = { player: null, engine: null, volume: null, findAt: 0 };
   let findTimer = 0;
   const track = (root) => {
     if (root && typeof root === 'object') roots.add(root);
@@ -91,10 +91,28 @@
   // これを部品の木から見つけて、状態を読み（getState）、操作する（pause・resume・skipToNext・skipToPrevious・seekTo・setVolume）。
   // 呼ぶのは、アプリ自身のサービスだけ（画面のボタンを押すのと同じ。通信はアプリ自身が行い、認証情報には触らない）。
 
-  /** サービスを部品の木から探す（見つかるまで、2 秒に 1 回まで）。props の名前（playerAPI・standalonePlayer）ではなく、メソッドの名前で見分ける。 */
+  /** 起動のときに取ったプラットフォーム（boot-main.js）の登録簿から、名前つきのサービスを引く。部品の木が（文書の外でも）できる前から使える。 */
+  function fromRegistry() {
+    const B = window.__svBoot;
+    if (!B || !B.platform) return;
+    if (!svc.player) {
+      const p = B.service('PlayerAPI');
+      if (p && typeof p.getState === 'function' && typeof p.seekTo === 'function') svc.player = p;
+    }
+    if (!svc.volume) {
+      const v = B.service('PlaybackAPI');
+      if (v && typeof v.setVolume === 'function' && typeof v.getVolume === 'function') svc.volume = v;
+    }
+  }
+
+  /**
+   * サービスを探す（見つかるまで、2 秒に 1 回まで）。まず登録簿（名前で引く）。なければ部品の木から、メソッドの名前で見分ける（props の名前には頼らない）。
+   * 音声の再生エンジン（standalonePlayer）は、音を有効にする（activateElement）ために、部品の木から探す。
+   */
   function findServices() {
+    fromRegistry();
     const now = performance.now();
-    if ((svc.player && svc.engine) || now - svc.findAt < 2000) return;
+    if ((svc.player && svc.engine && svc.volume) || now - svc.findAt < 2000) return;
     svc.findAt = now;
     const budget = now + 1500;
     for (const root of roots) {
@@ -147,25 +165,37 @@
 
   let lastPush = '';
   let lastSentAt = 0;
+  /** ログインしていないか（プラットフォームのセッション）。分からなければ null。 */
+  function anonymous() {
+    try {
+      const B = window.__svBoot;
+      const ses = B && B.platform && B.platform.getSession();
+      return ses && typeof ses.isAnonymous === 'boolean' ? ses.isAnonymous : null;
+    } catch (e) {
+      return null;
+    }
+  }
   function pushState(force) {
     try {
       findServices();
+      const anon = anonymous();
       if (!svc.player) {
-        if (lastPush !== 'none') window.postMessage({ svApp: 'none' }, location.origin);
-        lastPush = 'none';
+        const sig = 'none|' + anon;
+        if (lastPush !== sig) window.postMessage({ svApp: 'none', anonymous: anon }, location.origin);
+        lastPush = sig;
         return;
       }
       const state = compact(svc.player.getState() || {});
       const send = (vol) => {
-        const sig = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, vol]);
+        const sig = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, vol, anon]);
         if (!force && sig === lastPush && Date.now() - lastSentAt < 2000) return; // 変わらなくても、2 秒おきには送る（受け取り側が、生きているかを見分けるため）
         lastPush = sig;
         lastSentAt = Date.now();
-        window.postMessage({ svApp: 'state', state, vol, now: Date.now() }, location.origin);
+        window.postMessage({ svApp: 'state', state, vol, anonymous: anon, now: Date.now() }, location.origin);
       };
-      if (svc.engine) {
-        Promise.resolve(svc.engine.getVolume()).then((v) => send(Number.isFinite(Number(v)) ? Number(v) : null), () => send(null));
-      } else send(null);
+      const vs = svc.volume || svc.engine;
+      if (vs) Promise.resolve(vs.getVolume()).then((v) => send(Number.isFinite(Number(v)) ? Number(v) : null), () => send(null));
+      else send(null);
     } catch (err) {
       console.error('[SV] app state', err);
     }
@@ -178,7 +208,37 @@
     next: () => svc.player.skipToNext(),
     prev: () => svc.player.skipToPrevious(),
     seek: (ms) => svc.player.seekTo(Math.max(0, Math.round(Number(ms)))),
-    volume: (v) => svc.engine.setVolume(Math.min(1, Math.max(0, Number(v)))),
+    volume: (v) => (svc.volume || svc.engine).setVolume(Math.min(1, Math.max(0, Number(v)))),
+    // ブラウザの自動再生の制限を解く（ユーザーの操作の直後に呼ぶ。Spotify 自身が、最初のクリックで呼ぶのと同じ）
+    activate: () => svc.engine && typeof svc.engine.activateElement === 'function' && svc.engine.activateElement(),
+    // ログイン: アプリ自身のログインのボタンの処理（クリック）を呼ぶ。見つからなければ、Spotify のログインの画面へ（戻り先はこのページ）
+    login: () => {
+      const stack = [];
+      for (const root of roots) stack.push(root && root.current);
+      const budget = performance.now() + 1500;
+      while (stack.length && performance.now() < budget) {
+        const n = stack.pop();
+        if (!n) continue;
+        if (n.sibling) stack.push(n.sibling);
+        if (n.child) stack.push(n.child);
+        const p = n.memoizedProps;
+        if (p && typeof p === 'object' && p['data-testid'] === 'login-button' && typeof p.onClick === 'function') {
+          p.onClick({ preventDefault() {}, stopPropagation() {}, persist() {}, currentTarget: null, target: null, type: 'click' });
+          return;
+        }
+      }
+      location.href = 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(location.origin + '/');
+    },
+    // 歌詞の画面（歌詞の部品ができる）へ移る・戻る。アプリ内の移動（履歴）なので、音は止まらない
+    lyricsView: (on) => {
+      const B = window.__svBoot;
+      const h = B && B.platform && B.platform.getHistory();
+      if (!h) return;
+      const pre = (location.pathname.match(/^\/(intl-[a-z-]+)(?=\/)/) || [''])[0];
+      const at = /\/lyrics\/?$/.test(location.pathname);
+      if (on && !at) h.push(pre + '/lyrics');
+      else if (!on && at) h.push(pre + '/');
+    },
   };
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data) return;
@@ -190,7 +250,8 @@
     if (!c || !CMD[c]) return;
     try {
       findServices();
-      const r = (c === 'volume' ? svc.engine : svc.player) && CMD[c](e.data.arg);
+      const need = c === 'volume' ? svc.volume || svc.engine : c === 'activate' ? svc.engine : c === 'lyricsView' || c === 'login' ? true : svc.player;
+      const r = need && CMD[c](e.data.arg);
       Promise.resolve(r).catch((err) => console.error('[SV] app command', c, err));
     } catch (err) {
       console.error('[SV] app command', c, err);
@@ -484,6 +545,8 @@
     } catch (e) {
       /* なくてもよい */
     }
+    const B = window.__svBoot;
+    report.boot = B ? { patched: B.patched, renders: B.renders, platform: !!B.platform, container: B.container && B.container.id, error: B.error } : null;
     report.ms = Math.round(performance.now() - t0);
     return report;
   }

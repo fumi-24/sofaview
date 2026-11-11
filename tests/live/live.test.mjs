@@ -383,24 +383,20 @@ test('実際の TVer のプレイヤー（再生 API だけ偽）で、視聴画
   await page.close();
 });
 
-test('Spotify（ログアウト状態の Web プレーヤー）: Spotify のタブは手を加えず（画面はそのまま見える）、前面の自前ページ（再生中の画面）が、ログインしていない状態を出す。Spotify 自身の React が、先に置いた入口に登録される', opts, async () => {
+test('Spotify（ログアウト状態の Web プレーヤー）: タブは 1 つ。Spotify 自身の画面は文書の外に描かれ（起動の入口が効く）、自前の画面が、ログインしていない状態を出す。Spotify 自身の React が、先に置いた入口に登録される', opts, async () => {
   const sp = await env.ctx.newPage();
   const errors = [];
   sp.on('pageerror', (e) => errors.push(e.message));
   await sp.goto('https://open.spotify.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
   await until(() => sp.evaluate(() => document.documentElement.dataset.svReady === '1'), { timeout: 30000, message: 'sv ready' });
-  // Spotify のタブは、手を加えない
-  await until(() => sp.evaluate(() => !!document.querySelector('main') && document.querySelector('main').getClientRects().length > 0), { timeout: 30000, message: 'Spotify の画面が見える' });
-  assert.equal(await sp.evaluate(() => document.documentElement.classList.contains('sv-sp')), false);
-  // Spotify 自身の React（vendor の 18.3.1）が、先に置いた入口に登録され、画面の根を知らせてくる（歌詞の読み取りの土台）
-  assert.ok(await sp.evaluate(() => window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size >= 1 && window.__REACT_DEVTOOLS_GLOBAL_HOOK__.getFiberRoots(1).size >= 1), 'React が入口に登録される');
-  // 前面の自前ページ
-  const np = await env.ctx.newPage();
-  await np.goto(env.hubUrl.replace('hub/index.html', 'spotify/np.html'));
-  await np.bringToFront();
-  await until(() => np.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 30000, message: 'logged-out status view' });
-  await shot(np, 'spotify-0-np-loggedout');
+  await sp.bringToFront();
+  await until(() => sp.evaluate(() => { const n = document.getElementById('sv-np'); return !!n && n.dataset.kind === 'loggedOut'; }), { timeout: 45000, message: 'logged-out status view' });
+  // Spotify 自身の画面は、文書の外（起動のとき createRoot の描画先を替えた）。文書には、Spotify の要素がない
+  assert.equal(await sp.evaluate(() => document.documentElement.getAttribute('data-sv-detached')), '1', '描画先を替えた');
+  assert.equal(await sp.evaluate(() => document.querySelectorAll('main, [data-testid]').length), 0, '文書に Spotify の要素はない');
+  // Spotify 自身の React（vendor の 18.3.1）が、先に置いた入口に登録される（歌詞の読み取りの土台）
+  assert.ok(await sp.evaluate(() => window.__REACT_DEVTOOLS_GLOBAL_HOOK__.renderers.size >= 1), 'React が入口に登録される');
+  await shot(sp, 'spotify-0-loggedout');
   assert.deepEqual(errors.filter((m) => /sv-|SV\./.test(m)), [], '拡張由来の例外がない');
-  await np.close();
   await sp.close();
 });

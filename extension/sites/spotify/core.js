@@ -1,5 +1,5 @@
 /*
- * Spotify: 再生中の画面（拡張の自前ページ spotify/np.html）と、Spotify のタブ（engine.js）で共有する、純粋な部分（DOM に触らない）。
+ * Spotify: 自前の画面（ui.js）と、読み取り・操作（engine.js）で共有する、純粋な部分（DOM に触らない）。
  *   fmt: 秒 → m:ss    statusOf / STATUS_TEXT: 状態の画面の種類と文言    lyricsAt: 歌詞の行と再生位置から、いまの行を決める
  */
 (function (root) {

@@ -1,20 +1,21 @@
 /*
- * Spotify: 再生中の画面（拡張の自前ページ）。テレビに出す専用の画面。スマホから再生して、テレビには「いま何が流れているか」を大きく出す使い方が主。
- * この画面には、Spotify の部品は 1 つもない。再生エンジンは、裏のタブの Spotify（sites/spotify/content.js・engine.js）。
- *   状態: 裏のタブから届く（sv:spState）。再生位置は、届いた位置から、再生中は経過時間で進める。
- *   操作: 裏のタブへ依頼する（sv:spCmd → background が転送）。
+ * Spotify: 再生中の画面（自前）。Spotify のページの中に、全画面で出す。テレビに出す専用の画面。スマホから再生して、テレビには「いま何が流れているか」を大きく出す使い方が主。
+ * Spotify 自身の画面は、文書の外に描かれる（boot-main.js）ので、この画面の下に、Spotify の要素はない。
+ *   状態: 読み取り役（engine.js）から、250ms ごとに取る。再生位置は、再生中は経過時間で進める。
+ *   操作: 読み取り役に依頼する（アプリ自身のサービス → メディアセッション）。
  *   曲があるとき: ジャケット・曲名・アーティスト・歌詞・再生位置。操作されたとき（← → OK）にボタンの列を出し、5 秒で隠す。↑ ↓ は音量。
- *   曲がないとき: 読み込み中／ログインしていない／再生できない（Widevine がない）／スマホから再生するのを待っている／裏のタブにつながっていない、を、理由とやることつきで出す。
- * キーは、この自前ページがそのまま受ける（Spotify のページには届かない）。Home でハブへ。
+ *   曲がないとき: 読み込み中／ログインしていない／再生できない（Widevine がない）／スマホから再生するのを待っている／Spotify のサービスにつながっていない、を、理由とやることつきで出す。
+ * キーは、この画面がそのまま受ける。Home でハブへ。最初のキーで、音を有効にする（ブラウザの自動再生の制限）。
  */
-(function () {
+(function (root) {
   'use strict';
 
   const SV = self.SV;
   const C = SV.spotifyCore;
   const doc = document;
+  let reader = null; // 読み取り・操作（engine.js）
 
-  const state = { st: null, recv: 0 }; // 裏のタブから届いた状態と、届いた時刻
+  const state = { st: null, recv: 0 }; // 読み取り役から取った、いまの状態と、取った時刻
   const ctl = { settings: SV.settings.defaults(), matcher: SV.keys.createMatcher(), gate: new SV.keys.RepeatGate({ maxPerSec: 12 }), hold: new SV.keys.HoldDetector({ holdMs: 800 }) };
   function applySettings(s) {
     ctl.settings = s;
@@ -38,6 +39,7 @@
   let toastTimer = 0;
   let fi = 2; // ボタンの列で、フォーカスがある位置（初めは再生/一時停止）
   let lock = null;
+  let lastActivateAt = 0;
   let lyricHint = -1;
   let lyricSig = '';
   let lyricCur = -2;
@@ -60,18 +62,19 @@
     if (node.textContent !== v) node.textContent = v;
   };
 
-  /** 裏のタブへ、操作を依頼する。 */
+  /** 操作を実行する（アプリ自身のサービス → メディアセッション。engine.js）。実行したあと、状態をすぐ取り直す。 */
   function send(cmd, arg) {
-    return SV.sendMessage({ type: 'sv:spCmd', cmd, arg });
+    reader.command(cmd, arg);
+    setTimeout(refresh, 300);
   }
   const wantLyrics = () => !!ctl.settings.spotify.lyrics;
 
-  /** いまの状態の種類。裏のタブから、20 秒以上何も届かない（または、最初の 12 秒で何も届かない）ときは、つながっていない。 */
+  /** いまの状態の種類。アプリのサービスに、15 秒たってもつながらないときは、つながっていない。 */
   function viewKind() {
-    const now = Date.now();
-    if (!state.st) return now - startedAt > 12000 ? 'noEngine' : 'loading';
-    if (now - state.recv > 20000) return 'noEngine';
-    return state.st.kind;
+    const st = state.st;
+    if (!st) return 'loading';
+    if (!st.service && Date.now() - startedAt > 15000) return 'noEngine';
+    return st.kind;
   }
 
   /** 画面を点けたままにする（テレビの画面が消えないように）。画面が見えなくなると外れるので、見えたら取り直す。 */
@@ -185,8 +188,8 @@
     const t = performance.now();
     while (longTasks.length && t - longTasks[0].t > 10000) longTasks.shift();
     const max = longTasks.reduce((m, x) => Math.max(m, x.d), 0);
-    const age = state.st ? Math.max(0, (Date.now() - state.recv) / 1000).toFixed(0) + '秒前' : '–';
-    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　受信 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
+    const age = state.st ? Math.max(0, (Date.now() - state.st.at) / 1000).toFixed(0) + '秒前' : '–';
+    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　取得 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
   }
 
   function paintButtons(i) {
@@ -239,6 +242,8 @@
   }
 
   function refresh() {
+    state.st = reader.snapshot();
+    state.recv = Date.now();
     const kind = viewKind();
     el.setAttribute('data-kind', kind);
     const trackView = kind === 'track';
@@ -315,11 +320,16 @@
     doc.body.appendChild(el);
   }
 
-  /** キー。この自前ページがそのまま受ける。 */
+  /** キー。この画面がそのまま受ける（Spotify のページには届かない）。 */
   function onKeyDown(e) {
     if (SV.keys.shouldIgnore(e)) return;
     const action = ctl.matcher.match(e);
     SV.consume(e);
+    // ブラウザの自動再生の制限を解く: Spotify 自身が、最初のクリックで音を有効にする（activateElement）。ここでキーを横取りしているので、代わりに呼ぶ
+    if (!e.repeat && Date.now() - lastActivateAt > 3000) {
+      lastActivateAt = Date.now();
+      reader.command('activate');
+    }
     if (!action) return;
     if (action === 'HOME') {
       if (!e.repeat) SV.goHub();
@@ -333,7 +343,7 @@
     if (!ctl.gate.allow(action, e)) return;
     const kind = viewKind();
     if (kind === 'loggedOut') {
-      if (action === 'OK') SV.sendMessage({ type: 'sv:spCmd', cmd: 'login' }); // ログイン画面（Spotify のタブ）を前面に出す
+      if (action === 'OK') reader.command('login'); // Spotify のログイン画面へ（アプリ自身のログインの処理）
       return;
     }
     if (kind !== 'track') return; // 曲がないときは、ほかの操作はない
@@ -361,7 +371,8 @@
     }
   }
 
-  function start() {
+  function start(opts) {
+    reader = opts.reader;
     build();
     window.addEventListener('keydown', onKeyDown, true);
     window.addEventListener('keyup', (e) => {
@@ -369,24 +380,7 @@
       SV.consume(e);
       if (ctl.matcher.match(e) === 'BACK') ctl.hold.release('BACK');
     }, true);
-    if (SV.hasChrome()) {
-      chrome.runtime.onMessage.addListener((msg) => {
-        if (msg && msg.type === 'sv:spState' && msg.state) {
-          state.st = msg.state;
-          state.recv = Date.now();
-        }
-        return false;
-      });
-    }
-    // 裏の Spotify のタブを用意して（なければ開く）、いまの状態を求める。届かない間は、繰り返す
-    const hello = () => {
-      SV.sendMessage({ type: 'sv:ensureSpotifyEngine' });
-      SV.sendMessage({ type: 'sv:spCmd', cmd: 'hello' });
-    };
-    hello();
-    setInterval(() => {
-      if (viewKind() === 'noEngine' || viewKind() === 'loading') hello();
-    }, 3000);
+    window.addEventListener('keypress', (e) => !SV.keys.shouldIgnore(e) && SV.consume(e), true);
     try {
       const po = new PerformanceObserver((l) => {
         for (const en of l.getEntries()) longTasks.push({ t: en.startTime, d: en.duration });
@@ -406,9 +400,9 @@
     }, 250);
     refresh();
     acquireLock();
-    doc.documentElement.setAttribute('data-sv-ready', '1');
     window.addEventListener('pagehide', () => perfObs && perfObs.disconnect());
+    return { refresh, root: () => el };
   }
 
-  start();
-})();
+  SV.spotifyUI = { start };
+})(typeof self !== 'undefined' ? self : globalThis);
