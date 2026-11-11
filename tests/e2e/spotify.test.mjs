@@ -166,6 +166,9 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 10000, message: '歌詞が出る' });
   assert.equal(await root.locator('.sv-np-ly-track').evaluate((e) => e.style.getPropertyValue('--cur')), '2', 'いまの行（3 行目）が真ん中に来る位置');
   assert.ok((await fx(page, 'log')).some((l) => l.ev === 'nav' && /\/intl-ja\/lyrics$/.test(l.to)), 'アプリ内の移動で、歌詞の画面へ（言語の接頭辞を保つ）');
+  const clicks = (await fx(page, 'log')).filter((l) => l.ev === 'lyricsBtnClick');
+  assert.equal(clicks.length, 1, 'アプリ自身の歌詞ボタンの処理を 1 回だけ呼ぶ（切り替えを繰り返さない）');
+  assert.equal(clicks[0].button, 0, 'リンクの処理が通る形のクリックを渡す');
   const focused = () => page.evaluate(() => document.activeElement && document.activeElement.dataset.id);
   for (let i = 0; i < 4; i++) await press(page, 'ArrowRight'); // 列を出す + 3 つ右
   assert.equal(await focused(), 'lyrics');
@@ -179,6 +182,25 @@ test('Spotify: 歌詞のオン/オフ。ボタンで切り替えると設定に�
   await press(page, 'Enter');
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 10000, message: '歌詞がまた出る' });
   await until(async () => (await root.locator('.sv-np-controls').isVisible()) === false, { timeout: 8000, message: '5 秒で隠れる' });
+});
+
+test('Spotify: 歌詞の画面への移り先は、アプリ自身の歌詞ボタンから（href があれば履歴で、なければ処理を呼ぶ）。ボタンがなければ履歴で /lyrics。行の部品が描かれなくても、入れ物の props（data.lyrics）から読む', async () => {
+  await setSp({ lyrics: true });
+  // 1) href: 履歴でその移り先へ。ボタンの処理は呼ばない
+  let page = await open({ lyricsBtn: 'href' });
+  await until(async () => (await page.locator('#sv-np .sv-np-line').count()) === 6, { timeout: 12000, message: 'href から歌詞が出る' });
+  let log = await fx(page, 'log');
+  assert.ok(log.some((l) => l.ev === 'nav' && /\/intl-ja\/lyrics$/.test(l.to)));
+  assert.equal(log.filter((l) => l.ev === 'lyricsBtnClick').length, 0);
+  await page.close();
+  // 2) ボタンがない: 履歴で、接頭辞つきの /lyrics へ
+  page = await open({ lyricsBtn: 'none' });
+  await until(async () => (await page.locator('#sv-np .sv-np-line').count()) === 6, { timeout: 12000, message: '履歴の移動から歌詞が出る' });
+  await page.close();
+  // 3) 行の部品がない（描かれていない・名前が変わった）: 入れ物の props から読む
+  page = await open({ dataOnly: true });
+  await until(async () => (await page.locator('#sv-np .sv-np-line').count()) === 6, { timeout: 12000, message: 'data.lyrics から歌詞が出る' });
+  assert.match(await page.locator('#sv-np .sv-np-line.is-current').innerText(), /三行目（いま）/);
 });
 
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {

@@ -62,9 +62,20 @@
   /** 歌詞の行の部品か（props の名前だけで見分ける）。 */
   const isLine = (p) => !!p && typeof p === 'object' && typeof p.onObserve === 'function' && typeof p.text === 'string' && 'start' in p;
 
-  /** 部品の木をたどって、歌詞の行を、画面の順に集める。行の部品の中（同じ props を渡す内側の部品）は、たどらない（二重に数えない）。 */
+  /** 歌詞のデータを持つ部品か（props の名前ではなく、形で見分ける: data.lyrics が { text, start } の配列）。 */
+  const lyricsOf = (p) => {
+    const d = p && typeof p === 'object' ? p.data : null;
+    const a = d && typeof d === 'object' ? d.lyrics : null;
+    return Array.isArray(a) && a.length && a.every((x) => x && typeof x === 'object' && typeof x.text === 'string' && 'start' in x) ? a : null;
+  };
+
+  /**
+   * 部品の木をたどって、歌詞の行を、画面の順に集める。行の部品の中（同じ props を渡す内側の部品）は、たどらない（二重に数えない）。
+   * 行の部品が見つからないとき（描かれていない・名前が変わった）の代わりに、歌詞の入れ物の props（data.lyrics）から読む。
+   */
   function collectLyrics() {
     const lines = [];
+    let viaData = null;
     for (const root of roots) {
       let f = root && root.current;
       if (!f) continue;
@@ -77,14 +88,62 @@
           if (n.sibling) stack.push(n.sibling);
           continue;
         }
+        if (!viaData) {
+          const a = lyricsOf(n.memoizedProps);
+          if (a) viaData = a.map((x) => ({ text: x.text, start: Number(x.start) }));
+        }
         if (n.sibling) stack.push(n.sibling);
         if (n.child) stack.push(n.child);
       }
     }
-    return lines;
+    return lines.length ? lines : viaData || [];
   }
 
+  /** 歌詞ボタンの props。木をたどるのは安くないので、4 秒は覚えておく（ボタンが変わると props が差し替わるので、押下の状態は古くなりうる。移動の前は強制的に探し直す）。 */
+  let lyricsBtnCache = { at: -1e9, p: null };
+  function lyricsButton(fresh) {
+    const now = performance.now();
+    if (fresh || now - lyricsBtnCache.at > 4000) lyricsBtnCache = { at: now, p: findProps((p) => p['data-testid'] === 'lyrics-button') };
+    return lyricsBtnCache.p;
+  }
 
+  /** 歌詞が出ない理由を探すための、数だけの情報（文字の値は含めない）。 */
+  function lyricsDebug() {
+    const B = window.__svBoot;
+    const host = B && B.host;
+    const btn = lyricsButton(false);
+    return {
+      path: location.pathname.replace(/\/[A-Za-z0-9]{22}/g, '/…').slice(0, 40),
+      btn: btn ? (typeof btn.onClick === 'function' ? 'onClick' : '') + (typeof btn.href === 'string' ? ' href=' + btn.href.replace(/\/[A-Za-z0-9]{22}/g, '/…').slice(0, 30) : '') : '',
+      pressed: btn ? String(btn['aria-pressed'] ?? btn['data-active'] ?? '') : '',
+      lineEls: host ? host.querySelectorAll('[data-testid="lyrics-line"]').length : -1,
+      hostNodes: host ? host.getElementsByTagName('*').length : -1,
+      main: host && host.querySelector('main') ? host.querySelector('main').getElementsByTagName('*').length : -1,
+    };
+  }
+
+  /** 部品の木から、条件に合う props（ホスト要素の props）を 1 つ探す。 */
+  function findProps(pred) {
+    const budget = performance.now() + 250;
+    for (const root of roots) {
+      const stack = [root && root.current];
+      while (stack.length && performance.now() < budget) {
+        const n = stack.pop();
+        if (!n) continue;
+        if (n.sibling) stack.push(n.sibling);
+        if (n.child) stack.push(n.child);
+        if (typeof n.type === 'string') {
+          const p = n.memoizedProps;
+          try {
+            if (p && typeof p === 'object' && pred(p)) return p;
+          } catch (e) {
+            /* 次へ */
+          }
+        }
+      }
+    }
+    return null;
+  }
 
   // ================= アプリ自身のサービス（再生の状態・操作・音量）=================
   // Spotify のアプリは、再生のサービス（playerAPI）と、音声の再生エンジン（standalonePlayer。音量を持つ）を、部品の props として持っている（実機の診断で確認）。
@@ -229,15 +288,20 @@
       }
       location.href = 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(location.origin + '/');
     },
-    // 歌詞の画面（歌詞の部品ができる）へ移る・戻る。アプリ内の移動（履歴）なので、音は止まらない
+    // 歌詞の画面（歌詞の部品ができる）へ移る・戻る。アプリ内の移動（履歴）なので、音は止まらない。
+    // 移り先は、アプリ自身の歌詞ボタンが知っている（href か onClick）。押すのと同じ処理を呼ぶ。見つからなければ履歴で /lyrics へ
     lyricsView: (on) => {
       const B = window.__svBoot;
       const h = B && B.platform && B.platform.getHistory();
-      if (!h) return;
       const pre = (location.pathname.match(/^\/(intl-[a-z-]+)(?=\/)/) || [''])[0];
-      const at = /\/lyrics\/?$/.test(location.pathname);
-      if (on && !at) h.push(pre + '/lyrics');
-      else if (!on && at) h.push(pre + '/');
+      const btn = lyricsButton(true);
+      const at = /\/lyrics\/?$/.test(location.pathname) || (btn && (btn['aria-pressed'] === true || btn['aria-pressed'] === 'true' || btn['data-active'] === true || btn['data-active'] === 'true'));
+      if (on === !!at) return;
+      if (on) {
+        if (btn && typeof btn.href === 'string' && btn.href.charAt(0) === '/' && h) h.push(btn.href);
+        else if (btn && typeof btn.onClick === 'function') btn.onClick({ button: 0, defaultPrevented: false, metaKey: false, ctrlKey: false, shiftKey: false, altKey: false, preventDefault() {}, stopPropagation() {}, persist() {}, currentTarget: null, target: null, type: 'click', nativeEvent: {} });
+        else if (h) h.push(pre + '/lyrics');
+      } else if (h) h.push(pre + '/');
     },
   };
   window.addEventListener('message', (e) => {
@@ -547,6 +611,11 @@
     }
     const B = window.__svBoot;
     report.boot = B ? { patched: B.patched, renders: B.renders, platform: !!B.platform, container: B.container && B.container.id, error: B.error } : null;
+    try {
+      report.lyrics = lyricsDebug(); // 歌詞が出ない理由を探すための、数だけの情報
+    } catch (e) {
+      report.lyrics = { error: String(e && e.message).slice(0, 60) };
+    }
     report.ms = Math.round(performance.now() - t0);
     return report;
   }
@@ -571,6 +640,12 @@
     } catch (err) {
       console.error('[SV] react lyrics', err);
     }
-    window.postMessage({ svReact: 'lyrics', lines, ms: performance.now() - t0 }, location.origin);
+    let dbg = null;
+    try {
+      dbg = lines.length ? null : lyricsDebug();
+    } catch (err) {
+      dbg = { error: String(err && err.message).slice(0, 60) };
+    }
+    window.postMessage({ svReact: 'lyrics', lines, ms: performance.now() - t0, dbg }, location.origin);
   });
 })();

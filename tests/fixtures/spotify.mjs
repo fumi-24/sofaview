@@ -36,7 +36,7 @@ export function spotifyHtml(opt) {
   };
   const playbackAPI = { getVolume() { return Promise.resolve(AP.vol); }, setVolume(v) { AP.vol = v; appLog('volume', v); } };
   const standalonePlayer = { getVolume() { return Promise.resolve(AP.vol); }, setVolume() {}, pause() {}, activateElement() { appLog('activate'); } };
-  const appHistory = { push(to) { window.history.pushState({}, '', to); log('nav', { to }); setLyrics(/lyrics\\/?$/.test(to)); } };
+  const appHistory = { push(to) { window.history.pushState({}, '', to); log('nav', { to }); setLyrics(/^\\/intl-[a-z-]+\\/lyrics\\/?$/.test(to)); } };
 
   // ---- プラットフォームと登録簿（名前つき Symbol）----
   const registry = { _map: new Map(), resolve(k) { return this._map.get(k); } };
@@ -48,15 +48,23 @@ export function spotifyHtml(opt) {
   const fakeRoot = { current: null };
   function setLyrics(on) {
     if (!hook) return;
-    const lines = on ? ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'].map((t, i) => {
+    const texts = ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'];
+    // 行の部品（Spotify の歌詞の行と同じ props: text・start・onObserve）。dataOnly のときは描かれず、入れ物の props（data.lyrics）だけがある
+    let lines = on && !${!!o.dataOnly} ? texts.map((t, i) => {
       const props = { text: t, start: i * 20000, onObserve() {}, translationText: undefined };
       return { memoizedProps: props, child: { memoizedProps: props, child: null, sibling: null }, sibling: null };
     }) : [];
+    if (on && ${!!o.dataOnly}) lines = [{ memoizedProps: { trackUri: 'spotify:track:abc', data: { isTimeSynced: true, lyrics: texts.map((t, i) => ({ text: t, start: i * 20000, end: (i + 1) * 20000 })) } }, child: null, sibling: null }];
     lines.forEach((l, i) => { if (i) lines[i - 1].sibling = l; });
     const prov = { memoizedProps: { value: platform }, tag: 10, type: { _context: { displayName: 'PlatformContext' } }, child: null, sibling: null };
     const login = ${o.loggedOut ? "{ memoizedProps: { 'data-testid': 'login-button', onClick() { log('login'); } }, tag: 5, child: null, sibling: prov }" : 'prov'};
     const player = ${o.noApp ? 'null' : "{ memoizedProps: { playerAPI, standalonePlayer }, tag: 0, type: { name: 'PlayerHost' }, child: null, sibling: login }"};
-    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: player || login }, sibling: null };
+    // 歌詞ボタン（アプリ自身の移り先を知っている）。lyricsBtn: 'onClick'（既定）/ 'href' / 'none'
+    const mode = ${JSON.stringify(o.lyricsBtn || 'onClick')};
+    const btnProps = mode === 'href' ? { 'data-testid': 'lyrics-button', 'aria-pressed': on, href: '/intl-ja/lyrics', onClick() { log('lyricsBtnClick'); } }
+      : { 'data-testid': 'lyrics-button', 'aria-pressed': on, onClick(e) { log('lyricsBtnClick', { button: e && e.button }); appHistory.push('/intl-ja/lyrics'); } };
+    const btn = mode === 'none' ? null : { memoizedProps: btnProps, tag: 5, type: 'button', child: null, sibling: player || login };
+    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: btn || player || login }, sibling: null };
     hook.onCommitFiberRoot(rid, fakeRoot);
   }
   setLyrics(false);

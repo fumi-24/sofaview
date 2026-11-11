@@ -166,6 +166,8 @@
     let drm = null;
     let lastAppAsk = 0;
     let lyricLines = []; // react-main.js から受け取った歌詞の行 [{ text, start }]
+    let lyricDbg = null; // 歌詞が出ない理由を探すための情報（数だけ）
+    let lyricViewTries = 0; // 歌詞の画面へ移る依頼の回数（同じ曲で、数回まで。アプリのボタンの切り替えを繰り返さない）
     let lyricTitle = '';
     let lyricTitleAt = 0;
     let lyricOldSig = '';
@@ -223,15 +225,19 @@
       // 曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
       if (L.length && sigOf(L) === lyricOldSig && Date.now() - lyricTitleAt < 5000) return;
       lyricLines = L;
+      lyricDbg = e.data.dbg || null;
     });
 
     /** 歌詞の画面（アプリ内の /lyrics）へ移る・戻る。設定に合わせる（変わったとき、または 5 秒に 1 回）。 */
     function syncLyricsView() {
       const want = wantLyrics();
       const now = Date.now();
-      if (want === lyricViewWant && now - lyricViewAt < 5000) return;
+      if (want === lyricViewWant && now - lyricViewAt < 8000) return;
+      // 歌詞を出したい間は、行が届くまで、同じ曲で 4 回まで依頼する（アプリ側は、すでに歌詞の画面なら何もしない）
+      if (want && want === lyricViewWant && (lyricLines.length || lyricViewTries >= 4)) return;
       lyricViewWant = want;
       lyricViewAt = now;
+      lyricViewTries = want ? lyricViewTries + 1 : 0;
       appCmd('lyricsView', want);
     }
 
@@ -243,6 +249,8 @@
         lyricTitleAt = now;
         lyricOldSig = sigOf(lyricLines);
         lyricLines = [];
+        lyricDbg = null;
+        lyricViewTries = 0;
         lyricAskAt = 0;
         lyricAskGap = 500;
         lyricAsks = 0;
@@ -266,6 +274,7 @@
       else if (cmd === 'activate') appCmd('activate'); // ユーザーの操作の直後に、音を有効にする
       else if (cmd === 'lyrics') {
         lyricViewWant = null;
+        lyricViewTries = 0;
         lyricAskAt = 0;
         lyricAsks = 0;
         lyricAskGap = 500;
@@ -299,7 +308,7 @@
           durationSec: i.durationSec,
           volume: i.volume,
         },
-        lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks },
+        lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries },
       };
     }
 

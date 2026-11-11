@@ -11,7 +11,7 @@
  */
 (function () {
   'use strict';
-  const B = (window.__svBoot = { platform: null, container: null, patched: false, renders: 0, error: null });
+  const B = (window.__svBoot = { platform: null, container: null, host: null, patched: false, renders: 0, error: null });
 
   /** 名前つきのサービス（登録簿のキーは、説明つきの Symbol）。なければ null。 */
   B.service = function (name) {
@@ -52,8 +52,10 @@
       // アプリの根（最初の createRoot と、同じ要素への作り直し）は、文書の外へ描かせる
       const app = !B.container || container === B.container;
       if (!B.container) B.container = container;
-      const root = orig.call(this, app ? document.createElement('div') : container, options);
+      const target = app ? document.createElement('div') : container;
+      const root = orig.call(this, target, options);
       if (app) {
+        B.host = target; // 描画先（文書の外）。診断で、中に何が描かれているかを数える
         const render = root.render;
         root.render = function (el) {
           B.renders++;

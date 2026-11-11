@@ -115,8 +115,16 @@
     box.querySelector('.sv-np-s-hint').textContent = t.hint;
   }
 
+  /** 歌詞が出ないときの診断（右下の表示）: 依頼の回数・いまのパス・歌詞ボタンの有無・歌詞の行の要素の数・Spotify の画面の大きさ。 */
+  function dbgText(lyr) {
+    const d = lyr.dbg;
+    if (!d) return lyr.asks > 2 ? '（依頼' + (lyr.tries || 0) + '）' : '';
+    if (d.error) return '（' + d.error + '）';
+    return '（依頼' + (lyr.tries || 0) + ' 路' + d.path + ' ボタン' + (d.btn || 'なし') + (d.pressed ? ' 押下' + d.pressed : '') + ' 行要素' + d.lineEls + ' 本体' + d.main + '）';
+  }
+
   /**
-   * 歌詞。裏のタブが読んだ行（文字・開始時刻）と、再生位置から、いまの行を決める。全部の行を並べて、
+   * 歌詞。アプリの部品の木から読んだ行（文字・開始時刻）と、再生位置から、いまの行を決める。全部の行を並べて、
    * いまの行が真ん中に来るよう、列ごと滑らかに動かす（行の作り直しは、曲が変わったときだけ）。
    */
   function paintLyrics(i, posSec, lyr) {
@@ -126,7 +134,7 @@
       lyricHint = -1;
     }
     const ly = wantLyrics() ? C.lyricsAt(lyr.lines, posSec, i.durationSec, lyricHint) : null;
-    lyricState = !wantLyrics() ? 'オフ' : ly ? ly.lines.length + '行' : lyr.lines.length ? '時刻なし' : '待ち' + lyr.asks + '回';
+    lyricState = !wantLyrics() ? 'オフ' : ly ? ly.lines.length + '行' : lyr.lines.length ? '時刻なし' : '待ち' + lyr.asks + '回' + dbgText(lyr);
     box.hidden = !ly;
     if (!ly) return;
     lyricHint = ly.cur;
