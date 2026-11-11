@@ -16,14 +16,14 @@ export function spotifyHtml(opt) {
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
   // ---- アプリ自身のサービス（状態を持つ）----
-  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', vol: 1, listeners: [] };
+  const AP = { paused: true, pos: 50000, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, listeners: [] };
   const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
   const appLog = (action, arg) => log('app', { action, arg });
   const playerAPI = {
     getState() {
       return {
         isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
-        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: 'spotify:track:abc', name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=', width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
+        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=', width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
         restrictions: { canSeek: true },
       };
     },
@@ -43,6 +43,21 @@ export function spotifyHtml(opt) {
   const registry = { _map: new Map(), resolve(k) { return this._map.get(k); } };
   ${o.noApp ? '' : "registry._map.set(Symbol('PlayerAPI'), playerAPI); registry._map.set(Symbol('PlaybackAPI'), playbackAPI);"}
   const platform = { getRegistry() { return registry; }, getSession() { return { isAnonymous: ${!!o.loggedOut}, market: 'SECRET-MARKET' }; }, getHistory() { return appHistory; }, getTransport() { return {}; }, token: 'SECRET-TOKEN' };
+
+  // ---- 問い合わせキャッシュ（react-query の QueryClient の形。Spotify の歌詞は、曲ごとに 1 回取得してここに入る。次の曲の分は先読みされる）----
+  const subs = [];
+  const queries = [];
+  const qcache = { getAll() { return queries; }, subscribe(cb) { subs.push(cb); return () => {}; } };
+  const queryClient = { getQueryCache() { return qcache; } };
+  const LYRIC_TEXTS = ['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞'];
+  const putQuery = (queryKey, data) => {
+    const q = { queryKey, state: { data, dataUpdatedAt: Date.now() } };
+    queries.push(q);
+    subs.forEach((cb) => cb({ type: 'updated', query: q }));
+  };
+  window.__fx.cacheLyrics = (uri, texts) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: true, isTimeSynced: true, lyrics: (texts || LYRIC_TEXTS).map((t, i) => ({ start: i * 20000, end: (i + 1) * 20000, text: t })) });
+  window.__fx.cacheAvail = (uri, v) => putQuery(['useLyricsAvailability', uri], v);
+  window.__fx.cacheNone = (uri) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: false });
 
   // ---- 部品の木（DevTools の入口に知らせる）----
   const rid = hook ? hook.inject({}) : 0;
@@ -65,13 +80,16 @@ export function spotifyHtml(opt) {
     const btnProps = mode === 'href' ? { 'data-testid': 'lyrics-button', 'aria-pressed': on, href: '/intl-ja/lyrics', onClick() { log('lyricsBtnClick'); } }
       : { 'data-testid': 'lyrics-button', 'aria-pressed': on, onClick(e) { log('lyricsBtnClick', { button: e && e.button }); appHistory.push('/intl-ja/lyrics'); } };
     const btn = mode === 'none' ? null : { memoizedProps: btnProps, tag: 5, type: 'button', child: null, sibling: player || login };
-    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: btn || player || login }, sibling: null };
+    const qcp = ${o.noQuery ? 'null' : "{ memoizedProps: { client: queryClient }, tag: 0, type: { name: 'QueryClientProvider' }, child: null, sibling: btn || player || login }"};
+    fakeRoot.current = { memoizedProps: null, child: { memoizedProps: {}, child: lines[0] || null, sibling: qcp || btn || player || login }, sibling: null };
     hook.onCommitFiberRoot(rid, fakeRoot);
+    if (on && !${!!o.noQuery} && !queries.some((q) => q.queryKey[0] === 'lyrics' && q.queryKey[1].uri === AP.uri)) setTimeout(() => window.__fx.cacheLyrics(AP.uri), 300);
   }
   setLyrics(false);
 
-  window.__fx.setTrack = (t) => {
+  window.__fx.setTrack = (t, uri) => {
     AP.title = t;
+    if (uri) AP.uri = uri;
     AP.listeners.forEach((cb) => cb({ data: {} })); // アプリの更新イベント
     if (navigator.mediaSession.metadata) navigator.mediaSession.metadata = new MediaMetadata({ title: t, artist: 'テスト歌手', artwork: [{ src: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=' }] });
   };

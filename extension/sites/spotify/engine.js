@@ -167,6 +167,9 @@
     let lastAppAsk = 0;
     let lyricLines = []; // react-main.js から受け取った歌詞の行 [{ text, start }]
     let lyricDbg = null; // 歌詞が出ない理由を探すための情報（数だけ）
+    let lyricUri = ''; // 問い合わせキャッシュから届いた歌詞の曲の URI
+    let lyricNone = false; // この曲には歌詞がない（キャッシュで分かった）
+    let lyricSrc = ''; // 歌詞の出どころ: cache（問い合わせキャッシュ）/ tree（部品の木）
     let lyricViewTries = 0; // 歌詞の画面へ移る依頼の回数（同じ曲で、数回まで。アプリのボタンの切り替えを繰り返さない）
     let lyricTitle = '';
     let lyricTitleAt = 0;
@@ -230,9 +233,22 @@
       if (e.source === root && e.data && e.data.svReact === 'diag' && opts && opts.onDiag) opts.onDiag(e.data.report); // 診断の報告（読み取りだけ。react-main.js）
       if (e.source !== root || !e.data || e.data.svReact !== 'lyrics') return;
       const L = Array.isArray(e.data.lines) ? e.data.lines : [];
-      // 曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
+      if (e.data.src === 'cache') {
+        // 問い合わせキャッシュから（曲の URI つき）。いまの曲のものだけ受け取る。前の曲のものが残っている心配はない
+        const cur = app.state && app.state.uri;
+        if (cur && e.data.uri && e.data.uri !== cur) return;
+        lyricUri = e.data.uri || '';
+        lyricNone = !!e.data.none;
+        lyricLines = L;
+        lyricSrc = 'cache';
+        lyricDbg = null;
+        return;
+      }
+      // 部品の木から。曲が変わった直後は、前の曲の歌詞がまだ部品の木に残っている。違う歌詞になるまで（または 5 秒たつまで）、新しい曲の歌詞とみなさない
       if (L.length && sigOf(L) === lyricOldSig && Date.now() - lyricTitleAt < 5000) return;
+      if (lyricSrc === 'cache' && lyricLines.length && lyricUri && lyricUri === (app.state && app.state.uri)) return; // キャッシュのほうが確か
       lyricLines = L;
+      lyricSrc = L.length ? 'tree' : '';
       lyricDbg = e.data.dbg || null;
     });
 
@@ -252,18 +268,25 @@
     /** 歌詞の行を、部品の木から読む（問い合わせ）。返ってこない間は、間隔を広げる（木をたどるのは、安くない）。 */
     function askLyrics(title) {
       const now = Date.now();
-      if (title !== lyricTitle) {
-        lyricTitle = title;
+      const key = (appOk() && app.state.uri) || title;
+      if (key !== lyricTitle) {
+        const keep = !!lyricUri && lyricUri === key; // 先読みのキャッシュから、もう届いている
+        lyricTitle = key;
         lyricTitleAt = now;
         lyricOldSig = sigOf(lyricLines);
-        lyricLines = [];
+        if (!keep) {
+          lyricLines = [];
+          lyricNone = false;
+          lyricSrc = '';
+          lyricUri = '';
+        }
         lyricDbg = null;
         lyricViewTries = 0;
         lyricAskAt = 0;
         lyricAskGap = 250;
         lyricAsks = 0;
       }
-      if (wantLyrics() && !lyricLines.length && now - lyricAskAt > lyricAskGap) {
+      if (wantLyrics() && !lyricLines.length && !lyricNone && now - lyricAskAt > lyricAskGap) {
         lyricAskAt = now;
         lyricAsks++;
         lyricAskGap = lyricAsks < 24 ? 250 : lyricAsks < 34 ? 1000 : lyricAsks < 44 ? 3000 : 8000; // 曲が変わった直後の 6 秒は、0.25 秒おき（歌詞の出方を速く）。出なければ、間隔を広げる
@@ -320,7 +343,7 @@
           durationSec: i.durationSec,
           volume: i.volume,
         },
-        lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries },
+        lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries, none: lyricNone, src: lyricSrc },
         mediaDiff,
       };
     }

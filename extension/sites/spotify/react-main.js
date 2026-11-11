@@ -62,6 +62,105 @@
   /** 歌詞の行の部品か（props の名前だけで見分ける）。 */
   const isLine = (p) => !!p && typeof p === 'object' && typeof p.onObserve === 'function' && typeof p.text === 'string' && 'start' in p;
 
+  // ================= 歌詞: アプリの問い合わせキャッシュ（react-query）を購読する =================
+  // Spotify 自身の歌詞表示は、歌詞を曲ごとに 1 回だけ取得して問い合わせキャッシュに入れ、画面はそのキャッシュを描くだけ。次の曲の歌詞も先に取得しておく。
+  // ここでは、そのキャッシュ（アプリが持っているデータ）を、更新の通知で受け取る（部品の木を探し回らない）。キーは ["lyrics", { uri, … }]、
+  // 値は { hasLyrics, isTimeSynced, lyrics: [{ start, end, text }], … }（実サイトの公開コードで確認）。通信は、アプリ自身が行う。拡張は読むだけ。
+  const lyr = { qc: null, findAt: -1e9, sub: false, sentSig: '', n: 0 };
+
+  /** QueryClient（部品の props の client）を探して、キャッシュの更新を購読する。見つかるまで 2 秒に 1 回まで。 */
+  function ensureQueryClient() {
+    if (lyr.qc) return lyr.qc;
+    const now = performance.now();
+    if (now - lyr.findAt < 2000) return null;
+    lyr.findAt = now;
+    const budget = now + 300;
+    for (const root of roots) {
+      const stack = [root && root.current];
+      while (stack.length && performance.now() < budget) {
+        const n = stack.pop();
+        if (!n) continue;
+        if (n.sibling) stack.push(n.sibling);
+        if (n.child) stack.push(n.child);
+        const c = n.memoizedProps && n.memoizedProps.client;
+        if (c && typeof c === 'object' && typeof c.getQueryCache === 'function') {
+          try {
+            const cache = c.getQueryCache();
+            if (typeof cache.getAll !== 'function') continue;
+            lyr.qc = c;
+            if (typeof cache.subscribe === 'function') {
+              cache.subscribe((ev) => {
+                const k = ev && ev.query && ev.query.queryKey;
+                if (k && (k[0] === 'lyrics' || k[0] === 'useLyricsAvailability')) setTimeout(() => sendLyrics(false), 0);
+              });
+              lyr.sub = true;
+            }
+            return c;
+          } catch (e) {
+            /* 次へ */
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  /** いまの曲の URI（アプリの再生サービスから）。 */
+  function currentUri() {
+    try {
+      const st = svc.player && svc.player.getState();
+      const u = st && st.item && st.item.uri;
+      return typeof u === 'string' ? u : '';
+    } catch (e) {
+      return '';
+    }
+  }
+
+  /** キャッシュから、この曲の歌詞を引く。{ lines, none } または null（まだキャッシュにない）。 */
+  function lyricsFromCache(uri) {
+    const qc = ensureQueryClient();
+    if (!qc || !uri) return null;
+    let best = null;
+    let avail = null;
+    let n = 0;
+    for (const q of qc.getQueryCache().getAll()) {
+      const k = q && q.queryKey;
+      if (!k) continue;
+      if (k[0] === 'lyrics' && k[1] && k[1].uri === uri) {
+        n++;
+        const d = q.state && q.state.data;
+        if (d && (!best || (q.state.dataUpdatedAt || 0) >= (best.t || 0))) best = { d, t: q.state.dataUpdatedAt || 0 };
+      } else if (k[0] === 'useLyricsAvailability' && k[1] === uri) {
+        const d = q.state && q.state.data;
+        if (typeof d === 'boolean') avail = d;
+      }
+    }
+    lyr.n = n;
+    if (best) {
+      const d = best.d;
+      if (d.hasLyrics === false) return { lines: [], none: true };
+      if (Array.isArray(d.lyrics) && d.lyrics.length) return { lines: d.lyrics.map((x) => ({ text: String(x && x.text != null ? x.text : ''), start: Number(x && x.start) })), none: false };
+    }
+    if (avail === false) return { lines: [], none: true }; // 歌詞のない曲
+    return null;
+  }
+
+  /** この曲の歌詞がキャッシュにあれば、すぐ送る（変わっていなければ送らない。force なら必ず）。送ったら true。 */
+  function sendLyrics(force) {
+    try {
+      const uri = currentUri();
+      const r = lyricsFromCache(uri);
+      if (!r) return false;
+      const sig = uri + '|' + r.lines.length + '|' + (r.lines[0] ? r.lines[0].text : '') + '|' + (r.lines.length ? r.lines[r.lines.length - 1].text : '') + '|' + r.none;
+      if (!force && sig === lyr.sentSig) return true;
+      lyr.sentSig = sig;
+      window.postMessage({ svReact: 'lyrics', lines: r.lines, none: r.none, uri, src: 'cache', ms: 0 }, location.origin);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+
   /** 歌詞のデータを持つ部品か（props の名前ではなく、形で見分ける: data.lyrics が { text, start } の配列）。 */
   const lyricsOf = (p) => {
     const d = p && typeof p === 'object' ? p.data : null;
@@ -116,6 +215,8 @@
       path: location.pathname.replace(/\/[A-Za-z0-9]{22}/g, '/…').slice(0, 40),
       btn: btn ? (typeof btn.onClick === 'function' ? 'onClick' : '') + (typeof btn.href === 'string' ? ' href=' + btn.href.replace(/\/[A-Za-z0-9]{22}/g, '/…').slice(0, 30) : '') : '',
       pressed: btn ? String(btn['aria-pressed'] ?? btn['data-active'] ?? '') : '',
+      qc: lyr.qc ? (lyr.sub ? 'sub' : 'get') : 'なし',
+      cache: lyr.n,
       lineEls: host ? host.querySelectorAll('[data-testid="lyrics-line"]').length : -1,
       hostNodes: host ? host.getElementsByTagName('*').length : -1,
       main: host && host.querySelector('main') ? host.querySelector('main').getElementsByTagName('*').length : -1,
@@ -224,6 +325,7 @@
 
   let lastPush = '';
   let lastBase = '';
+  let lastUri = '';
   let lastFullAt = 0;
   let lastSentAt = 0;
   /** ログインしていないか（プラットフォームのセッション）。分からなければ null。 */
@@ -254,6 +356,10 @@
       if (!force && base === lastBase && t - lastFullAt < 1000) return;
       lastBase = base;
       lastFullAt = t;
+      if (state.uri !== lastUri) {
+        lastUri = state.uri;
+        setTimeout(() => sendLyrics(true), 0); // 曲が変わった: その曲の歌詞が（先読みで）キャッシュにあれば、すぐ送る
+      }
       const send = (vol) => {
         const sig = base + JSON.stringify(vol);
         if (!force && sig === lastPush && Date.now() - lastSentAt < 2000) return; // 変わらなくても、2 秒おきには送る（受け取り側が、生きているかを見分けるため）
@@ -633,6 +739,7 @@
     const B = window.__svBoot;
     report.boot = B ? { patched: B.patched, renders: B.renders, platform: !!B.platform, container: B.container && B.container.id, error: B.error } : null;
     try {
+      ensureQueryClient();
       report.lyrics = lyricsDebug(); // 歌詞が出ない理由を探すための、数だけの情報
     } catch (e) {
       report.lyrics = { error: String(e && e.message).slice(0, 60) };
@@ -654,6 +761,9 @@
 
   window.addEventListener('message', (e) => {
     if (e.source !== window || !e.data || e.data.svReactAsk !== 'lyrics') return;
+    if (sendLyrics(true)) return; // 問い合わせキャッシュにあれば、それを返す（部品の木をたどらない）
+    // キャッシュが使えるのに、まだ入っていない: Spotify が歌詞を取得している最中。部品の木を探し回らずに待つ（3 秒待っても入らないときだけ、キャッシュの作りが変わったとみなして、部品の木から読む）
+    if (ensureQueryClient() && !(e.data.n >= 12)) return;
     let lines = [];
     const t0 = performance.now();
     try {

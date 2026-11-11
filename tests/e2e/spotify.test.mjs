@@ -50,6 +50,7 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   await until(async () => /経路 アプリ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: 'アプリのサービスから読んでいる' });
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 10000, message: '歌詞（React の部品の props から）' });
   assert.match(await root.locator('.sv-np-line.is-current').innerText(), /三行目（いま）/);
+  await until(async () => /歌詞 6行・キャッシュ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: '問い合わせキャッシュから読んだと表示される' });
   // Spotify の画面は、文書の外の要素に描かれた（起動のとき createRoot の描画先を替えた）
   assert.deepEqual(await fx(page, 'rendered'), { containerConnected: false, containerIsMain: false }, 'Spotify の画面の描画先は、文書の外');
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid], main').length), 0, '文書に、Spotify の要素はない');
@@ -202,9 +203,35 @@ test('Spotify: 歌詞の画面への移り先は、アプリ自身の歌詞ボ�
   await until(async () => (await page.locator('#sv-np .sv-np-line').count()) === 6, { timeout: 12000, message: '履歴の移動から歌詞が出る' });
   await page.close();
   // 3) 行の部品がない（描かれていない・名前が変わった）: 入れ物の props から読む
-  page = await open({ dataOnly: true });
+  page = await open({ dataOnly: true, noQuery: true });
   await until(async () => (await page.locator('#sv-np .sv-np-line').count()) === 6, { timeout: 12000, message: 'data.lyrics から歌詞が出る' });
   assert.match(await page.locator('#sv-np .sv-np-line.is-current').innerText(), /三行目（いま）/);
+  await until(async () => /歌詞 6行・部品/.test(await page.locator('#sv-np .sv-np-ver').innerText()), { timeout: 12000, message: '部品の木から読んだと表示される' });
+});
+
+test('Spotify: 歌詞は、アプリの問い合わせキャッシュ（曲ごとに 1 回取得・次の曲は先読み）から受け取る。曲が変わった瞬間に、先読み済みの歌詞が出る。まだ取得中なら前の曲の歌詞は消える', async () => {
+  await setSp({ lyrics: true });
+  const page = await open();
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '最初の曲の歌詞' });
+  // 次の曲の歌詞が先読みされた（Spotify 自身の動き）。曲が変わったら、すぐ出る
+  await page.evaluate(() => window.__fx.cacheLyrics('spotify:track:next', ['次の一', '次の二', '次の三', '次の四']));
+  await page.evaluate(() => window.__fx.setTrack('次の曲', 'spotify:track:next'));
+  await until(async () => (await root.locator('.sv-np-line').count()) === 4 && /次の一/.test(await root.locator('.sv-np-ly-track').innerText()), { timeout: 1500, message: '先読み済みの歌詞が、曲が変わってすぐ出る' });
+  // まだ取得されていない曲: 前の曲の歌詞は消える。取得されて（キャッシュに入って）すぐ、出る
+  await page.evaluate(() => window.__fx.setTrack('三曲目', 'spotify:track:third'));
+  await until(async () => (await root.locator('.sv-np-lyrics').isVisible()) === false, { timeout: 1500, message: '前の曲の歌詞が消える' });
+  await page.evaluate(() => window.__fx.cacheLyrics('spotify:track:third', ['三の一', '三の二', '三の三']));
+  await until(async () => (await root.locator('.sv-np-line').count()) === 3 && /三の一/.test(await root.locator('.sv-np-ly-track').innerText()), { timeout: 1500, message: '取得された歌詞がすぐ出る' });
+  // 別の曲の歌詞（違う URI）は受け取らない
+  await page.evaluate(() => window.__fx.cacheLyrics('spotify:track:other', ['別の曲の歌詞']));
+  await page.waitForTimeout(600);
+  assert.equal(await root.locator('.sv-np-line').count(), 3);
+  // 歌詞のない曲: 理由が分かり、問い合わせを続けない
+  await page.evaluate(() => window.__fx.setTrack('歌詞なしの曲', 'spotify:track:none'));
+  await page.evaluate(() => window.__fx.cacheAvail('spotify:track:none', false));
+  await until(async () => (await root.locator('.sv-np-lyrics').isVisible()) === false, { timeout: 1500, message: '歌詞の枠が消える' });
+  await until(async () => /歌詞 なし/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: '歌詞がないと表示される' });
 });
 
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {

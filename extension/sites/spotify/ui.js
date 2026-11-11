@@ -126,7 +126,7 @@
     const d = lyr.dbg;
     if (!d) return lyr.asks > 2 ? '（依頼' + (lyr.tries || 0) + '）' : '';
     if (d.error) return '（' + d.error + '）';
-    return '（依頼' + (lyr.tries || 0) + ' 路' + d.path + ' ボタン' + (d.btn || 'なし') + (d.pressed ? ' 押下' + d.pressed : '') + ' 行要素' + d.lineEls + ' 本体' + d.main + '）';
+    return '（依頼' + (lyr.tries || 0) + ' 路' + d.path + ' ボタン' + (d.btn || 'なし') + (d.pressed ? ' 押下' + d.pressed : '') + ' 行要素' + d.lineEls + ' 本体' + d.main + ' 問合せ' + d.qc + '/' + d.cache + '）';
   }
 
   /**
@@ -140,7 +140,7 @@
       lyricHint = -1;
     }
     const ly = wantLyrics() ? C.lyricsAt(lyr.lines, posSec, i.durationSec, lyricHint) : null;
-    lyricState = !wantLyrics() ? 'オフ' : ly ? ly.lines.length + '行' : lyr.lines.length ? '時刻なし' : '待ち' + lyr.asks + '回' + dbgText(lyr);
+    lyricState = !wantLyrics() ? 'オフ' : lyr.none ? 'なし（この曲には歌詞がありません）' : ly ? ly.lines.length + '行・' + (lyr.src === 'cache' ? 'キャッシュ' : '部品') : lyr.lines.length ? '時刻なし' : '待ち' + lyr.asks + '回' + dbgText(lyr);
     box.hidden = !ly;
     if (!ly) return;
     lyricHint = ly.cur;
