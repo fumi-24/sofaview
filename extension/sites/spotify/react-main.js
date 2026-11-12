@@ -66,6 +66,7 @@
   // Spotify 自身の歌詞表示は、歌詞を曲ごとに 1 回だけ取得して問い合わせキャッシュに入れ、画面はそのキャッシュを描くだけ。次の曲の歌詞も先に取得しておく。
   // ここでは、そのキャッシュ（アプリが持っているデータ）を、更新の通知で受け取る（部品の木を探し回らない）。キーは ["lyrics", { uri, … }]、
   // 値は { hasLyrics, isTimeSynced, lyrics: [{ start, end, text }], … }（実サイトの公開コードで確認）。通信は、アプリ自身が行う。拡張は読むだけ。
+  const vid = { on: false }; // 映像を自前の枠に出しているか
   const lyr = { qc: null, findAt: -1e9, sub: false, sentSig: '', n: 0 };
 
   /** QueryClient（部品の props の client）を探して、キャッシュの更新を購読する。見つかるまで 2 秒に 1 回まで。 */
@@ -315,6 +316,7 @@
       speed: Number(st.speed) || 1,
       type: item ? String(item.type || '') : '',
       mediaType: item ? String(item.mediaType || '') : '',
+      video: !!item && (item.mediaType === 'video' || !!(item.metadata && item.metadata.track_player === 'video')), // ミュージックビデオを再生中か
       uri: item ? String(item.uri || '') : '',
       title: item ? String(item.name || '') : '',
       artists: item && Array.isArray(item.artists) ? item.artists.map((a) => String((a && a.name) || '')).filter(Boolean) : [],
@@ -351,7 +353,7 @@
       subscribeUpdates();
       const state = compact(svc.player.getState() || {});
       // 変わっていなければ、ここで終わる（音量の問い合わせまで進むのは、変わったときと、1 秒に 1 回だけ）
-      const base = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, anon]);
+      const base = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, state.video, anon]);
       const t = Date.now();
       if (!force && base === lastBase && t - lastFullAt < 1000) return;
       lastBase = base;
@@ -415,6 +417,41 @@
       }
       location.href = 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(location.origin + '/');
     },
+    // ミュージックビデオ（MV）の映像を、自前の画面の枠（#sv-np-video）に出す・戻す。Spotify 自身の画面が、映像の置き場（VideoContainerManager）を表示枠に差し込む・画面外に戻す（claim・release）のと、
+    // 映像を出していることを伝える（VideoAPI の setIsVideoVisible・reportVideoMode）のと、同じ呼び方。アプリ自身の部品を呼ぶだけ（通信はアプリ自身。認証情報には触らない）
+    video: (arg) => {
+      const mode = arg && arg.mode;
+      const B = window.__svBoot;
+      const mgr = B && B.service('VideoContainerManager');
+      const api = B && B.service('VideoAPI');
+      const slot = document.getElementById('sv-np-video');
+      const res = { ok: false, mode, err: '', mgr: !!mgr, api: !!api, slot: !!slot };
+      try {
+        if (mode === 'full' || mode === 'split') {
+          if (mgr && typeof mgr.claim === 'function' && api && slot) {
+            const box = typeof mgr.getVideoContainer === 'function' ? mgr.getVideoContainer() : null;
+            if (!(box && slot.contains(box))) mgr.claim(slot);
+            if (typeof api.setIsVideoVisible === 'function') api.setIsVideoVisible(true);
+            if (typeof api.reportVideoMode === 'function') api.reportVideoMode(mode === 'full' ? 'cinema' : 'npv');
+            vid.on = true;
+            res.ok = true;
+          } else res.err = !mgr ? '映像の部品なし' : !api ? '映像の API なし' : '枠なし';
+        } else {
+          if (vid.on && mgr && slot && typeof mgr.release === 'function') {
+            mgr.release(slot);
+            if (api && typeof api.setIsVideoVisible === 'function') api.setIsVideoVisible(false);
+            if (api && typeof api.reportVideoMode === 'function') api.reportVideoMode('none');
+          }
+          vid.on = false;
+          res.ok = true;
+        }
+      } catch (err) {
+        res.err = String(err && err.message).slice(0, 60);
+      }
+      const box = document.querySelector('.VideoPlayer__container');
+      res.box = box ? (slot && slot.contains(box) ? 'slot' : 'other') : 'none';
+      window.postMessage({ svApp: 'video', res }, location.origin);
+    },
     // 歌詞の画面（歌詞の部品ができる）へ移る・戻る。アプリ内の移動（履歴）なので、音は止まらない。
     // 移り先は、アプリ自身の歌詞ボタンが知っている（href か onClick）。押すのと同じ処理を呼ぶ。見つからなければ履歴で /lyrics へ
     lyricsView: (on) => {
@@ -441,7 +478,7 @@
     if (!c || !CMD[c]) return;
     try {
       findServices();
-      const need = c === 'volume' ? svc.volume || svc.engine : c === 'activate' ? svc.engine : c === 'lyricsView' || c === 'login' ? true : svc.player;
+      const need = c === 'volume' ? svc.volume || svc.engine : c === 'activate' ? svc.engine : c === 'lyricsView' || c === 'login' || c === 'video' ? true : svc.player;
       const r = need && CMD[c](e.data.arg);
       Promise.resolve(r).catch((err) => console.error('[SV] app command', c, err));
     } catch (err) {
@@ -743,6 +780,13 @@
       report.lyrics = lyricsDebug(); // 歌詞が出ない理由を探すための、数だけの情報
     } catch (e) {
       report.lyrics = { error: String(e && e.message).slice(0, 60) };
+    }
+    try {
+      const B2 = window.__svBoot;
+      const bx = document.querySelector('.VideoPlayer__container');
+      report.video = { mgr: !!(B2 && B2.service('VideoContainerManager')), api: !!(B2 && B2.service('VideoAPI')), container: !!bx, parking: !!document.getElementById('video-player-parking-surface'), on: vid.on, tags: bx ? Array.from(bx.querySelectorAll('*')).map((e) => e.tagName).slice(0, 8) : [] }; // MV の診断（数・有無だけ）
+    } catch (e) {
+      report.video = { error: String(e && e.message).slice(0, 60) };
     }
     report.ms = Math.round(performance.now() - t0);
     return report;

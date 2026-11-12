@@ -16,14 +16,14 @@ export function spotifyHtml(opt) {
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
   // ---- アプリ自身のサービス（状態を持つ）----
-  const AP = { paused: true, pos: ${o.pos || 50000}, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, listeners: [] };
+  const AP = { paused: true, pos: ${o.pos || 50000}, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, video: ${!!o.video}, listeners: [] };
   const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
   const appLog = (action, arg) => log('app', { action, arg });
   const playerAPI = {
     getState() {
       return {
         isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
-        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
+        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: AP.video ? 'video' : 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
         restrictions: { canSeek: true },
       };
     },
@@ -39,9 +39,24 @@ export function spotifyHtml(opt) {
   const standalonePlayer = { getVolume() { return Promise.resolve(AP.vol); }, setVolume() {}, pause() {}, activateElement() { appLog('activate'); } };
   const appHistory = { push(to) { window.history.pushState({}, '', to); log('nav', { to }); setLyrics(/^\\/intl-[a-z-]+\\/lyrics\\/?$/.test(to)); } };
 
+  // ---- MV の映像の置き場と API（Spotify の VideoContainerManager・VideoAPI の形）----
+  const videoBox = document.createElement('div');
+  videoBox.className = 'VideoPlayer__container';
+  videoBox.innerHTML = '<video muted></video>';
+  document.body.append(videoBox); // 使っていないときは、画面外に置いてある（実サイトでは #video-player-parking-surface）
+  videoBox.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:160px;height:90px';
+  const videoMgr = {
+    getVideoContainer() { return videoBox; },
+    claim(el) { el.insertBefore(videoBox, el.firstChild); videoBox.style.cssText = ''; appLog('video:claim'); },
+    release(el) { if (el.contains(videoBox)) { document.body.append(videoBox); videoBox.style.cssText = 'position:fixed;left:-10000px;top:-10000px;width:160px;height:90px'; } appLog('video:release'); },
+  };
+  const videoAPI = { setIsVideoVisible(v) { appLog('video:visible:' + v); }, reportVideoMode(m) { appLog('video:mode:' + m); } };
+  window.__fx.setVideo = (v) => { AP.video = !!v; };
+
   // ---- プラットフォームと登録簿（名前つき Symbol）----
   const registry = { _map: new Map(), resolve(k) { return this._map.get(k); } };
   ${o.noApp ? '' : "registry._map.set(Symbol('PlayerAPI'), playerAPI); registry._map.set(Symbol('PlaybackAPI'), playbackAPI);"}
+  ${o.noVideoApi ? '' : "registry._map.set(Symbol('VideoContainerManager'), videoMgr); registry._map.set(Symbol('VideoAPI'), videoAPI);"}
   const platform = { getRegistry() { return registry; }, getSession() { return { isAnonymous: ${!!o.loggedOut}, market: 'SECRET-MARKET' }; }, getHistory() { return appHistory; }, getTransport() { return {}; }, token: 'SECRET-TOKEN' };
 
   // ---- 問い合わせキャッシュ（react-query の QueryClient の形。Spotify の歌詞は、曲ごとに 1 回取得してここに入る。次の曲の分は先読みされる）----

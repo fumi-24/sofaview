@@ -23,6 +23,7 @@
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
       lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
       lyricsOffset: 0, // 歌詞のタイミングの微調整（秒。＋で歌詞が早く、−で遅く。0.1 秒きざみ）
+      mvLayout: 'full', // ミュージックビデオ（MV）の表示: full=画面全体に映像（歌詞・UI なし）/ split=左半分に映像・右半分に歌詞 / off=映像を出さない
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
@@ -80,6 +81,7 @@
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
     out.spotify.lyrics = bool(sp.lyrics, d.spotify.lyrics);
+    out.spotify.mvLayout = ['full', 'split', 'off'].includes(sp.mvLayout) ? sp.mvLayout : d.spotify.mvLayout;
     out.spotify.lyricsOffset = Math.round(num(sp.lyricsOffset, -3, 3, d.spotify.lyricsOffset) * 10) / 10 || 0;
 
     const y = isObj(s.youtube) ? s.youtube : {};

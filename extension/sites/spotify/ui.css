@@ -357,3 +357,71 @@ html.sv-sp #main {
 #sv-np .sv-np-info.fresh .sv-np-artist {
   animation: sv-np-fade 0.9s ease-out;
 }
+
+/* ---- ミュージックビデオ（MV）。映像は Spotify 自身の置き場（.VideoPlayer__container）を、#sv-np-video に差し込んだもの ---- */
+#sv-np #sv-np-video {
+  display: none;
+  position: absolute;
+  background: #000;
+  overflow: hidden;
+  z-index: 1;
+}
+
+#sv-np[data-mv="full"] #sv-np-video,
+#sv-np[data-mv="split"] #sv-np-video {
+  display: block;
+}
+
+/* 全画面: 映像だけ（歌詞・曲名・位置の棒・案内は出さない。キーを押したときのボタンの列だけ、映像の上に出る） */
+#sv-np[data-mv="full"] #sv-np-video {
+  inset: 0;
+}
+
+#sv-np[data-mv="full"] .sv-np-body,
+#sv-np[data-mv="full"] .sv-np-hint {
+  display: none;
+}
+
+/* 左右: 左半分に映像、右半分に曲名・歌詞（ジャケットは出さない） */
+#sv-np[data-mv="split"] #sv-np-video {
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 50%;
+}
+
+#sv-np[data-mv="split"] .sv-np-body {
+  padding-left: calc(50% + 6vh);
+  z-index: 2;
+}
+
+#sv-np[data-mv="split"] .sv-np-cover {
+  display: none;
+}
+
+#sv-np #sv-np-video .VideoPlayer__container,
+#sv-np #sv-np-video video {
+  width: 100%;
+  height: 100%;
+}
+
+#sv-np #sv-np-video video {
+  display: block;
+  object-fit: contain;
+  background: #000;
+}
+
+/* 映像の上に出るもの（ボタンの列・一時表示）は、映像より前に。右下の版は、全画面の映像のときは、ボタンの列を出しているときだけ */
+#sv-np .sv-np-controls,
+#sv-np .sv-np-toast,
+#sv-np .sv-np-ver {
+  z-index: 3;
+}
+
+#sv-np[data-mv="full"] .sv-np-ver {
+  opacity: 0;
+}
+
+#sv-np[data-mv="full"] .sv-np-controls[data-show] ~ .sv-np-ver {
+  opacity: 1;
+}

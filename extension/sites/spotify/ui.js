@@ -119,6 +119,16 @@
     box.querySelector('.sv-np-s-hint').textContent = t.hint;
   }
 
+  /** MV（ミュージックビデオ）の状態（右下の表示）: なし / 全画面 / 左右 / 検出（出せない理由）/ 検出（設定で出さない）。 */
+  function mvText() {
+    const st = state.st;
+    if (!st || !st.video) return 'なし';
+    if (st.mv) return st.mv === 'full' ? '全画面' : '左右';
+    if (ctl.settings.spotify.mvLayout === 'off') return '検出（設定で出さない）';
+    const i = st.mvInfo;
+    return '検出（出せません' + (i && i.err ? ': ' + i.err : '') + '）';
+  }
+
   /** アプリの再生位置 − 実際に鳴っている音声の位置（秒）。0 に近ければ、位置は正しい。 */
   function mediaDiffText() {
     const d = state.st && state.st.mediaDiff;
@@ -218,7 +228,7 @@
     while (longTasks.length && t - longTasks[0].t > 10000) longTasks.shift();
     const max = longTasks.reduce((m, x) => Math.max(m, x.d), 0);
     const age = state.st ? Math.max(0, (Date.now() - state.st.at) / 1000).toFixed(0) + '秒前' : '–';
-    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　音声差 ' + mediaDiffText() + '　取得 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
+    put(el.querySelector('.sv-np-ver'), 'SofaView v' + (SV.VERSION || '') + '　更新 ' + refreshMs.toFixed(0) + 'ms　経路 ' + ({ app: 'アプリ', session: '標準API', dom: '画面' }[state.st && state.st.source] || '–') + '　歌詞 ' + lyricState + '　音声差 ' + mediaDiffText() + '　映像 ' + mvText() + '　取得 ' + age + '　停止 ' + longTasks.length + '回/10秒（最大 ' + max.toFixed(0) + 'ms）');
   }
 
   function paintButtons(i) {
@@ -275,6 +285,8 @@
     state.recv = Date.now();
     const kind = viewKind();
     el.setAttribute('data-kind', kind);
+    if (state.st && state.st.mv && kind === 'track') el.setAttribute('data-mv', state.st.mv); // MV の映像を出しているとき（full / split）
+    else el.removeAttribute('data-mv');
     const trackView = kind === 'track';
     el.setAttribute('data-view', trackView ? 'track' : 'status');
     put(el.querySelector('.sv-np-hint'), trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '');
@@ -380,7 +392,10 @@
       btn.tabIndex = -1;
       controls.appendChild(btn);
     });
-    el.append(bgs[0], bgs[1], body, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
+    // MV の映像の枠。Spotify 自身の映像の置き場を、アプリ自身の部品（react-main.js の video）が、ここに差し込む。映像がないときは、空で隠れている
+    const vslot = mk('div');
+    vslot.id = 'sv-np-video';
+    el.append(bgs[0], bgs[1], vslot, body, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
     doc.body.appendChild(el);
   }
 

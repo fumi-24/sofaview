@@ -14,7 +14,7 @@
   const core = SV.spotifyCore;
 
   // ---- 1) アプリ自身のサービス ----
-  const app = { state: null, vol: null, anonymous: null, recv: 0, onChange: null };
+  const app = { state: null, vol: null, anonymous: null, recv: 0, onChange: null, videoRes: null };
   if (typeof root.addEventListener === 'function' && root.location) {
     root.addEventListener('message', (e) => {
       if (e.source !== root || !e.data) return;
@@ -24,6 +24,8 @@
         if (typeof e.data.anonymous === 'boolean') app.anonymous = e.data.anonymous;
         app.recv = Date.now();
         if (app.onChange) app.onChange();
+      } else if (e.data.svApp === 'video') {
+        app.videoRes = e.data.res || null; // MV の映像を出せたか（react-main.js の返事）
       } else if (e.data.svApp === 'none') {
         app.state = null;
         if (typeof e.data.anonymous === 'boolean') app.anonymous = e.data.anonymous;
@@ -107,6 +109,7 @@
     return {
       source: 'app',
       hasTrack: !!st.has && !!st.title,
+      video: !!st.video, // ミュージックビデオを再生中か
       title: st.title,
       artists: st.artists.join(', '),
       cover: st.cover,
@@ -182,6 +185,9 @@
     let lyricViewAt = 0;
     const waited = () => Date.now() - createdAt > 8000; // サービスが見つからなくても、「読み込み中」のままにしない
     const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
+    const mvLayout = () => (opts && opts.getMv ? opts.getMv() : 'full'); // full / split / off
+    let videoWant = null; // 映像を出している形（off / full / split）
+    let videoAt = 0;
 
     (opts && opts.checkDrm ? opts.checkDrm() : checkWidevine(win)).then((ok) => {
       drm = !!ok;
@@ -338,6 +344,16 @@
       const d = detect(doc, drm, waited());
       const i = d.info;
       if (d.kind === 'track') syncLyricsView();
+      // ミュージックビデオ: 再生中で、設定が off でなければ、映像を自前の枠に出す（変わったとき・3 秒おきに、アプリ自身の部品へ依頼）。出せたときだけ、画面を映像用にする
+      const isVideo = d.kind === 'track' && appOk() && !!i.video;
+      const wantV = isVideo && mvLayout() !== 'off' ? mvLayout() : 'off';
+      if (wantV !== videoWant || (wantV !== 'off' && Date.now() - videoAt > 3000)) {
+        videoWant = wantV;
+        videoAt = Date.now();
+        appCmd('video', { mode: wantV });
+      }
+      const vr = app.videoRes;
+      const mv = wantV !== 'off' && vr && vr.ok && vr.mode === wantV ? wantV : '';
       askLyrics(i.title);
       return {
         kind: d.kind,
@@ -358,6 +374,9 @@
         lyrics: { on: wantLyrics(), lines: lyricLines, asks: lyricAsks, dbg: lyricDbg, tries: lyricViewTries, none: lyricNone, src: lyricSrc },
         mediaDiff,
         lyricShift,
+        video: isVideo,
+        mv,
+        mvInfo: vr ? { ok: vr.ok, err: vr.err || '', box: vr.box || '' } : null,
       };
     }
 

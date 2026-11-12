@@ -315,6 +315,68 @@ test('Spotify: 最後の行が終わったあと（後奏）は、最後の行�
   await until(async () => (await opacity(5)) === 1, { timeout: 4000, message: '明るさ 1' });
 });
 
+test('Spotify: MV（ミュージックビデオ）を再生中は、既定で映像を画面全体に出す（歌詞・曲名・案内は出さない）。Spotify 自身の映像の置き場を、自前の枠に差し込む。MV でなくなったら、戻す', async () => {
+  await setSp({ lyrics: true, mvLayout: 'full' });
+  const page = await open({ video: true });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.getAttribute('data-mv')) === 'full', { timeout: 12000, message: '映像が全画面で出る' });
+  const log = async () => (await fx(page, 'log')).filter((l) => l.ev === 'app').map((l) => l.action);
+  assert.ok((await log()).includes('video:claim'), 'アプリ自身の部品で、映像の置き場を枠に差し込む');
+  assert.ok((await log()).includes('video:visible:true') && (await log()).includes('video:mode:cinema'), '映像を出していることをアプリに伝える');
+  assert.equal(await page.locator('#sv-np-video .VideoPlayer__container video').count(), 1, '枠の中に映像がある');
+  const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+  const box = await page.locator('#sv-np-video').boundingBox();
+  assert.ok(Math.abs(box.width - vp.w) < 2 && Math.abs(box.height - vp.h) < 2, '画面全体: ' + JSON.stringify(box));
+  assert.equal(await root.locator('.sv-np-title').isVisible(), false, '曲名は出ない');
+  assert.equal(await root.locator('.sv-np-lyrics').isVisible(), false, '歌詞は出ない');
+  await until(async () => /映像 全画面/.test(await root.locator('.sv-np-ver').evaluate((e) => e.textContent)), { timeout: 8000, message: '右下に状態（全画面）' });
+  // キーを押すと、ボタンの列だけが、映像の上に出る
+  await press(page, 'Enter');
+  assert.equal(await root.locator('.sv-np-controls').isVisible(), true);
+  // MV でなくなったら（次の曲）、映像を戻して、普通の画面に
+  await page.evaluate(() => { window.__fx.setVideo(false); window.__fx.setTrack('次の曲', 'spotify:track:next'); });
+  await until(async () => (await root.getAttribute('data-mv')) === null, { timeout: 5000, message: '映像の画面が終わる' });
+  assert.ok((await log()).includes('video:release') && (await log()).includes('video:visible:false') && (await log()).includes('video:mode:none'));
+  assert.equal(await page.locator('#sv-np-video .VideoPlayer__container').count(), 0, '枠は空になる');
+  assert.equal(await root.locator('.sv-np-title').isVisible(), true, '曲名が戻る');
+});
+
+test('Spotify: MV の表示を「左半分に映像・右半分に歌詞」にできる。「出さない」なら映像を出さない', async () => {
+  await setSp({ lyrics: true, mvLayout: 'split' });
+  let page = await open({ video: true });
+  let root = page.locator('#sv-np');
+  await until(async () => (await root.getAttribute('data-mv')) === 'split', { timeout: 12000, message: '左右の表示' });
+  assert.ok((await fx(page, 'log')).some((l) => l.ev === 'app' && l.action === 'video:mode:npv'));
+  const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+  const vbox = await page.locator('#sv-np-video').boundingBox();
+  assert.ok(Math.abs(vbox.width - vp.w / 2) < 2 && vbox.x < 2 && Math.abs(vbox.height - vp.h) < 2, '左半分: ' + JSON.stringify(vbox));
+  assert.equal(await root.locator('.sv-np-title').isVisible(), true, '曲名は右半分に出る');
+  const tbox = await root.locator('.sv-np-title').boundingBox();
+  assert.ok(tbox.x >= vp.w / 2, '曲名は右半分: x=' + tbox.x);
+  await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞も出る' });
+  assert.equal(await root.locator('.sv-np-lyrics').isVisible(), true);
+  assert.equal(await root.locator('.sv-np-cover').isVisible(), false, 'ジャケットは出ない');
+  await page.close();
+
+  await setSp({ mvLayout: 'off' });
+  page = await open({ video: true });
+  root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-title').isVisible()) === true, { timeout: 12000, message: '普通の画面' });
+  await page.waitForTimeout(800);
+  assert.equal(await root.getAttribute('data-mv'), null);
+  assert.ok(!(await fx(page, 'log')).some((l) => l.ev === 'app' && l.action === 'video:claim'), '映像は差し込まない');
+  await until(async () => /映像 検出（設定で出さない）/.test(await root.locator('.sv-np-ver').evaluate((e) => e.textContent)), { timeout: 8000, message: '検出だけ表示' });
+  await page.close();
+
+  // 映像の部品が見つからないとき: 普通の画面のまま。理由を右下に
+  await setSp({ mvLayout: 'full' });
+  page = await open({ video: true, noVideoApi: true });
+  root = page.locator('#sv-np');
+  await until(async () => /映像 検出（出せません: 映像の部品なし）/.test(await root.locator('.sv-np-ver').evaluate((e) => e.textContent)), { timeout: 12000, message: '出せない理由' });
+  assert.equal(await root.getAttribute('data-mv'), null);
+  assert.equal(await root.locator('.sv-np-title').isVisible(), true, '普通の画面のまま');
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

@@ -23,6 +23,7 @@
     const reader = E.createReader({
       document,
       getLyrics: () => ctl.settings.spotify.lyrics,
+      getMv: () => ctl.settings.spotify.mvLayout,
       onDiag: (report) => SV.sendMessage({ type: 'sv:spDiag', report }), // 診断の報告を、診断ページへ送る
     });
     SV.spotifyUI.start({ reader });

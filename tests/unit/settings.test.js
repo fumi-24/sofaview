@@ -93,3 +93,11 @@ test('歌詞のタイミングの微調整: 既定は 0。−3〜+3 秒に収め
   const s = await settings.save({ spotify: { lyricsOffset: 0.5 } });
   assert.equal(s.spotify.lyricsOffset, 0.5);
 });
+
+test('MV の表示: 既定は full。full / split / off 以外は既定に戻す', async () => {
+  assert.equal(settings.defaults().spotify.mvLayout, 'full');
+  for (const v of ['full', 'split', 'off']) assert.equal(settings.sanitize({ spotify: { mvLayout: v } }).spotify.mvLayout, v);
+  for (const v of ['x', 1, null, true]) assert.equal(settings.sanitize({ spotify: { mvLayout: v } }).spotify.mvLayout, 'full');
+  const s = await settings.save({ spotify: { mvLayout: 'split' } });
+  assert.equal(s.spotify.mvLayout, 'split');
+});

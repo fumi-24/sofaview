@@ -55,6 +55,16 @@ test('小窓: Spotify の歌詞のタイミングを選べる（歌詞がオン�
   await page.close();
 });
 
+test('小窓: Spotify の MV の表示を選べる（文字の値で保存される）', async () => {
+  const page = await open();
+  await page.locator('.row[data-id="spotify.mvLayout"] select').selectOption('split');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'split', { message: '左右' });
+  await page.locator('.row[data-id="spotify.mvLayout"] select').selectOption('off');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'off', { message: '出さない' });
+  assert.equal(await page.locator('.row[data-id="spotify.mvLayout"] select').inputValue(), 'off');
+  await page.close();
+});
+
 test('小窓: 画面倍率の 3 択。「固定」のときだけ倍率の選択が出る', async () => {
   const page = await open();
   assert.equal(await page.locator('.row[data-id="zoom.factor"]').count(), 0, '自動のときは出ない');

@@ -128,6 +128,21 @@ test('設定: Spotify の歌詞のタイミングを ← → で 0.1 秒ずつ�
   await page.close();
 });
 
+test('設定: Spotify の MV の表示を ← → で切り替えられる（全画面 → 左右 → 出さない）', async () => {
+  const page = await open('settings.html');
+  for (let i = 0; i < 20 && (await active(page)).sv !== 'spotify.mvLayout'; i++) await press(page, 'ArrowDown', 60);
+  assert.equal((await active(page)).sv, 'spotify.mvLayout');
+  assert.match(await text(page, '[data-id="spotify.mvLayout"] .value'), /画面全体に映像/);
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'split', { message: '左右に分ける' });
+  assert.match(await text(page, '[data-id="spotify.mvLayout"] .value'), /左半分に映像・右半分に歌詞/);
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'off', { message: '出さない' });
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'full', { message: '一周して全画面' });
+  await page.close();
+});
+
 test('設定が TVer に反映される（ヘッダーを隠す → オフにすると検索・設定が現れる）', async () => {
   const tver = await env.ctx.newPage();
   await tver.goto('https://tver.jp/');
