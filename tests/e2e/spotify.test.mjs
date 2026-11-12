@@ -50,6 +50,10 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   await until(async () => /経路 アプリ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: 'アプリのサービスから読んでいる' });
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 10000, message: '歌詞（React の部品の props から）' });
   assert.match(await root.locator('.sv-np-line.is-current').innerText(), /三行目（いま）/);
+  // 枠の端で半分切れて見える行（いまの行から 3 行以上離れた行）は、完全に透明。近い行は段階的に暗い
+  const opacity = (n) => root.locator('.sv-np-line').nth(n).evaluate((e) => Number(getComputedStyle(e).opacity));
+  await until(async () => (await opacity(5)) === 0, { timeout: 4000, message: '3 行離れた行は透明' });
+  assert.ok((await opacity(2)) === 1 && (await opacity(3)) > 0.4 && (await opacity(4)) > 0.2 && (await opacity(4)) < (await opacity(3)), '近い行は、離れるほど暗い');
   await until(async () => /歌詞 6行・キャッシュ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: '問い合わせキャッシュから読んだと表示される' });
   // Spotify の画面は、文書の外の要素に描かれた（起動のとき createRoot の描画先を替えた）
   assert.deepEqual(await fx(page, 'rendered'), { containerConnected: false, containerIsMain: false }, 'Spotify の画面の描画先は、文書の外');
