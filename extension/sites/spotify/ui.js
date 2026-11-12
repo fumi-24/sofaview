@@ -134,7 +134,7 @@
   }
 
   /**
-   * 歌詞。アプリの部品の木から読んだ行（文字・開始時刻）と、再生位置から、いまの行を決める。全部の行を並べて、
+   * 歌詞。アプリの問い合わせキャッシュから受け取った行（文字・開始時刻）と、再生位置から、いまの行を決める。全部の行を並べて、
    * いまの行が真ん中に来るよう、列ごと滑らかに動かす（行の作り直しは、曲が変わったときだけ）。
    */
   function paintLyrics(i, posSec, lyr) {
@@ -163,11 +163,11 @@
     }
     if (ly.cur !== lyricCur) {
       const kids = track.children;
-      // いまの行から離れるほど暗く（d1・d2）。変わるのは、前後 3 行ずつだけ（それ以外は、もとから暗い）
-      const mark = (c, prev) => {
-        for (let k = Math.max(0, c - 3); k <= Math.min(kids.length - 1, c + 3); k++) {
+      // いまの行から離れるほど暗く（d1〜d3）。4 行以上離れた行は、もとから透明。変わるのは、前後 4 行ずつだけ
+      const mark = (c) => {
+        for (let k = Math.max(0, c - 4); k <= Math.min(kids.length - 1, c + 4); k++) {
           const d = Math.abs(k - Math.max(0, ly.cur));
-          const cls = k === ly.cur ? 'sv-np-line is-current' : d === 1 ? 'sv-np-line d1' : d === 2 ? 'sv-np-line d2' : 'sv-np-line';
+          const cls = k === ly.cur ? 'sv-np-line is-current' : d <= 3 ? 'sv-np-line d' + d : 'sv-np-line';
           if (kids[k].className !== cls) kids[k].className = cls;
         }
       };

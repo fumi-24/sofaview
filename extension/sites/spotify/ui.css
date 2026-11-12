@@ -114,7 +114,7 @@ html.sv-sp #main {
 /* 歌詞: 全部の行を並べ、いまの行が真ん中に来るよう、列ごと動かす（動かすのは transform だけ。レイアウトを走らせない） */
 #sv-np .sv-np-lyrics {
   margin-top: 3vh;
-  height: 31.2vh; /* 5.2vh の行 × 6 */
+  height: 36.4vh; /* 5.2vh の行 × 7（いまの行が真ん中。前後に 3 行ずつ） */
   overflow: hidden;
 }
 
@@ -123,14 +123,14 @@ html.sv-sp #main {
 }
 
 #sv-np .sv-np-ly-track {
-  transform: translateY(calc(13vh - var(--cur, 0) * 5.2vh));
+  transform: translateY(calc(15.6vh - var(--cur, 0) * 5.2vh)); /* いまの行の上端を、枠の真ん中の行の位置（3 行ぶん下）に */
   /* なめらかで、キビキビした動き（0.7 秒）。行き過ぎない（目的の位置を越えて戻る動きは使わない。要望）。始めはすぐ動き出し、終わりはすっと落ち着く。動かすのは transform だけ */
   transition: transform 0.7s cubic-bezier(0.25, 0.6, 0.25, 1);
   will-change: transform;
 }
 
 /* 行の太さ・大きさは全部同じ（切り替えで文字の幅が変わると、再レイアウトが走ってカクつく）。いまの行を明るく、離れるほど段階的に暗くし、
-   いまの行から 3 行以上離れた行（枠の端で、半分切れて見える行）は、完全に透明にする（opacity だけ。マスクは使わない）。変わるのは、ゆっくり */
+   いまの行から 4 行以上離れた行（枠の外から入ってくる行・出ていく行）は、完全に透明にする（opacity だけ。マスクは使わない）。変わるのは、ゆっくり */
 #sv-np .sv-np-line {
   width: 86%;
   height: 5.2vh;
@@ -143,6 +143,10 @@ html.sv-sp #main {
   color: #fff;
   opacity: 0;
   transition: opacity 0.7s cubic-bezier(0.25, 0.6, 0.25, 1); /* 列の動きと同じ曲線・同じ長さ */
+}
+
+#sv-np .sv-np-line.d3 {
+  opacity: 0.16;
 }
 
 #sv-np .sv-np-line.d2 {
