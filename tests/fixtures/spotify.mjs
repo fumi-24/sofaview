@@ -24,7 +24,7 @@ export function spotifyHtml(opt) {
       return {
         isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
         item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: AP.video && !AP.signalOnly ? 'video' : 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
-        restrictions: { canSeek: true },
+        restrictions: { canSeek: true, disallowSignals: ${o.videoWhy ? "{ 'switch-to-video': { reasons: ['" + o.videoWhy + "'] } }" : '{}'} },
         signals: AP.video && AP.signalOnly ? ['switch-to-audio'] : AP.video ? [] : AP.canVideo ? ['switch-to-video'] : [],
       };
     },
@@ -32,6 +32,7 @@ export function spotifyHtml(opt) {
     resume() { AP.ts = Date.now(); AP.paused = false; appLog('resume'); },
     skipToNext() { appLog('next'); },
     skipToPrevious() { appLog('prev'); },
+    canSendSignal(sig) { return sig === 'switch-to-video' ? AP.canVideo && !AP.video : false; },
     sendSignal(sig) { appLog('signal:' + sig); if (sig === 'switch-to-video' && AP.canVideo) { AP.video = true; AP.signalOnly = true; } if (sig === 'switch-to-audio') { AP.video = false; } },
     seekTo(ms) { AP.pos = ms; AP.ts = Date.now(); appLog('seekTo', ms); },
     play() {}, skipTo() {}, seekForward() {}, seekBackward() {}, getQueue() {}, setShuffle() {}, setRepeat() {},

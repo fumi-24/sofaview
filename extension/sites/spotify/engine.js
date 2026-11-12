@@ -112,6 +112,7 @@
       video: !!st.video, // ミュージックビデオを再生中か
       canVideo: !!st.canVideo, // 映像のある曲（いまは音だけ）
       signals: st.signals || '',
+      videoWhy: st.videoWhy || '',
       title: st.title,
       artists: st.artists.join(', '),
       cover: st.cover,
@@ -399,6 +400,7 @@
         video: isVideo,
         canVideo: !!i.canVideo,
         videoSignals: i.signals || '',
+        videoWhy: i.videoWhy || '',
         mv,
         mvInfo: vr ? { ok: vr.ok, err: vr.err || '', box: vr.box || '' } : null,
       };

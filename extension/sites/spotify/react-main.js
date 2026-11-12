@@ -322,6 +322,12 @@
       video: !!item && (sigs.includes('switch-to-audio') || item.mediaType === 'video' || !!(item.metadata && item.metadata.track_player === 'video')),
       canVideo: !!item && sigs.includes('switch-to-video'),
       signals: sigs.join(','),
+      trackPlayer: item && item.metadata && typeof item.metadata.track_player === 'string' ? item.metadata.track_player.slice(0, 20) : '',
+      videoWhy: (() => {
+        // 映像に切り替えられない理由（Spotify 自身が持つ制限の理由。例: no_associated_track・not_supported_by_device）
+        const r = st.restrictions && st.restrictions.disallowSignals && st.restrictions.disallowSignals['switch-to-video'];
+        return r && Array.isArray(r.reasons) ? r.reasons.filter((x) => typeof x === 'string').slice(0, 4).join(',') : '';
+      })(),
       uri: item ? String(item.uri || '') : '',
       title: item ? String(item.name || '') : '',
       artists: item && Array.isArray(item.artists) ? item.artists.map((a) => String((a && a.name) || '')).filter(Boolean) : [],
@@ -330,6 +336,15 @@
     };
   }
 
+  // 映像の診断（ブラウザの開発者ツールのコンソールに、変わったときだけ 1 行。値は種類・真偽・制限の理由だけ。曲名・ID・認証情報は含めない）
+  let lastVideoLog = '';
+  let lastVideoSlotLog = '';
+  function logVideo(state) {
+    const sum = JSON.stringify({ 映像を再生中: state.video, 映像あり: state.canVideo, 信号: state.signals, 種類: state.mediaType, プレイヤー: state.trackPlayer, 切替の制限: state.videoWhy });
+    if (sum === lastVideoLog) return;
+    lastVideoLog = sum;
+    console.info('[SV] 映像の状態', sum);
+  }
   let lastPush = '';
   let lastBase = '';
   let lastUri = '';
@@ -363,6 +378,7 @@
       if (!force && base === lastBase && t - lastFullAt < 1000) return;
       lastBase = base;
       lastFullAt = t;
+      logVideo(state);
       if (state.uri !== lastUri) {
         lastUri = state.uri;
         setTimeout(() => sendLyrics(true), 0); // 曲が変わった: その曲の歌詞が（先読みで）キャッシュにあれば、すぐ送る
@@ -425,9 +441,28 @@
     // 映像のある曲を、映像に切り替える（Spotify 自身の「映像に切り替える」ボタンと同じ呼び方: PlayerAPI.sendSignal）。切り替えられる（signals に switch-to-video がある）ときだけ
     videoSwitch: () => {
       const p = svc.player;
-      if (!p || typeof p.sendSignal !== 'function') return;
+      if (!p || typeof p.sendSignal !== 'function') {
+        console.info('[SV] 映像に切り替え: PlayerAPI に sendSignal がない');
+        return;
+      }
       const st = p.getState();
-      if (st && Array.isArray(st.signals) && st.signals.includes('switch-to-video')) p.sendSignal('switch-to-video');
+      const has = !!(st && Array.isArray(st.signals) && st.signals.includes('switch-to-video'));
+      let can = null;
+      try {
+        can = typeof p.canSendSignal === 'function' ? p.canSendSignal('switch-to-video') : null;
+      } catch (e) {
+        can = 'error';
+      }
+      console.info('[SV] 映像に切り替え', JSON.stringify({ 信号にある: has, 送れる: can }));
+      if (!has) return;
+      try {
+        Promise.resolve(p.sendSignal('switch-to-video')).then(
+          (r) => console.info('[SV] 映像に切り替えの返事', typeof r),
+          (e) => console.warn('[SV] 映像に切り替えに失敗', String(e && e.message).slice(0, 80)),
+        );
+      } catch (e) {
+        console.warn('[SV] 映像に切り替えで例外', String(e && e.message).slice(0, 80));
+      }
     },
     // ミュージックビデオ（MV）の映像を、自前の画面の枠（#sv-np-video）に出す・戻す。Spotify 自身の画面が、映像の置き場（VideoContainerManager）を表示枠に差し込む・画面外に戻す（claim・release）のと、
     // 映像を出していることを伝える（VideoAPI の setIsVideoVisible・reportVideoMode）のと、同じ呼び方。アプリ自身の部品を呼ぶだけ（通信はアプリ自身。認証情報には触らない）
@@ -462,6 +497,17 @@
       }
       const box = document.querySelector('.VideoPlayer__container');
       res.box = box ? (slot && slot.contains(box) ? 'slot' : 'other') : 'none';
+      try {
+        const v = box ? box.querySelector('video') : null;
+        res.el = v ? { w: v.videoWidth, h: v.videoHeight, ready: v.readyState, paused: v.paused } : null; // 映像の要素の状態（大きさ 0 なら、まだ映像が届いていない）
+      } catch (e) {
+        res.el = null;
+      }
+      const sum = JSON.stringify({ 依頼: res.mode, 出せた: res.ok, 理由: res.err, 部品: res.mgr, API: res.api, 枠: res.slot, 置き場: res.box, 映像の要素: res.el });
+      if (sum !== lastVideoSlotLog) {
+        lastVideoSlotLog = sum;
+        console.info('[SV] 映像の枠', sum);
+      }
       window.postMessage({ svApp: 'video', res }, location.origin);
     },
     // 歌詞の画面（歌詞の部品ができる）へ移る・戻る。アプリ内の移動（履歴）なので、音は止まらない。

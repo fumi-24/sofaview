@@ -29,6 +29,8 @@ const press = async (page, key) => {
 /** Spotify のページ（起動の再現）を開く。画面は、そのまま自前の再生中の画面。 */
 async function open(opt) {
   const page = await env.ctx.newPage();
+  page.__logs = []; // 拡張のコンソールの出力（[SV] で始まるもの）
+  page.on('console', (m) => { if (/^\[SV\]/.test(m.text())) page.__logs.push(m.text()); });
   await page.route('https://open.spotify.com/**', (route) => route.fulfill({ status: 200, contentType: 'text/html; charset=utf-8', body: spotifyHtml(opt) }));
   await page.goto('https://open.spotify.com/intl-ja/');
   await ready(page);
@@ -534,6 +536,27 @@ test('Spotify: 歌詞の枠で行を切らない（動いている途中でも�
     return [c - 6, c - 4, c + 4, c + 6].filter((i) => i >= 0 && i < k.length).map((i) => Number(getComputedStyle(k[i]).opacity));
   });
   assert.ok(far.length >= 3 && far.every((o) => o < 0.02), '遠い行は透明: ' + JSON.stringify(far));
+});
+
+test('Spotify: 映像が出ないときの診断。コンソールに [SV] 映像の状態・切り替え・枠を出す。右下に、映像に切り替えられない理由（制限）を出す', async () => {
+  await setSp({ lyrics: false, mvLayout: 'full', mvAuto: true });
+  // 映像のある曲（音で再生中）→ 自動で切り替える。コンソールに、状態・切り替え・枠が出る
+  let page = await open({ songVideo: true });
+  await until(async () => (await page.locator('#sv-np').getAttribute('data-mv')) === 'full', { timeout: 12000, message: '映像が出る' });
+  const logs = () => page.__logs.join('\n');
+  assert.match(logs(), /\[SV\] 映像の状態 .*"映像あり":true.*"信号":"switch-to-video"/, '最初は、映像あり・信号 switch-to-video');
+  assert.match(logs(), /\[SV\] 映像に切り替え {"信号にある":true,"送れる":true}/, '切り替え: 信号にある・送れる');
+  assert.match(logs(), /\[SV\] 映像に切り替えの返事/, '切り替えの返事');
+  assert.match(logs(), /\[SV\] 映像の状態 .*"映像を再生中":true.*"信号":"switch-to-audio"/, '切り替わったあと: 映像を再生中');
+  assert.match(logs(), /\[SV\] 映像の枠 .*"出せた":true.*"置き場":"slot"/, '枠に差し込めた');
+  assert.doesNotMatch(logs(), /spotify:track|SECRET/, '曲の ID・秘密の値は出さない');
+  await page.close();
+
+  // 映像に切り替えられない曲（制限の理由つき）: 右下に理由を出す
+  page = await open({ videoWhy: 'no_associated_track' });
+  await until(async () => /映像 なし（制限: no_associated_track）/.test(await page.locator('#sv-np .sv-np-ver').evaluate((e) => e.textContent)), { timeout: 10000, message: '右下に制限の理由' });
+  assert.match(page.__logs.join('\n'), /\[SV\] 映像の状態 .*"切替の制限":"no_associated_track"/);
+  await page.close();
 });
 
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
