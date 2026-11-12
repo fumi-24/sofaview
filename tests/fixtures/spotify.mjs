@@ -40,6 +40,9 @@ export function spotifyHtml(opt) {
   const appHistory = { push(to) { window.history.pushState({}, '', to); log('nav', { to }); setLyrics(/^\\/intl-[a-z-]+\\/lyrics\\/?$/.test(to)); } };
 
   // ---- MV の映像の置き場と API（Spotify の VideoContainerManager・VideoAPI の形）----
+  const st = document.createElement('style');
+  st.textContent = '.VideoPlayer__container { background: #000; } .VideoPlayer__container video { background: #000; }'; // 実サイトの CSS が、黒を付けている想定
+  document.head.append(st);
   const videoBox = document.createElement('div');
   videoBox.className = 'VideoPlayer__container';
   videoBox.innerHTML = '<video muted></video>';
