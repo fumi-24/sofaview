@@ -329,20 +329,30 @@
     info.append(mk('div', 'sv-np-state'), mk('h1', 'sv-np-title'), mk('div', 'sv-np-artist'), lyrics, bar, times);
     const cover = mk('img', 'sv-np-cover');
     cover.alt = '';
-    // 背景は、ジャケットを 16×16 に縮めて、画面いっぱいに引き伸ばす（補間でぼける）。大きなぼかし（filter: blur）は、弱い GPU で重いので使わない。曲が変わったときに 1 回だけ描く
-    // 2 枚の canvas を交互に使い、前の絵から新しい絵へクロスフェードさせる（opacity だけ）
+    // 背景: ジャケットを、曲が変わったときに 1 回だけ、小さな canvas（160×90）に「ぼかして・暗くして」描く（ぼかしは canvas の中で 1 回だけ。画面では、できあがった絵を引き伸ばすだけで、
+    // 毎フレームのぼかし（CSS の filter: blur）は使わない。弱い GPU で重いため）。2 枚の canvas を交互に使い、前の絵から新しい絵へクロスフェードさせる（opacity だけ）
     const bgs = [mk('canvas', 'sv-np-bg'), mk('canvas', 'sv-np-bg')];
     bgs.forEach((c) => {
-      c.width = 16;
-      c.height = 16;
+      c.width = 160;
+      c.height = 90;
     });
     let bgNext = 0;
+    function paintBg(c) {
+      const g = c.getContext('2d');
+      const iw = cover.naturalWidth || 1;
+      const ih = cover.naturalHeight || 1;
+      const k = Math.max(c.width / iw, c.height / ih) * 1.3; // 画面いっぱいに、まわりを少し余分に（端がぼけて暗くならないように）
+      g.clearRect(0, 0, c.width, c.height);
+      g.filter = 'blur(7px) brightness(0.4) saturate(1.25)';
+      g.drawImage(cover, (c.width - iw * k) / 2, (c.height - ih * k) / 2, iw * k, ih * k);
+      g.filter = 'none';
+    }
     cover.addEventListener('load', () => {
       cover.style.opacity = '1'; // ジャケットは、読み込めてから、ふわっと出る
       try {
         const c = bgs[bgNext];
         bgNext ^= 1;
-        c.getContext('2d').drawImage(cover, 0, 0, 16, 16);
+        paintBg(c);
         c.classList.add('on');
         bgs[bgNext].classList.remove('on');
       } catch (e) {

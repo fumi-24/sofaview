@@ -37,8 +37,8 @@ html.sv-sp #main {
   overflow: hidden;
 }
 
-/* 背景: ジャケットを 16×16 に縮めた絵（canvas）を、画面いっぱいに引き伸ばす（補間でぼける）。暗くするのは、上に重ねた半透明の黒。
-   大きなぼかし（filter: blur）・マスク・大きな影は、弱い GPU で重いので使わない */
+/* 背景: ジャケットを「ぼかして・暗くして」小さな canvas（160×90）に 1 回だけ描いた絵を、画面いっぱいに引き伸ばす（ui.js の paintBg）。
+   ぼかしと暗さは、その絵の中に入っているので、ここでは filter を使わない（毎フレームのぼかしは、弱い GPU で重い）。マスク・大きな影も使わない */
 #sv-np .sv-np-bg {
   position: absolute;
   inset: 0;
@@ -49,7 +49,7 @@ html.sv-sp #main {
 }
 
 #sv-np .sv-np-bg.on {
-  opacity: 0.4;
+  opacity: 1;
 }
 
 #sv-np[data-view="status"] {

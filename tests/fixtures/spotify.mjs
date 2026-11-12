@@ -23,7 +23,7 @@ export function spotifyHtml(opt) {
     getState() {
       return {
         isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
-        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=', width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
+        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
         restrictions: { canSeek: true },
       };
     },

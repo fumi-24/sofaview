@@ -55,6 +55,9 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   assert.deepEqual(await fx(page, 'rendered'), { containerConnected: false, containerIsMain: false }, 'Spotify の画面の描画先は、文書の外');
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid], main').length), 0, '文書に、Spotify の要素はない');
   await until(async () => (await page.evaluate(() => document.getElementById('main').children.length)) === 0, { timeout: 12000, message: '読み込みの骨組みも取り除く' });
+  // 背景: ジャケットを、ぼかして・暗くして描いた絵（canvas）。画面では毎フレームのぼかし（CSS の filter）を使わない（弱い GPU で重いため）
+  await until(async () => (await page.locator('#sv-np .sv-np-bg.on').count()) === 1, { timeout: 5000, message: '背景の絵が描かれる' });
+  assert.equal(await page.locator('#sv-np .sv-np-bg.on').evaluate((e) => getComputedStyle(e).filter), 'none', '背景に CSS のぼかしを使わない');
   // アプリの更新イベントを購読している（曲が変わる・再生/一時停止・シークを、すぐ受け取る）。変わったら、すぐ画面に出る
   assert.ok((await fx(page, 'log')).some((l) => l.ev === 'app' && l.action === 'subscribe:update'), '更新イベントを購読');
   await page.evaluate(() => window.__fx.setTrack('次の曲'));
