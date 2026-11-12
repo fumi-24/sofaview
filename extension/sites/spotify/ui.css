@@ -358,7 +358,8 @@ html.sv-sp #main {
   animation: sv-np-fade 0.9s ease-out;
 }
 
-/* ---- ミュージックビデオ（MV）。映像は Spotify 自身の置き場（.VideoPlayer__container）を、#sv-np-video に差し込んだもの ---- */
+/* ---- ミュージックビデオ（MV）。映像は Spotify 自身の置き場（.VideoPlayer__container）を、#sv-np-video に差し込んだもの ----
+   映像メイン: 曲名・アーティスト名は左上、位置の棒は一番下（細く。秒数なし）。「再生中」・秒数・案内は出さない。右下の版は、操作した直後だけ */
 #sv-np #sv-np-video {
   display: none;
   position: absolute;
@@ -372,17 +373,16 @@ html.sv-sp #main {
   display: block;
 }
 
-/* 全画面: 映像だけ（歌詞・曲名・位置の棒・案内は出さない。キーを押したときのボタンの列だけ、映像の上に出る） */
+/* 全画面: 映像が画面全体。歌詞は出さない */
 #sv-np[data-mv="full"] #sv-np-video {
   inset: 0;
 }
 
-#sv-np[data-mv="full"] .sv-np-body,
-#sv-np[data-mv="full"] .sv-np-hint {
+#sv-np[data-mv="full"] .sv-np-lyrics {
   display: none;
 }
 
-/* 左右: 左半分に映像、右半分に曲名・歌詞（ジャケットは出さない） */
+/* 左右: 左半分に映像、右半分に歌詞（画面の真ん中に） */
 #sv-np[data-mv="split"] #sv-np-video {
   left: 0;
   top: 0;
@@ -390,13 +390,92 @@ html.sv-sp #main {
   width: 50%;
 }
 
-#sv-np[data-mv="split"] .sv-np-body {
-  padding-left: calc(50% + 6vh);
+#sv-np[data-mv="split"] .sv-np-lyrics {
+  position: absolute;
+  left: calc(50% + 6vh);
+  right: 6vh;
+  top: 50%;
+  margin: 0;
+  transform: translateY(-50%);
+}
+
+/* 映像の上の文字を読みやすく: 上に薄い暗幕（グラデーションだけ。ぼかし・影は使わない） */
+#sv-np[data-mv]::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 22vh;
+  background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
+  pointer-events: none;
   z-index: 2;
 }
 
-#sv-np[data-mv="split"] .sv-np-cover {
+/* 本文の枠は、画面全体。中の要素（info は枠を作らない）を、画面に対して置く */
+#sv-np[data-mv] .sv-np-body {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  gap: 0;
+  display: block;
+  z-index: 2;
+}
+
+#sv-np[data-mv] .sv-np-info {
+  display: contents;
+}
+
+#sv-np[data-mv] .sv-np-cover,
+#sv-np[data-mv] .sv-np-state,
+#sv-np[data-mv] .sv-np-times,
+#sv-np[data-mv] .sv-np-hint {
   display: none;
+}
+
+/* 曲名・アーティスト名: 左上 */
+#sv-np[data-mv] .sv-np-title {
+  position: absolute;
+  left: 4vh;
+  top: 3vh;
+  margin: 0;
+  max-width: calc(100% - 8vh);
+  font-size: 3.6vh;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  -webkit-line-clamp: unset;
+}
+
+#sv-np[data-mv="split"] .sv-np-title,
+#sv-np[data-mv="split"] .sv-np-artist {
+  max-width: calc(50% - 8vh);
+}
+
+#sv-np[data-mv] .sv-np-artist {
+  position: absolute;
+  left: 4vh;
+  top: 8vh;
+  margin: 0;
+  max-width: calc(100% - 8vh);
+  font-size: 2.6vh;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 位置の棒: 一番下、画面の幅いっぱい、細く */
+#sv-np[data-mv] .sv-np-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: 0;
+  height: 0.8vh;
+  border-radius: 0;
 }
 
 #sv-np #sv-np-video .VideoPlayer__container,
@@ -411,18 +490,19 @@ html.sv-sp #main {
   object-fit: contain;
 }
 
-/* 映像の上に出るもの（ボタンの列・一時表示・案内）は、映像より前に。右下の版は、全画面の映像のときは、ボタンの列を出しているときだけ */
+/* 映像の上に出るもの（ボタンの列・一時表示）は、映像より前に */
 #sv-np .sv-np-controls,
 #sv-np .sv-np-toast,
-#sv-np .sv-np-hint,
 #sv-np .sv-np-ver {
   z-index: 3;
 }
 
-#sv-np[data-mv="full"] .sv-np-ver {
+/* 右下の版（診断）は、操作した直後（ボタンの列か一時表示が出ている間）だけ */
+#sv-np[data-mv] .sv-np-ver {
   opacity: 0;
 }
 
-#sv-np[data-mv="full"] .sv-np-controls[data-show] ~ .sv-np-ver {
+#sv-np[data-mv] .sv-np-controls[data-show] ~ .sv-np-ver,
+#sv-np[data-mv] .sv-np-toast:not([hidden]) ~ .sv-np-ver {
   opacity: 1;
 }

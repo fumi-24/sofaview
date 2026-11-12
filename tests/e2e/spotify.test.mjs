@@ -329,18 +329,33 @@ test('Spotify: MV（ミュージックビデオ）を再生中は、既定で映
   assert.ok(Math.abs(box.width - vp.w) < 2 && Math.abs(box.height - vp.h) < 2, '画面全体: ' + JSON.stringify(box));
   const bgOf = (sel) => page.locator(sel).evaluate((e) => getComputedStyle(e).backgroundColor);
   for (const sel of ['#sv-np-video', '#sv-np-video .VideoPlayer__container', '#sv-np-video video']) assert.equal(await bgOf(sel), 'rgba(0, 0, 0, 0)', '映像の余白は黒でなく透明（後ろのぼかした背景が見える）: ' + sel);
-  assert.equal(await root.locator('.sv-np-title').isVisible(), false, '曲名は出ない');
-  assert.equal(await root.locator('.sv-np-lyrics').isVisible(), false, '歌詞は出ない');
+  // 映像メイン: 曲名・アーティスト名は左上、位置の棒は一番下。歌詞・「再生中」・秒数・案内は出さない
+  const rect = (sel) => root.locator(sel).boundingBox();
+  const title = await rect('.sv-np-title');
+  const artist = await rect('.sv-np-artist');
+  assert.ok(title.x < vp.w * 0.1 && title.y < vp.h * 0.15, '曲名は左上: ' + JSON.stringify(title));
+  assert.ok(artist.x < vp.w * 0.1 && artist.y < vp.h * 0.2 && artist.y > title.y, 'アーティスト名は曲名の下: ' + JSON.stringify(artist));
+  const bar = await rect('.sv-np-bar');
+  assert.ok(Math.abs(bar.x) < 2 && Math.abs(bar.width - vp.w) < 2 && Math.abs(bar.y + bar.height - vp.h) < 2, '位置の棒は一番下で、画面の幅いっぱい: ' + JSON.stringify(bar));
+  assert.ok(bar.height < vp.h * 0.015, '細い');
+  for (const sel of ['.sv-np-lyrics', '.sv-np-state', '.sv-np-times', '.sv-np-hint', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない');
+  // 右下の版は、操作した直後だけ
+  const verOpacity = () => root.locator('.sv-np-ver').evaluate((e) => Number(getComputedStyle(e).opacity));
+  assert.equal(await verOpacity(), 0, '操作する前は出ない');
   await until(async () => /映像 全画面/.test(await root.locator('.sv-np-ver').evaluate((e) => e.textContent)), { timeout: 8000, message: '右下に状態（全画面）' });
-  // キーを押すと、ボタンの列だけが、映像の上に出る
+  // キーを押すと、ボタンの列と右下の版が、映像の上に出る
   await press(page, 'Enter');
   assert.equal(await root.locator('.sv-np-controls').isVisible(), true);
+  assert.equal(await verOpacity(), 1, '操作した直後は出る');
   // MV でなくなったら（次の曲）、映像を戻して、普通の画面に
   await page.evaluate(() => { window.__fx.setVideo(false); window.__fx.setTrack('次の曲', 'spotify:track:next'); });
   await until(async () => (await root.getAttribute('data-mv')) === null, { timeout: 5000, message: '映像の画面が終わる' });
   assert.ok((await log()).includes('video:release') && (await log()).includes('video:visible:false') && (await log()).includes('video:mode:none'));
   assert.equal(await page.locator('#sv-np-video .VideoPlayer__container').count(), 0, '枠は空になる');
   assert.equal(await root.locator('.sv-np-title').isVisible(), true, '曲名が戻る');
+  assert.equal(await root.locator('.sv-np-state').isVisible(), true, '「再生中」の表示も戻る');
+  assert.equal(await root.locator('.sv-np-times').isVisible(), true, '秒数も戻る');
+  assert.ok((await rect('.sv-np-title')).x > vp.w * 0.2, '曲名は普通の位置（ジャケットの右）');
 });
 
 test('Spotify: MV の表示を「左半分に映像・右半分に歌詞」にできる。「出さない」なら映像を出さない', async () => {
@@ -352,15 +367,17 @@ test('Spotify: MV の表示を「左半分に映像・右半分に歌詞」に�
   const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
   const vbox = await page.locator('#sv-np-video').boundingBox();
   assert.ok(Math.abs(vbox.width - vp.w / 2) < 2 && vbox.x < 2 && Math.abs(vbox.height - vp.h) < 2, '左半分: ' + JSON.stringify(vbox));
-  assert.equal(await root.locator('.sv-np-title').isVisible(), true, '曲名は右半分に出る');
-  const tbox = await root.locator('.sv-np-title').boundingBox();
-  assert.ok(tbox.x >= vp.w / 2, '曲名は右半分: x=' + tbox.x);
+  // 曲名・アーティスト名は左上（左半分の中）、位置の棒は一番下、「再生中」・秒数・案内は出さない
+  const title = await root.locator('.sv-np-title').boundingBox();
+  assert.ok(title.x < vp.w * 0.1 && title.y < vp.h * 0.15 && title.x + title.width <= vp.w / 2, '曲名は左上（左半分の中）: ' + JSON.stringify(title));
+  const bar = await root.locator('.sv-np-bar').boundingBox();
+  assert.ok(Math.abs(bar.width - vp.w) < 2 && Math.abs(bar.y + bar.height - vp.h) < 2, '位置の棒は一番下: ' + JSON.stringify(bar));
+  for (const sel of ['.sv-np-state', '.sv-np-times', '.sv-np-hint', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない');
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞も出る' });
   assert.equal(await root.locator('.sv-np-lyrics').isVisible(), true);
-  assert.equal(await root.locator('.sv-np-cover').isVisible(), false, 'ジャケットは出ない');
+  const lbox = await root.locator('.sv-np-lyrics').boundingBox();
+  assert.ok(lbox.x >= vp.w / 2 && Math.abs(lbox.y + lbox.height / 2 - vp.h / 2) < vp.h * 0.03, '歌詞は右半分の真ん中: ' + JSON.stringify(lbox));
   assert.equal(await page.locator('#sv-np-video').evaluate((e) => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)', '左半分の余白も透明');
-  const z = (sel) => root.locator(sel).evaluate((e) => Number(getComputedStyle(e).zIndex));
-  assert.ok((await z('.sv-np-hint')) > (await page.locator('#sv-np-video').evaluate((e) => Number(getComputedStyle(e).zIndex))), '案内は、映像の枠より前（左半分に隠れない）');
   await page.close();
 
   await setSp({ mvLayout: 'off' });
