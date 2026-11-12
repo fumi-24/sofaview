@@ -1,6 +1,6 @@
 {
   "name": "sofaview",
-  "version": "0.15.2",
+  "version": "0.16.0",
   "private": true,
   "description": "テレビのリモコンだけで YouTube と TVer を操作する Chromium 拡張機能",
   "license": "MIT",

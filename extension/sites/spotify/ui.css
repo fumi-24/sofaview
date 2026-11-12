@@ -111,10 +111,15 @@ html.sv-sp #main {
   color: #d9d9d9;
 }
 
-/* 歌詞: 全部の行を並べ、いまの行が真ん中に来るよう、列ごと動かす（動かすのは transform だけ。レイアウトを走らせない） */
+/* 歌詞: 全部の行を並べ、いまの行が真ん中に来るよう、列ごと動かす（動かすのは transform だけ。レイアウトを走らせない）。
+   行の高さは変数 --ly-h（MV の左右では小さくする）。枠は 7 行ぶん */
+#sv-np {
+  --ly-h: 5.2vh;
+}
+
 #sv-np .sv-np-lyrics {
   margin-top: 3vh;
-  height: 36.4vh; /* 5.2vh の行 × 7（いまの行が真ん中。前後に 3 行ずつ） */
+  height: calc(var(--ly-h) * 7); /* 前後 3 行ずつ + いまの行 */
   overflow: hidden;
 }
 
@@ -123,7 +128,7 @@ html.sv-sp #main {
 }
 
 #sv-np .sv-np-ly-track {
-  transform: translateY(calc(15.6vh - var(--cur, 0) * 5.2vh)); /* いまの行の上端を、枠の真ん中の行の位置（3 行ぶん下）に */
+  transform: translateY(calc(var(--ly-h) * (3 - var(--cur, 0)))); /* いまの行の上端を、枠の真ん中の行の位置（3 行ぶん下）に */
   /* なめらかで、キビキビした動き（0.7 秒）。行き過ぎない（目的の位置を越えて戻る動きは使わない。要望）。始めはすぐ動き出し、終わりはすっと落ち着く。動かすのは transform だけ */
   transition: transform 0.7s cubic-bezier(0.25, 0.6, 0.25, 1);
   will-change: transform;
@@ -133,9 +138,9 @@ html.sv-sp #main {
    いまの行から 4 行以上離れた行（枠の外から入ってくる行・出ていく行）は、完全に透明にする（opacity だけ。マスクは使わない）。変わるのは、ゆっくり */
 #sv-np .sv-np-line {
   width: 86%;
-  height: 5.2vh;
-  line-height: 5.2vh;
-  font-size: 3.2vh;
+  height: var(--ly-h);
+  line-height: var(--ly-h);
+  font-size: calc(var(--ly-h) * 0.615);
   font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
@@ -359,7 +364,18 @@ html.sv-sp #main {
 }
 
 /* ---- ミュージックビデオ（MV）。映像は Spotify 自身の置き場（.VideoPlayer__container）を、#sv-np-video に差し込んだもの ----
-   映像メイン: 曲名・アーティスト名は左上、位置の棒は一番下（細く。秒数なし）。「再生中」・秒数・案内は出さない。右下の版は、操作した直後だけ */
+   映像メイン: 曲名は左上、位置の棒は一番下（細く。秒数なし）。アーティスト名・「再生中」・秒数・案内は出さない。右下の版は、操作した直後だけ。
+   設定「映像に重ねる」がオフのときは、曲名を映像の上の帯、位置の棒を映像の下の帯に分ける（data-mv-apart） */
+#sv-np {
+  --mv-top: 0px;
+  --mv-bottom: 0px;
+}
+
+#sv-np[data-mv-apart] {
+  --mv-top: 7vh;
+  --mv-bottom: 1.6vh;
+}
+
 #sv-np #sv-np-video {
   display: none;
   position: absolute;
@@ -373,43 +389,58 @@ html.sv-sp #main {
   display: block;
 }
 
-/* 全画面: 映像が画面全体。歌詞は出さない */
+/* 全画面: 映像が画面全体（重ねないときは、上下の帯を空ける）。歌詞は出さない */
 #sv-np[data-mv="full"] #sv-np-video {
-  inset: 0;
+  left: 0;
+  right: 0;
+  top: var(--mv-top);
+  bottom: var(--mv-bottom);
 }
 
 #sv-np[data-mv="full"] .sv-np-lyrics {
   display: none;
 }
 
-/* 左右: 左半分に映像、右半分に歌詞（画面の真ん中に） */
+/* 左右: 左 70% に映像、右 30% に小さな歌詞（縦の真ん中）。歌詞の行は小さく */
+#sv-np[data-mv="split"] {
+  --ly-h: 3.9vh;
+}
+
 #sv-np[data-mv="split"] #sv-np-video {
   left: 0;
-  top: 0;
-  bottom: 0;
-  width: 50%;
+  top: var(--mv-top);
+  bottom: var(--mv-bottom);
+  width: 70%;
 }
 
 #sv-np[data-mv="split"] .sv-np-lyrics {
   position: absolute;
-  left: calc(50% + 6vh);
-  right: 6vh;
-  top: 50%;
+  left: calc(70% + 3vh);
+  right: 3vh;
+  top: calc(50% + (var(--mv-top) - var(--mv-bottom)) / 2);
   margin: 0;
   transform: translateY(-50%);
 }
 
-/* 映像の上の文字を読みやすく: 上に薄い暗幕（グラデーションだけ。ぼかし・影は使わない） */
+#sv-np[data-mv="split"] .sv-np-line {
+  width: 100%;
+}
+
+/* 映像の上の文字を読みやすく: 上に薄い暗幕（グラデーションだけ。ぼかし・影は使わない）。映像に重ねないときは要らない */
 #sv-np[data-mv]::before {
   content: '';
   position: absolute;
   left: 0;
   right: 0;
   top: 0;
-  height: 22vh;
+  height: 16vh;
   background: linear-gradient(to bottom, rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0));
   pointer-events: none;
   z-index: 2;
+}
+
+#sv-np[data-mv-apart]::before {
+  display: none;
 }
 
 /* 本文の枠は、画面全体。中の要素（info は枠を作らない）を、画面に対して置く */
@@ -427,17 +458,18 @@ html.sv-sp #main {
 }
 
 #sv-np[data-mv] .sv-np-cover,
+#sv-np[data-mv] .sv-np-artist,
 #sv-np[data-mv] .sv-np-state,
 #sv-np[data-mv] .sv-np-times,
 #sv-np[data-mv] .sv-np-hint {
   display: none;
 }
 
-/* 曲名・アーティスト名: 左上 */
+/* 曲名: 左上（1 行。はみ出しは省略） */
 #sv-np[data-mv] .sv-np-title {
   position: absolute;
   left: 4vh;
-  top: 3vh;
+  top: 2vh;
   margin: 0;
   max-width: calc(100% - 8vh);
   font-size: 3.6vh;
@@ -449,22 +481,8 @@ html.sv-sp #main {
   -webkit-line-clamp: unset;
 }
 
-#sv-np[data-mv="split"] .sv-np-title,
-#sv-np[data-mv="split"] .sv-np-artist {
-  max-width: calc(50% - 8vh);
-}
-
-#sv-np[data-mv] .sv-np-artist {
-  position: absolute;
-  left: 4vh;
-  top: 8vh;
-  margin: 0;
-  max-width: calc(100% - 8vh);
-  font-size: 2.6vh;
-  line-height: 1.25;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+#sv-np[data-mv="split"] .sv-np-title {
+  max-width: calc(70% - 8vh);
 }
 
 /* 位置の棒: 一番下、画面の幅いっぱい、細く */

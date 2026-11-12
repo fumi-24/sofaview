@@ -140,6 +140,18 @@ test('設定: Spotify の MV の表示を ← → で切り替えられる（全
   await until(async () => (await stored())?.spotify?.mvLayout === 'off', { message: '出さない' });
   await press(page, 'ArrowRight');
   await until(async () => (await stored())?.spotify?.mvLayout === 'full', { message: '一周して全画面' });
+  // 「映像に重ねる」: MV を出すときだけ項目が出る。← → で切り替え
+  await press(page, 'ArrowDown'); // 「映像に重ねる」は、MV の表示の次の行
+  assert.equal((await active(page)).sv, 'spotify.mvOverlap');
+  assert.equal(await text(page, '[data-id="spotify.mvOverlap"] .value'), 'オン');
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.mvOverlap === false, { message: '重ねない' });
+  await press(page, 'ArrowUp'); // spotify.mvLayout
+  assert.equal((await active(page)).sv, 'spotify.mvLayout');
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.mvLayout === 'off', { message: '出さない' });
+  assert.equal(await page.locator('[data-id="spotify.mvOverlap"]').count(), 0, 'MV を出さないときは、項目も出ない');
   await page.close();
 });
 

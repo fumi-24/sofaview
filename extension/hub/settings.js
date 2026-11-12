@@ -29,6 +29,7 @@
     { id: 'youtube.redirect', label: 'YouTube の通常 URL を /tv へ転送', sub: 'watch?v=… と youtu.be のリンクも /tv で開きます', options: onOff },
     { id: 'youtube.receiver', label: 'キャスト待機：YouTube を裏で開いておく', sub: 'スマホから YouTube を送る（キャスト）と、自動で前面に出て再生します', options: onOff },
     { id: 'spotify.mvLayout', label: 'Spotify のミュージックビデオ（MV）の表示', sub: 'MV の曲を再生中に、映像を出します', options: [['full', '画面全体に映像（歌詞・UI なし）'], ['split', '左半分に映像・右半分に歌詞'], ['off', '出さない']] },
+    { id: 'spotify.mvOverlap', label: 'MV の曲名・位置の棒を映像に重ねる', sub: 'オフにすると、曲名は映像の上、位置の棒は映像の下に分けて、映像に被せません', options: onOff, visible: (s) => s.spotify.mvLayout !== 'off' },
     { id: 'spotify.lyrics', label: 'Spotify の再生中の画面に歌詞を出す', sub: '画面のボタンでも切り替えられます', options: onOff },
     { id: 'spotify.lyricsOffset', label: '歌詞のタイミングの微調整', sub: 'スマホの歌詞より遅れるときは「＋」に、早いときは「−」に。← → で 0.1 秒ずつ', options: lyricOffsets, visible: (s) => s.spotify.lyrics },
     { id: 'spotify.standby', label: 'Spotify を裏で開いておく（スマホから再生すると自動で再生中の画面）', sub: 'スマホの Spotify で、再生先に「Web Player」を選んで使います', options: onOff },

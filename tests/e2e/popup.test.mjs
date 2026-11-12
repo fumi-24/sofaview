@@ -62,6 +62,10 @@ test('小窓: Spotify の MV の表示を選べる（文字の値で保存され
   await page.locator('.row[data-id="spotify.mvLayout"] select').selectOption('off');
   await until(async () => (await stored())?.spotify?.mvLayout === 'off', { message: '出さない' });
   assert.equal(await page.locator('.row[data-id="spotify.mvLayout"] select').inputValue(), 'off');
+  assert.equal(await page.locator('.row[data-id="spotify.mvOverlap"]').count(), 0, 'MV を出さないときは、「映像に重ねる」も出ない');
+  await page.locator('.row[data-id="spotify.mvLayout"] select').selectOption('full');
+  await page.locator('.row[data-id="spotify.mvOverlap"] .switch').click();
+  await until(async () => (await stored())?.spotify?.mvOverlap === false, { message: '重ねない' });
   await page.close();
 });
 

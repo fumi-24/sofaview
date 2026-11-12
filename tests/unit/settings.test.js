@@ -101,3 +101,11 @@ test('MV の表示: 既定は full。full / split / off 以外は既定に戻す
   const s = await settings.save({ spotify: { mvLayout: 'split' } });
   assert.equal(s.spotify.mvLayout, 'split');
 });
+
+test('MV の「映像に重ねる」: 既定は true。真偽以外は既定に戻す', async () => {
+  assert.equal(settings.defaults().spotify.mvOverlap, true);
+  assert.equal(settings.sanitize({ spotify: { mvOverlap: false } }).spotify.mvOverlap, false);
+  assert.equal(settings.sanitize({ spotify: { mvOverlap: 'no' } }).spotify.mvOverlap, true);
+  const s = await settings.save({ spotify: { mvOverlap: false } });
+  assert.equal(s.spotify.mvOverlap, false);
+});

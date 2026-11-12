@@ -287,6 +287,8 @@
     el.setAttribute('data-kind', kind);
     if (state.st && state.st.mv && kind === 'track') el.setAttribute('data-mv', state.st.mv); // MV の映像を出しているとき（full / split）
     else el.removeAttribute('data-mv');
+    if (state.st && state.st.mv && kind === 'track' && ctl.settings.spotify.mvOverlap === false) el.setAttribute('data-mv-apart', '1'); // MV の曲名・位置の棒を、映像に被せず、上下の帯に分ける
+    else el.removeAttribute('data-mv-apart');
     const trackView = kind === 'track';
     el.setAttribute('data-view', trackView ? 'track' : 'status');
     put(el.querySelector('.sv-np-hint'), trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '');
