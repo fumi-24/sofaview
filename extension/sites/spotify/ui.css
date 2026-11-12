@@ -120,7 +120,8 @@ html.sv-sp #main {
 #sv-np .sv-np-lyrics {
   margin-top: 3vh;
   height: calc(var(--ly-h) * 7); /* 前後 3 行ずつ + いまの行 */
-  overflow: hidden;
+  /* 枠で行を切らない（切ると、動いている途中で、枠の端の行が半分切れて見える）。遠い行は、もともと透明 */
+  overflow: visible;
 }
 
 #sv-np .sv-np-lyrics[hidden] {
@@ -135,7 +136,7 @@ html.sv-sp #main {
 }
 
 /* 行の太さ・大きさは全部同じ（切り替えで文字の幅が変わると、再レイアウトが走ってカクつく）。いまの行を明るく、離れるほど段階的に暗くし、
-   いまの行から 4 行以上離れた行（枠の外から入ってくる行・出ていく行）は、完全に透明にする（opacity だけ。マスクは使わない）。変わるのは、ゆっくり */
+   いまの行から 4 行以上離れた行は、完全に透明にする（opacity だけ。マスクは使わない）。変わるのは、列の動きと同じ曲線・同じ長さ */
 #sv-np .sv-np-line {
   width: 86%;
   height: var(--ly-h);
@@ -147,11 +148,19 @@ html.sv-sp #main {
   text-overflow: ellipsis;
   color: #fff;
   opacity: 0;
-  transition: opacity 0.7s cubic-bezier(0.25, 0.6, 0.25, 1); /* 列の動きと同じ曲線・同じ長さ */
+  transition: opacity 0.7s cubic-bezier(0.25, 0.6, 0.25, 1);
 }
 
 #sv-np .sv-np-line.d3 {
   opacity: 0.16;
+}
+
+#sv-np .sv-np-line.d2 {
+  opacity: 0.3;
+}
+
+#sv-np .sv-np-line.d1 {
+  opacity: 0.55;
 }
 
 /* まだ最初の行が始まっていないとき（前奏）: 最初の行は、いまの行の位置で、これから歌われる行として見せる */
@@ -162,14 +171,6 @@ html.sv-sp #main {
 /* 最後の行が終わったあと（後奏）: 最後の行を暗くして、何も光っていない状態に */
 #sv-np .sv-np-line.done {
   opacity: 0.45;
-}
-
-#sv-np .sv-np-line.d2 {
-  opacity: 0.3;
-}
-
-#sv-np .sv-np-line.d1 {
-  opacity: 0.55;
 }
 
 #sv-np .sv-np-line.is-current {
@@ -532,4 +533,12 @@ html.sv-sp #main {
 #sv-np[data-mv] .sv-np-controls[data-show] ~ .sv-np-ver,
 #sv-np[data-mv] .sv-np-toast:not([hidden]) ~ .sv-np-ver {
   opacity: 1;
+}
+
+/* 歌詞の枠の外へはみ出す行（動いている途中の、透明に近い行）より、曲名・アーティスト名・位置の棒・秒数は前に */
+#sv-np .sv-np-artist,
+#sv-np .sv-np-bar,
+#sv-np .sv-np-times {
+  position: relative;
+  z-index: 1;
 }

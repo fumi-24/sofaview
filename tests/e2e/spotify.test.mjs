@@ -509,6 +509,31 @@ test('Spotify: 映像のある曲（signals に switch-to-video。いまは音�
   await page.close();
 });
 
+test('Spotify: 歌詞の枠で行を切らない（動いている途中でも、枠の端で行が半分切れて見えない）。遠い行は透明', async () => {
+  await setSp({ lyrics: true, mvLayout: 'off' });
+  const page = await open({ fineLyrics: true, pos: 20000 });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 120, { timeout: 12000, message: '歌詞が出る' });
+  // 行を切る祖先がない（歌詞の枠・列・その外側の枠。画面全体の #sv-np は除く）
+  const clipping = await page.evaluate(() => {
+    const out = [];
+    for (let e = document.querySelector('#sv-np .sv-np-line').parentElement; e && e.id !== 'sv-np'; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.overflowX !== 'visible' || cs.overflowY !== 'visible' || (cs.clipPath && cs.clipPath !== 'none') || (cs.maskImage && cs.maskImage !== 'none')) out.push(e.className);
+    }
+    return out;
+  });
+  assert.deepEqual(clipping, [], '行を切る枠・マスクがない');
+  // 遠い行（4 行以上離れた行）は透明
+  await until(async () => (await root.locator('.sv-np-line.is-current').count()) === 1, { timeout: 5000, message: 'いまの行がある' });
+  const far = await page.evaluate(() => {
+    const k = Array.from(document.querySelectorAll('#sv-np .sv-np-line'));
+    const c = k.findIndex((e) => e.classList.contains('is-current'));
+    return [c - 6, c - 4, c + 4, c + 6].filter((i) => i >= 0 && i < k.length).map((i) => Number(getComputedStyle(k[i]).opacity));
+  });
+  assert.ok(far.length >= 3 && far.every((o) => o < 0.02), '遠い行は透明: ' + JSON.stringify(far));
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();
