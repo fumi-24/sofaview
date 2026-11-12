@@ -167,7 +167,7 @@
       const mark = (c) => {
         for (let k = Math.max(0, c - 4); k <= Math.min(kids.length - 1, c + 4); k++) {
           const d = Math.abs(k - Math.max(0, ly.cur));
-          const cls = k === ly.cur ? 'sv-np-line is-current' : d <= 3 ? 'sv-np-line d' + d : 'sv-np-line';
+          const cls = k === ly.cur ? 'sv-np-line is-current' : d <= 3 ? 'sv-np-line d' + d : 'sv-np-line'; // d0: まだ最初の行が始まっていない（いまの行がない）とき、いまの位置にある最初の行
           if (kids[k].className !== cls) kids[k].className = cls;
         }
       };

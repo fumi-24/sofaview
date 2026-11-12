@@ -51,12 +51,13 @@ export function spotifyHtml(opt) {
   const queryClient = { getQueryCache() { return qcache; } };
   const LYRIC_TEXTS = ${o.fineLyrics ? "Array.from({ length: 120 }, (_, i) => '行' + i)" : "['一行目の歌詞', '二行目の歌詞', '三行目（いま）', '四行目の歌詞', '五行目の歌詞', '六行目の歌詞']"};
   const STEP = ${o.fineLyrics ? 1000 : 20000};
+  const LEAD = ${o.leadIn || 0}; // 最初の行が始まるまでの前奏（ミリ秒）
   const putQuery = (queryKey, data) => {
     const q = { queryKey, state: { data, dataUpdatedAt: Date.now() } };
     queries.push(q);
     subs.forEach((cb) => cb({ type: 'updated', query: q }));
   };
-  window.__fx.cacheLyrics = (uri, texts) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: true, isTimeSynced: true, lyrics: (texts || LYRIC_TEXTS).map((t, i) => ({ start: i * STEP, end: (i + 1) * STEP, text: t })) });
+  window.__fx.cacheLyrics = (uri, texts) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: true, isTimeSynced: true, lyrics: (texts || LYRIC_TEXTS).map((t, i) => ({ start: LEAD + i * STEP, end: LEAD + (i + 1) * STEP, text: t })) });
   window.__fx.cacheAvail = (uri, v) => putQuery(['useLyricsAvailability', uri], v);
   window.__fx.cacheNone = (uri) => putQuery(['lyrics', { uri, image: 'x', vocalRemoval: false }], { hasLyrics: false });
 
@@ -88,6 +89,7 @@ export function spotifyHtml(opt) {
   }
   setLyrics(false);
 
+  window.__fx.seekTo = (ms) => { AP.pos = ms; AP.ts = Date.now(); }; // 再生位置を飛ばす（スマホからのシーク）
   window.__fx.setTrack = (t, uri) => {
     AP.title = t;
     if (uri) AP.uri = uri;

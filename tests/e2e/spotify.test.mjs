@@ -280,6 +280,24 @@ test('Spotify: 設定の「歌詞のタイミングの微調整」が、歌詞�
   await until(async () => (await cur()) === 48, { timeout: 5000, message: '−2 秒: 歌詞が遅れて 48 行目' });
 });
 
+test('Spotify: 前奏（最初の行がまだ始まっていない間）も、最初の行は透明にならず、これから歌われる行として見える。始まったら、いまの行になる', async () => {
+  await setSp({ lyrics: true });
+  const page = await open({ leadIn: 30000, pos: 5000 });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞が出る' });
+  assert.equal(await root.locator('.sv-np-lyrics').isVisible(), true, '前奏でも歌詞の枠が出る');
+  assert.equal(await root.locator('.sv-np-line.is-current').count(), 0, 'まだ、いまの行はない');
+  const opacity = (n) => root.locator('.sv-np-line').nth(n).evaluate((e) => Number(getComputedStyle(e).opacity));
+  await until(async () => Math.abs((await opacity(0)) - 0.7) < 0.03, { timeout: 4000, message: '最初の行は、透明でなく、見える（0.7）' });
+  assert.ok((await opacity(1)) > 0.4 && (await opacity(1)) < (await opacity(0)), '次の行は、それより暗い');
+  // 最初の行が始まったら、いまの行（明るさ 1）になる
+  await press(page, 'Enter'); // 列を出す
+  await press(page, 'Enter'); // 再生
+  await page.evaluate(() => window.__fx.seekTo(32000)); // 最初の行の開始（30 秒）を過ぎる
+  await until(async () => (await root.locator('.sv-np-line.is-current').count()) === 1, { timeout: 5000, message: '最初の行が、いまの行になる' });
+  await until(async () => (await opacity(0)) === 1, { timeout: 4000, message: 'いまの行は明るさ 1' });
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

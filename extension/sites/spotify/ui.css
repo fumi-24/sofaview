@@ -149,6 +149,11 @@ html.sv-sp #main {
   opacity: 0.16;
 }
 
+/* まだ最初の行が始まっていないとき（前奏）: 最初の行は、いまの行の位置で、これから歌われる行として見せる */
+#sv-np .sv-np-line.d0 {
+  opacity: 0.7;
+}
+
 #sv-np .sv-np-line.d2 {
   opacity: 0.3;
 }
