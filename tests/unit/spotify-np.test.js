@@ -49,7 +49,7 @@ test('歌詞のいまの行: 開始時刻（ミリ秒）と再生位置から決
   assert.equal(np.lyricsAt([{ text: 'a', start: 5000 }, { text: 'b', start: 9000 }], 2, 200, -1).cur, -1, '最初の行の前');
   assert.deepEqual(np.lyricsAt(L, 50, 200, -1).lines, ['行0', '行1', '行2', '行3']);
   assert.equal(np.lyricsAt([{ text: 'a', start: 0 }, { text: 'b', start: 0 }], 5, 200, -1), null, '時刻のない歌詞');
-  assert.deepEqual(np.lyricsAt([{ text: 'a', start: 9000 }, { text: 'b', start: 3000 }], 12, 200, -1), { lines: ['a', 'b'], cur: 1 }, '順に増えなくても捨てない（逆転は、それまでの最大に合わせる）');
+  assert.deepEqual(np.lyricsAt([{ text: 'a', start: 9000 }, { text: 'b', start: 3000 }], 12, 200, -1), { lines: ['a', 'b'], cur: 1, ended: false }, '順に増えなくても捨てない（逆転は、それまでの最大に合わせる）');
   assert.equal(np.lyricsAt([], 5, 200, -1), null);
   // 値が秒の場合（曲の長さ以下の値ばかり）
   const S = [0, 20, 40, 60].map((start, i) => ({ text: '行' + i, start }));
@@ -83,4 +83,26 @@ test('歌詞の位置の補正: 差のサンプルが安定しているときだ
   assert.equal(np.lyricShift([-3, -2, -4]), null, 'ばらつくとき');
   assert.equal(np.lyricShift([-3, -3]), null, '3 個未満');
   assert.equal(np.lyricShift([]), null);
+});
+
+test('歌詞: 最後の行が終わったあと（後奏）を見分ける。最後の行は、行の間隔の中央値（3〜8 秒）だけ続いたら終わり', () => {
+  const L = (starts) => starts.map((st, i) => ({ text: '行' + i, start: st }));
+  const lines = L([0, 5000, 10000]); // 間隔 5 秒 → 最後の行は 5 秒続く
+  assert.equal(np.lyricsAt(lines, 11, 100, -1).ended, false, '最後の行が始まって 1 秒');
+  assert.equal(np.lyricsAt(lines, 14.9, 100, -1).ended, false);
+  assert.equal(np.lyricsAt(lines, 15, 100, -1).ended, true, '5 秒たった');
+  assert.equal(np.lyricsAt(lines, 15, 100, -1).cur, 2, 'いまの行の位置はそのまま（最後の行）');
+  assert.equal(np.lyricsAt(lines, 7, 100, -1).ended, false, '途中の行は終わりでない');
+  // 間隔が短い歌詞は 3 秒、長い歌詞は 8 秒まで
+  assert.equal(np.lyricsAt(L([0, 1000, 2000]), 4.9, 100, -1).ended, false);
+  assert.equal(np.lyricsAt(L([0, 1000, 2000]), 5, 100, -1).ended, true, '下限 3 秒');
+  assert.equal(np.lyricsAt(L([0, 30000, 60000]), 67, 200, -1).ended, false);
+  assert.equal(np.lyricsAt(L([0, 30000, 60000]), 68, 200, -1).ended, true, '上限 8 秒');
+  // 1 行だけ: 5 秒
+  assert.equal(np.lyricsAt(L([10000]), 14, 100, -1).ended, false);
+  assert.equal(np.lyricsAt(L([10000]), 15, 100, -1).ended, true);
+  // まだ最初の行の前は、終わりではない
+  assert.equal(np.lyricsAt(lines, 0, 100, -1).ended, false);
+  assert.equal(np.lyricsAt(L([3000, 8000]), 1, 100, -1).cur, -1);
+  assert.equal(np.lyricsAt(L([3000, 8000]), 1, 100, -1).ended, false);
 });

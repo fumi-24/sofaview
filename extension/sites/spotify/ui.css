@@ -154,6 +154,11 @@ html.sv-sp #main {
   opacity: 0.7;
 }
 
+/* 最後の行が終わったあと（後奏）: 最後の行を暗くして、何も光っていない状態に */
+#sv-np .sv-np-line.done {
+  opacity: 0.45;
+}
+
 #sv-np .sv-np-line.d2 {
   opacity: 0.3;
 }

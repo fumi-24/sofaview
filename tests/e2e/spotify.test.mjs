@@ -298,6 +298,23 @@ test('Spotify: 前奏（最初の行がまだ始まっていない間）も、�
   await until(async () => (await opacity(0)) === 1, { timeout: 4000, message: 'いまの行は明るさ 1' });
 });
 
+test('Spotify: 最後の行が終わったあと（後奏）は、最後の行を暗くして、何も光っていない状態に。戻れば、またいまの行になる', async () => {
+  await setSp({ lyrics: true });
+  const page = await open({ pos: 101000 }); // 6 行（20 秒おき）の最後の行は 100 秒から。間隔 20 秒 → 最後の行は 8 秒続く
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞が出る' });
+  const opacity = (n) => root.locator('.sv-np-line').nth(n).evaluate((e) => Number(getComputedStyle(e).opacity));
+  await until(async () => (await root.locator('.sv-np-line.is-current').count()) === 1, { timeout: 5000, message: '最後の行がいまの行' });
+  assert.match(await root.locator('.sv-np-line.is-current').innerText(), /六行目/);
+  await page.evaluate(() => window.__fx.seekTo(110000)); // 最後の行が始まって 10 秒: 終わった
+  await until(async () => (await root.locator('.sv-np-line.is-current').count()) === 0, { timeout: 5000, message: '光っている行がなくなる' });
+  await until(async () => Math.abs((await opacity(5)) - 0.45) < 0.03, { timeout: 4000, message: '最後の行は暗くなる（0.45）' });
+  assert.ok((await opacity(4)) > 0.3, '前の行は、そのまま見える');
+  await page.evaluate(() => window.__fx.seekTo(102000)); // 戻した: また、いまの行
+  await until(async () => (await root.locator('.sv-np-line.is-current').count()) === 1, { timeout: 5000, message: 'また、いまの行になる' });
+  await until(async () => (await opacity(5)) === 1, { timeout: 4000, message: '明るさ 1' });
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

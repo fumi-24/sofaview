@@ -43,6 +43,7 @@
   let lyricHint = -1;
   let lyricSig = '';
   let lyricCur = -2;
+  let lyricEnded = false; // 最後の行が終わったあと（後奏）か
   let lyricTitle = '';
   let lyricState = 'オフ'; // 診断用: オフ / 待ち n 回 / 時刻なし / n 行
   let refreshMs = 0; // 更新 1 回の時間（なだらかな平均）
@@ -154,6 +155,7 @@
     if (sig !== lyricSig) {
       lyricSig = sig;
       lyricCur = -2;
+      lyricEnded = false;
       track.textContent = '';
       L.forEach((t) => track.appendChild(mk('div', 'sv-np-line', t)));
       track.style.transition = 'none'; // 曲が変わったときは、滑らせずに合わせる
@@ -161,13 +163,13 @@
       void track.offsetWidth;
       track.style.transition = '';
     }
-    if (ly.cur !== lyricCur) {
+    if (ly.cur !== lyricCur || !!ly.ended !== lyricEnded) {
       const kids = track.children;
       // いまの行から離れるほど暗く（d1〜d3）。4 行以上離れた行は、もとから透明。変わるのは、前後 4 行ずつだけ
       const mark = (c) => {
         for (let k = Math.max(0, c - 4); k <= Math.min(kids.length - 1, c + 4); k++) {
           const d = Math.abs(k - Math.max(0, ly.cur));
-          const cls = k === ly.cur ? 'sv-np-line is-current' : d <= 3 ? 'sv-np-line d' + d : 'sv-np-line'; // d0: まだ最初の行が始まっていない（いまの行がない）とき、いまの位置にある最初の行
+          const cls = k === ly.cur ? (ly.ended ? 'sv-np-line d0 done' : 'sv-np-line is-current') : d <= 3 ? 'sv-np-line d' + d : 'sv-np-line'; // d0: まだ最初の行が始まっていない（いまの行がない）とき、いまの位置にある最初の行
           if (kids[k].className !== cls) kids[k].className = cls;
         }
       };
@@ -175,6 +177,7 @@
       mark(Math.max(0, ly.cur)); // 新しいいまの行のまわり
       track.style.setProperty('--cur', String(Math.max(0, ly.cur)));
       lyricCur = ly.cur;
+      lyricEnded = !!ly.ended;
     }
   }
 

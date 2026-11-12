@@ -59,7 +59,7 @@
    * 歌詞。Spotify の React の部品の木から、行の文字と開始時刻を読む（react-main.js。画面の要素・色には頼らない）。
    * いまの行は、再生位置（メディアセッション）と開始時刻を比べて決める。
    *   lines: [{ text, start }]（start は ミリ秒。曲の長さより小さい値ばかりなら、秒とみなす）  positionSec / durationSec: 秒
-   * 返す: { lines: [文字], cur: いまの行の位置（まだ最初の行の前なら -1） }。時刻が付いていない（順に増えない）歌詞は null（そのときは歌詞を出さない）。
+   * 返す: { lines: [文字], cur: いまの行の位置（まだ最初の行の前なら -1）, ended: 最後の行が終わったあと（後奏）か }。時刻が付いていない（順に増えない）歌詞は null（そのときは歌詞を出さない）。
    */
   function lyricsAt(lines, positionSec, durationSec, hint) {
     if (!lines || !lines.length) return null;
@@ -82,7 +82,17 @@
     let cur = Math.max(-1, Math.min(starts.length - 1, hint == null ? -1 : hint));
     while (cur >= 0 && starts[cur] > t) cur--;
     while (cur + 1 < starts.length && starts[cur + 1] <= t) cur++;
-    return { lines: lines.map((l) => l.text), cur };
+    // 最後の行が終わったあと（後奏）: 最後の行は、行の長さの目安（行の間隔の中央値。3〜8 秒）だけ続いたら、終わったとみなす。
+    // Spotify のデータでは、最後の行の終わりは決まっていない（曲の終わりまで）ので、ここで決める
+    let ended = false;
+    if (cur === starts.length - 1 && cur >= 0) {
+      const gaps = [];
+      for (let i = 1; i < starts.length; i++) if (starts[i] - starts[i - 1] > 0) gaps.push(starts[i] - starts[i - 1]);
+      gaps.sort((a, b) => a - b);
+      const med = gaps.length ? gaps[gaps.length >> 1] : 5 * unit;
+      ended = t >= starts[cur] + Math.min(8 * unit, Math.max(3 * unit, med));
+    }
+    return { lines: lines.map((l) => l.text), cur, ended };
   }
 
   /** 再生位置（秒）を、いまの時刻まで進める。state は Spotify のタブが送ってきた状態（info.positionSec・info.playing・at）。 */
