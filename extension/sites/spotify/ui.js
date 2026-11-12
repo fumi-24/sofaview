@@ -324,6 +324,11 @@
     cover.hidden = !i.cover;
     paintButtons(i);
     paintLyrics(i, posSec == null ? posSec : posSec + (st.lyricShift || 0) + lyricOffset(), st.lyrics); // 歌詞は、実際に鳴っている音声に合わせた補正と、設定の微調整（秒）を足した位置で
+    // MV の左右表示で、歌詞がない（設定オフ・この曲にはない・時刻がなくて出せない・待っても来ない）ときは、映像を画面いっぱいに（中央寄りで）広げる。歌詞を読み込み中の間は、広げない（揺れないように）
+    const lyBox = el.querySelector('.sv-np-lyrics');
+    const lyWaiting = wantLyrics() && !st.lyrics.none && !st.lyrics.lines.length && st.lyrics.asks < 30;
+    if (st.mv === 'split' && lyBox.hidden && !lyWaiting) el.setAttribute('data-mv-wide', '1');
+    else el.removeAttribute('data-mv-wide');
     paintProgress(i, posSec);
     put(el.querySelector('.sv-np-pos'), posSec != null ? C.fmt(posSec) : i.position);
     put(el.querySelector('.sv-np-dur'), i.durationSec > 0 ? C.fmt(i.durationSec) : i.duration);

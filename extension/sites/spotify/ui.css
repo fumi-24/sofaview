@@ -426,6 +426,15 @@ html.sv-sp #main {
   width: 100%;
 }
 
+/* 左右で歌詞がないとき: 映像を画面の幅いっぱいに（映像は枠の中央に収まる。大きく見せる） */
+#sv-np[data-mv="split"][data-mv-wide] #sv-np-video {
+  width: 100%;
+}
+
+#sv-np[data-mv="split"][data-mv-wide] .sv-np-title {
+  max-width: calc(100% - 8vh);
+}
+
 /* 映像の上の文字を読みやすく: 上に薄い暗幕（グラデーションだけ。ぼかし・影は使わない）。映像に重ねないときは要らない */
 #sv-np[data-mv]::before {
   content: '';

@@ -427,6 +427,45 @@ test('Spotify: MV の「映像に重ねる」をオフにすると、曲名は�
   }
 });
 
+test('Spotify: MV の左右表示で歌詞がないときは、映像を画面いっぱいに（中央寄りで）広げる。歌詞が出る間は、左 70% に戻る', async () => {
+  await setSp({ lyrics: true, mvLayout: 'split', mvOverlap: true });
+  const page = await open({ video: true });
+  const root = page.locator('#sv-np');
+  const vp = await page.evaluate(() => ({ w: innerWidth, h: innerHeight }));
+  const vbox = () => page.locator('#sv-np-video').boundingBox();
+  await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞が出る' });
+  assert.equal(await root.getAttribute('data-mv-wide'), null, '歌詞があるときは広げない');
+  assert.ok(Math.abs((await vbox()).width - vp.w * 0.7) < 2, '左 70%');
+  // 歌詞のない曲: 映像が画面の幅いっぱい
+  await page.evaluate(() => { window.__fx.setTrack('歌詞なしの曲', 'spotify:track:none'); window.__fx.cacheAvail('spotify:track:none', false); });
+  await until(async () => (await root.getAttribute('data-mv-wide')) === '1', { timeout: 6000, message: '歌詞がないと分かったら、広げる' });
+  let b = await vbox();
+  assert.ok(Math.abs(b.x) < 2 && Math.abs(b.width - vp.w) < 2, '映像は画面の幅いっぱい: ' + JSON.stringify(b));
+  assert.equal(await root.locator('.sv-np-lyrics').isVisible(), false);
+  assert.equal(await root.getAttribute('data-mv'), 'split', '左右の表示のまま（歌詞が来たら戻る）');
+  // 歌詞のある曲に変わったら、左 70% に戻る
+  await page.evaluate(() => { window.__fx.setTrack('歌詞ありの曲', 'spotify:track:third'); window.__fx.cacheLyrics('spotify:track:third', ['一', '二', '三']); });
+  await until(async () => (await root.getAttribute('data-mv-wide')) === null, { timeout: 6000, message: '歌詞が来たら、戻る' });
+  assert.ok(Math.abs((await vbox()).width - vp.w * 0.7) < 2, '左 70% に戻る');
+  await page.close();
+
+  // 設定で歌詞をオフにしているときも、広げる
+  await setSp({ lyrics: false, mvLayout: 'split', mvOverlap: true });
+  const page2 = await open({ video: true });
+  const root2 = page2.locator('#sv-np');
+  await until(async () => (await root2.getAttribute('data-mv-wide')) === '1', { timeout: 12000, message: '歌詞オフなら広げる' });
+  const b2 = await page2.locator('#sv-np-video').boundingBox();
+  assert.ok(Math.abs(b2.width - vp.w) < 2, '映像は画面の幅いっぱい');
+  await page2.close();
+
+  // 全画面では、もともと画面いっぱい（広げる属性は付かない）
+  await setSp({ lyrics: false, mvLayout: 'full', mvOverlap: true });
+  const page3 = await open({ video: true });
+  const root3 = page3.locator('#sv-np');
+  await until(async () => (await root3.getAttribute('data-mv')) === 'full', { timeout: 12000, message: '全画面' });
+  assert.equal(await root3.getAttribute('data-mv-wide'), null);
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();
