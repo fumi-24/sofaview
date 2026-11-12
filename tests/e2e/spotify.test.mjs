@@ -55,6 +55,8 @@ test('Spotify: タブは 1 つ。Spotify 自身の画面は、文書の外に描
   await until(async () => Math.abs((await opacity(5)) - 0.16) < 0.02, { timeout: 4000, message: '3 行離れた行は、かすかに見える' });
   assert.ok((await opacity(2)) === 1 && (await opacity(3)) > 0.4 && (await opacity(4)) > 0.2 && (await opacity(4)) < (await opacity(3)), '近い行は、離れるほど暗い');
   await until(async () => /歌詞 6行・キャッシュ/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 12000, message: '問い合わせキャッシュから読んだと表示される' });
+  assert.equal(await root.locator('.sv-np-hint').count(), 0, '「どれかのキーで、ボタンを出す」の案内は出さない（要素もない）');
+  assert.doesNotMatch(await root.innerText(), /どれかのキーで/);
   // Spotify の画面は、文書の外の要素に描かれた（起動のとき createRoot の描画先を替えた）
   assert.deepEqual(await fx(page, 'rendered'), { containerConnected: false, containerIsMain: false }, 'Spotify の画面の描画先は、文書の外');
   assert.equal(await page.evaluate(() => document.querySelectorAll('[data-testid], main').length), 0, '文書に、Spotify の要素はない');
@@ -336,7 +338,7 @@ test('Spotify: MV（ミュージックビデオ）を再生中は、既定で映
   const bar = await rect('.sv-np-bar');
   assert.ok(Math.abs(bar.x) < 2 && Math.abs(bar.width - vp.w) < 2 && Math.abs(bar.y + bar.height - vp.h) < 2, '位置の棒は一番下で、画面の幅いっぱい: ' + JSON.stringify(bar));
   assert.ok(bar.height < vp.h * 0.015, '細い');
-  for (const sel of ['.sv-np-artist', '.sv-np-lyrics', '.sv-np-state', '.sv-np-times', '.sv-np-hint', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない（曲名だけ残す）');
+  for (const sel of ['.sv-np-artist', '.sv-np-lyrics', '.sv-np-state', '.sv-np-times', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない（曲名だけ残す）');
   // 右下の版は、操作した直後だけ
   const verOpacity = () => root.locator('.sv-np-ver').evaluate((e) => Number(getComputedStyle(e).opacity));
   assert.equal(await verOpacity(), 0, '操作する前は出ない');
@@ -371,7 +373,7 @@ test('Spotify: MV の表示を「左半分に映像・右半分に歌詞」に�
   assert.ok(title.x < vp.w * 0.1 && title.y < vp.h * 0.15 && title.x + title.width <= vp.w * 0.7, '曲名は左上（映像の側の中）: ' + JSON.stringify(title));
   const bar = await root.locator('.sv-np-bar').boundingBox();
   assert.ok(Math.abs(bar.width - vp.w) < 2 && Math.abs(bar.y + bar.height - vp.h) < 2, '位置の棒は一番下: ' + JSON.stringify(bar));
-  for (const sel of ['.sv-np-artist', '.sv-np-state', '.sv-np-times', '.sv-np-hint', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない');
+  for (const sel of ['.sv-np-artist', '.sv-np-state', '.sv-np-times', '.sv-np-cover']) assert.equal(await root.locator(sel).isVisible(), false, sel + ' は出ない');
   await until(async () => (await root.locator('.sv-np-line').count()) === 6, { timeout: 12000, message: '歌詞も出る' });
   assert.equal(await root.locator('.sv-np-lyrics').isVisible(), true);
   const lbox = await root.locator('.sv-np-lyrics').boundingBox();

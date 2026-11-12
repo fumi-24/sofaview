@@ -247,7 +247,6 @@
     const bar = el.querySelector('.sv-np-controls');
     const was = bar.hasAttribute('data-show');
     bar.removeAttribute('data-show');
-    el.querySelector('.sv-np-hint').hidden = false;
     return was;
   }
   /** 操作されたとき、ボタンの列を出して、しばらく（5 秒）操作がなければ隠す。 */
@@ -255,7 +254,6 @@
     const bar = el.querySelector('.sv-np-controls');
     const was = bar.hasAttribute('data-show');
     bar.setAttribute('data-show', '1');
-    el.querySelector('.sv-np-hint').hidden = true;
     if (!was) focusButton(fi);
     clearTimeout(barTimer);
     barTimer = setTimeout(hideBar, 5000);
@@ -291,7 +289,6 @@
     else el.removeAttribute('data-mv-apart');
     const trackView = kind === 'track';
     el.setAttribute('data-view', trackView ? 'track' : 'status');
-    put(el.querySelector('.sv-np-hint'), trackView ? 'どれかのキーで、ボタンを出す　↑ ↓ 音量' : '');
     if (!trackView) {
       hideBar();
       paintStatus(kind);
@@ -402,7 +399,7 @@
     // MV の映像の枠。Spotify 自身の映像の置き場を、アプリ自身の部品（react-main.js の video）が、ここに差し込む。映像がないときは、空で隠れている
     const vslot = mk('div');
     vslot.id = 'sv-np-video';
-    el.append(bgs[0], bgs[1], vslot, body, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
+    el.append(bgs[0], bgs[1], vslot, body, status, toastEl, controls, mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
     doc.body.appendChild(el);
   }
 
