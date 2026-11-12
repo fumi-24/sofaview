@@ -8,7 +8,7 @@
 
   const SV = (root.SV = root.SV || {});
 
-  SV.VERSION = '0.16.1';
+  SV.VERSION = '0.17.0';
   SV.HUB_PATH = 'hub/index.html';
   SV.debug = false;
 

@@ -466,6 +466,49 @@ test('Spotify: MV の左右表示で歌詞がないときは、映像を画面�
   assert.equal(await root3.getAttribute('data-mv-wide'), null);
 });
 
+test('Spotify: MV は、Spotify 自身と同じく、再生状態の signals で見分ける（switch-to-audio＝映像を再生中）。mediaType が音のままでも、映像を出す', async () => {
+  await setSp({ lyrics: false, mvLayout: 'full' });
+  const page = await open({ songVideoPlaying: true });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.getAttribute('data-mv')) === 'full', { timeout: 12000, message: 'signals だけで映像と分かる' });
+  assert.ok((await fx(page, 'log')).some((l) => l.ev === 'app' && l.action === 'video:claim'));
+  assert.ok(!(await fx(page, 'log')).some((l) => l.ev === 'app' && /^signal:/.test(l.action)), '映像を再生中なので、切り替えの信号は送らない');
+});
+
+test('Spotify: 映像のある曲（signals に switch-to-video。いまは音だけ）は、設定が許せば、自動で映像に切り替える（Spotify 自身の「映像に切り替える」と同じ sendSignal）。曲ごとに最大 2 回。スマホで音に戻されても戻さない。設定オフ・MV を出さない設定なら送らない', async () => {
+  const signals = async (page) => (await fx(page, 'log')).filter((l) => l.ev === 'app' && /^signal:/.test(l.action)).map((l) => l.action);
+  // 自動（既定）
+  await setSp({ lyrics: false, mvLayout: 'full', mvAuto: true });
+  let page = await open({ songVideo: true });
+  let root = page.locator('#sv-np');
+  await until(async () => (await signals(page)).length >= 1, { timeout: 8000, message: '切り替えの信号を送る' });
+  assert.deepEqual(await signals(page), ['signal:switch-to-video']);
+  await until(async () => (await root.getAttribute('data-mv')) === 'full', { timeout: 8000, message: '映像が出る' });
+  // スマホで音に戻された: 同じ曲では、勝手に戻さない
+  await page.evaluate(() => window.__fx.setVideo(false));
+  await until(async () => (await root.getAttribute('data-mv')) === null, { timeout: 8000, message: '音に戻る' });
+  await page.waitForTimeout(6500);
+  assert.deepEqual(await signals(page), ['signal:switch-to-video'], '一度でも映像になった曲は、もう切り替えない（スマホで音に戻したのを、勝手に戻さない）');
+  assert.equal(await root.getAttribute('data-mv'), null, '勝手に映像に戻さない');
+  await page.close();
+
+  // 設定「自動で切り替える」がオフ
+  await setSp({ lyrics: false, mvLayout: 'full', mvAuto: false });
+  page = await open({ songVideo: true });
+  root = page.locator('#sv-np');
+  await until(async () => /映像 なし（映像あり・音で再生中）/.test(await root.locator('.sv-np-ver').evaluate((e) => e.textContent)), { timeout: 10000, message: '音で再生中と表示' });
+  await page.waitForTimeout(1500);
+  assert.deepEqual(await signals(page), [], '信号は送らない');
+  await page.close();
+
+  // MV を出さない設定
+  await setSp({ lyrics: false, mvLayout: 'off', mvAuto: true });
+  page = await open({ songVideo: true });
+  await page.waitForTimeout(2500);
+  assert.deepEqual(await signals(page), [], 'MV を出さないなら、信号は送らない');
+  await page.close();
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

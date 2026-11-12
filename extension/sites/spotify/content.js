@@ -24,6 +24,7 @@
       document,
       getLyrics: () => ctl.settings.spotify.lyrics,
       getMv: () => ctl.settings.spotify.mvLayout,
+      getMvAuto: () => ctl.settings.spotify.mvAuto,
       onDiag: (report) => SV.sendMessage({ type: 'sv:spDiag', report }), // 診断の報告を、診断ページへ送る
     });
     SV.spotifyUI.start({ reader });

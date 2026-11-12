@@ -109,3 +109,9 @@ test('MV の「映像に重ねる」: 既定は true。真偽以外は既定に�
   const s = await settings.save({ spotify: { mvOverlap: false } });
   assert.equal(s.spotify.mvOverlap, false);
 });
+
+test('MV の「自動で映像に切り替える」: 既定は true。真偽以外は既定に戻す', () => {
+  assert.equal(settings.defaults().spotify.mvAuto, true);
+  assert.equal(settings.sanitize({ spotify: { mvAuto: false } }).spotify.mvAuto, false);
+  assert.equal(settings.sanitize({ spotify: { mvAuto: 0 } }).spotify.mvAuto, true);
+});

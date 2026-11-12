@@ -16,21 +16,23 @@ export function spotifyHtml(opt) {
   const hook = window.__REACT_DEVTOOLS_GLOBAL_HOOK__;
 
   // ---- アプリ自身のサービス（状態を持つ）----
-  const AP = { paused: true, pos: ${o.pos || 50000}, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, video: ${!!o.video}, listeners: [] };
+  const AP = { paused: true, pos: ${o.pos || 50000}, ts: Date.now(), title: 'テスト曲のタイトル', uri: 'spotify:track:abc', vol: 1, video: ${!!(o.video || o.songVideoPlaying)}, canVideo: ${!!(o.songVideo || o.songVideoPlaying)}, signalOnly: ${!!o.songVideoPlaying}, listeners: [] };
   const apNow = () => (AP.paused ? AP.pos : AP.pos + (Date.now() - AP.ts));
   const appLog = (action, arg) => log('app', { action, arg });
   const playerAPI = {
     getState() {
       return {
         isPaused: AP.paused, isBuffering: false, positionAsOfTimestamp: AP.pos, timestamp: AP.ts, duration: 175797, speed: 1, shuffle: false, repeat: 0,
-        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: AP.video ? 'video' : 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
+        item: ${o.noTrack ? 'null' : "{ type: 'track', uri: AP.uri, name: AP.title, mediaType: AP.video && !AP.signalOnly ? 'video' : 'audio', duration: { milliseconds: 175797 }, album: { name: 'アルバム', images: [{ url: " + JSON.stringify(o.cover || 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=') + ", width: 640 }] }, artists: [{ name: 'テスト歌手' }], metadata: { secret: 'SECRET-VALUE' } }"},
         restrictions: { canSeek: true },
+        signals: AP.video && AP.signalOnly ? ['switch-to-audio'] : AP.video ? [] : AP.canVideo ? ['switch-to-video'] : [],
       };
     },
     pause() { AP.pos = apNow(); AP.ts = Date.now(); AP.paused = true; appLog('pause'); },
     resume() { AP.ts = Date.now(); AP.paused = false; appLog('resume'); },
     skipToNext() { appLog('next'); },
     skipToPrevious() { appLog('prev'); },
+    sendSignal(sig) { appLog('signal:' + sig); if (sig === 'switch-to-video' && AP.canVideo) { AP.video = true; AP.signalOnly = true; } if (sig === 'switch-to-audio') { AP.video = false; } },
     seekTo(ms) { AP.pos = ms; AP.ts = Date.now(); appLog('seekTo', ms); },
     play() {}, skipTo() {}, seekForward() {}, seekBackward() {}, getQueue() {}, setShuffle() {}, setRepeat() {},
     getEvents() { return { addListener(type, cb) { appLog('subscribe:' + type); AP.listeners.push(cb); } }; },

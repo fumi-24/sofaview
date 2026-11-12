@@ -306,6 +306,7 @@
       bestW = im.width || 0;
       cover = im.url;
     }
+    const sigs = Array.isArray(st.signals) ? st.signals.filter((x) => typeof x === 'string').slice(0, 8) : [];
     return {
       has: !!item,
       paused: !!st.isPaused,
@@ -316,7 +317,11 @@
       speed: Number(st.speed) || 1,
       type: item ? String(item.type || '') : '',
       mediaType: item ? String(item.mediaType || '') : '',
-      video: !!item && (item.mediaType === 'video' || !!(item.metadata && item.metadata.track_player === 'video')), // ミュージックビデオを再生中か
+      // ミュージックビデオ（曲の映像）: Spotify 自身は、再生状態の signals で判断する（switch-to-audio を含む＝映像を再生中、switch-to-video を含む＝映像があるが、いまは音だけ）。
+      // mediaType・track_player が video のもの（動画の番組など）も、映像を再生中とみなす
+      video: !!item && (sigs.includes('switch-to-audio') || item.mediaType === 'video' || !!(item.metadata && item.metadata.track_player === 'video')),
+      canVideo: !!item && sigs.includes('switch-to-video'),
+      signals: sigs.join(','),
       uri: item ? String(item.uri || '') : '',
       title: item ? String(item.name || '') : '',
       artists: item && Array.isArray(item.artists) ? item.artists.map((a) => String((a && a.name) || '')).filter(Boolean) : [],
@@ -353,7 +358,7 @@
       subscribeUpdates();
       const state = compact(svc.player.getState() || {});
       // 変わっていなければ、ここで終わる（音量の問い合わせまで進むのは、変わったときと、1 秒に 1 回だけ）
-      const base = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, state.video, anon]);
+      const base = JSON.stringify([state.has, state.paused, state.buffering, Math.round(state.positionMs / 500), state.durationMs, state.title, state.uri, state.video, state.canVideo, anon]);
       const t = Date.now();
       if (!force && base === lastBase && t - lastFullAt < 1000) return;
       lastBase = base;
@@ -416,6 +421,13 @@
         }
       }
       location.href = 'https://accounts.spotify.com/login?continue=' + encodeURIComponent(location.origin + '/');
+    },
+    // 映像のある曲を、映像に切り替える（Spotify 自身の「映像に切り替える」ボタンと同じ呼び方: PlayerAPI.sendSignal）。切り替えられる（signals に switch-to-video がある）ときだけ
+    videoSwitch: () => {
+      const p = svc.player;
+      if (!p || typeof p.sendSignal !== 'function') return;
+      const st = p.getState();
+      if (st && Array.isArray(st.signals) && st.signals.includes('switch-to-video')) p.sendSignal('switch-to-video');
     },
     // ミュージックビデオ（MV）の映像を、自前の画面の枠（#sv-np-video）に出す・戻す。Spotify 自身の画面が、映像の置き場（VideoContainerManager）を表示枠に差し込む・画面外に戻す（claim・release）のと、
     // 映像を出していることを伝える（VideoAPI の setIsVideoVisible・reportVideoMode）のと、同じ呼び方。アプリ自身の部品を呼ぶだけ（通信はアプリ自身。認証情報には触らない）

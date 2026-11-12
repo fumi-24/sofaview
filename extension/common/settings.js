@@ -23,6 +23,7 @@
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
       lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
       lyricsOffset: 0, // 歌詞のタイミングの微調整（秒。＋で歌詞が早く、−で遅く。0.1 秒きざみ）
+      mvAuto: true, // MV: 映像のある曲は、自動で映像に切り替える（Spotify の「映像に切り替える」と同じ。曲ごとに最大 2 回。スマホで音に戻したら、その曲では戻さない）
       mvOverlap: true, // MV: 曲名・位置の棒を映像に重ねる。オフなら、曲名は映像の上の帯、位置の棒は映像の下の帯に分けて、映像に被せない
       mvLayout: 'full', // ミュージックビデオ（MV）の表示: full=画面全体に映像（歌詞・UI なし）/ split=左半分に映像・右半分に歌詞 / off=映像を出さない
     },
@@ -82,6 +83,7 @@
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
     out.spotify.lyrics = bool(sp.lyrics, d.spotify.lyrics);
+    out.spotify.mvAuto = bool(sp.mvAuto, d.spotify.mvAuto);
     out.spotify.mvOverlap = bool(sp.mvOverlap, d.spotify.mvOverlap);
     out.spotify.mvLayout = ['full', 'split', 'off'].includes(sp.mvLayout) ? sp.mvLayout : d.spotify.mvLayout;
     out.spotify.lyricsOffset = Math.round(num(sp.lyricsOffset, -3, 3, d.spotify.lyricsOffset) * 10) / 10 || 0;

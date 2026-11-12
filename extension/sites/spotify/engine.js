@@ -110,6 +110,8 @@
       source: 'app',
       hasTrack: !!st.has && !!st.title,
       video: !!st.video, // ミュージックビデオを再生中か
+      canVideo: !!st.canVideo, // 映像のある曲（いまは音だけ）
+      signals: st.signals || '',
       title: st.title,
       artists: st.artists.join(', '),
       cover: st.cover,
@@ -186,7 +188,10 @@
     const waited = () => Date.now() - createdAt > 8000; // サービスが見つからなくても、「読み込み中」のままにしない
     const wantLyrics = () => (opts && opts.getLyrics ? !!opts.getLyrics() : true);
     const mvLayout = () => (opts && opts.getMv ? opts.getMv() : 'full'); // full / split / off
+    const mvAuto = () => (opts && opts.getMvAuto ? !!opts.getMvAuto() : true); // 映像のある曲を、自動で映像に切り替えるか
+    const autoSwitch = { uri: '', n: 0, at: 0, done: false }; // 曲ごとに、映像にならなかったときだけ 1 回やり直す。一度でも映像になった曲は、もう切り替えない（スマホで音に戻したのを、勝手に戻さない）
     let videoWant = null; // 映像を出している形（off / full / split）
+    const videoSeen = { at: 0, uri: '' }; // 最後に映像を再生中と分かったとき
     let videoAt = 0;
 
     (opts && opts.checkDrm ? opts.checkDrm() : checkWidevine(win)).then((ok) => {
@@ -346,11 +351,28 @@
       if (d.kind === 'track') syncLyricsView();
       // ミュージックビデオ: 再生中で、設定が off でなければ、映像を自前の枠に出す（変わったとき・3 秒おきに、アプリ自身の部品へ依頼）。出せたときだけ、画面を映像用にする
       const isVideo = d.kind === 'track' && appOk() && !!i.video;
-      const wantV = isVideo && mvLayout() !== 'off' ? mvLayout() : 'off';
+      if (isVideo) {
+        videoSeen.at = Date.now();
+        videoSeen.uri = app.state.uri || '';
+      }
+      let wantV = isVideo && mvLayout() !== 'off' ? mvLayout() : 'off';
+      // 状態が一瞬だけ映像でなくなっても（切り替えの途中など）、同じ曲のあいだは 3 秒、映像を片づけない（片づけると、Spotify が音だけの再生に落とす）
+      if (wantV === 'off' && videoWant && videoWant !== 'off' && mvLayout() !== 'off' && d.kind === 'track' && appOk() && (app.state.uri || '') === videoSeen.uri && Date.now() - videoSeen.at < 3000) wantV = videoWant;
       if (wantV !== videoWant || (wantV !== 'off' && Date.now() - videoAt > 3000)) {
         videoWant = wantV;
         videoAt = Date.now();
         appCmd('video', { mode: wantV });
+      }
+      // 映像のある曲（いまは音だけ）は、設定が許せば、自動で映像に切り替える（曲ごとに最大 2 回。5 秒あけて）。スマホで音に戻されても、勝手に戻さない
+      if (isVideo && autoSwitch.uri === (app.state.uri || '')) autoSwitch.done = true; // 映像になった（切り替えが効いた、または、もともと映像）
+      if (d.kind === 'track' && appOk() && app.state.canVideo && !isVideo && mvLayout() !== 'off' && mvAuto()) {
+        const u = app.state.uri || '';
+        if (autoSwitch.uri !== u) Object.assign(autoSwitch, { uri: u, n: 0, at: 0, done: false });
+        if (!autoSwitch.done && autoSwitch.n < 2 && Date.now() - autoSwitch.at > 5000) {
+          autoSwitch.n++;
+          autoSwitch.at = Date.now();
+          appCmd('videoSwitch');
+        }
       }
       const vr = app.videoRes;
       const mv = wantV !== 'off' && vr && vr.ok && vr.mode === wantV ? wantV : '';
@@ -375,6 +397,8 @@
         mediaDiff,
         lyricShift,
         video: isVideo,
+        canVideo: !!i.canVideo,
+        videoSignals: i.signals || '',
         mv,
         mvInfo: vr ? { ok: vr.ok, err: vr.err || '', box: vr.box || '' } : null,
       };

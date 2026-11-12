@@ -122,8 +122,8 @@
   /** MV（ミュージックビデオ）の状態（右下の表示）: なし / 全画面 / 左右 / 検出（出せない理由）/ 検出（設定で出さない）。 */
   function mvText() {
     const st = state.st;
-    if (!st || !st.video) return 'なし';
-    if (st.mv) return st.mv === 'full' ? '全画面' : '左右';
+    if (st && st.mv) return st.mv === 'full' ? '全画面' : '左右';
+    if (!st || !st.video) return st && st.canVideo ? 'なし（映像あり・音で再生中' + (ctl.settings.spotify.mvAuto === false || ctl.settings.spotify.mvLayout === 'off' ? '' : '。切り替え中') + '）' : 'なし' + (st && st.videoSignals ? '（信号: ' + st.videoSignals + '）' : '');
     if (ctl.settings.spotify.mvLayout === 'off') return '検出（設定で出さない）';
     const i = st.mvInfo;
     return '検出（出せません' + (i && i.err ? ': ' + i.err : '') + '）';
