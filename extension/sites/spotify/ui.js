@@ -68,6 +68,8 @@
     setTimeout(refresh, 300);
   }
   const wantLyrics = () => !!ctl.settings.spotify.lyrics;
+  /** 設定の「歌詞のタイミングの微調整」（秒。＋で歌詞が早く）。 */
+  const lyricOffset = () => Number(ctl.settings.spotify.lyricsOffset) || 0;
 
   /** いまの状態の種類。アプリのサービスに、15 秒たってもつながらないときは、つながっていない。 */
   function viewKind() {
@@ -119,7 +121,7 @@
   function mediaDiffText() {
     const d = state.st && state.st.mediaDiff;
     const sh = state.st && state.st.lyricShift;
-    return (d == null ? '–' : (d >= 0 ? '+' : '') + d.toFixed(1) + '秒') + (sh ? '（歌詞を ' + (sh > 0 ? '+' : '') + sh.toFixed(1) + '秒補正）' : '');
+    return (d == null ? '–' : (d >= 0 ? '+' : '') + d.toFixed(1) + '秒') + (sh ? '（歌詞を ' + (sh > 0 ? '+' : '') + sh.toFixed(1) + '秒補正）' : '') + (lyricOffset() ? '（微調整 ' + (lyricOffset() > 0 ? '+' : '') + lyricOffset().toFixed(1) + '秒）' : '');
   }
 
   /** 歌詞が出ないときの診断（右下の表示）: 依頼の回数・いまのパス・歌詞ボタンの有無・歌詞の行の要素の数・Spotify の画面の大きさ。 */
@@ -282,7 +284,7 @@
     if (i.cover && cover.getAttribute('src') !== i.cover) cover.setAttribute('src', i.cover); // 背景は、読み込みが終わったとき（load）に描く
     cover.hidden = !i.cover;
     paintButtons(i);
-    paintLyrics(i, posSec == null ? posSec : posSec + (st.lyricShift || 0), st.lyrics); // 歌詞は、実際に鳴っている音声に合わせて補正した位置で
+    paintLyrics(i, posSec == null ? posSec : posSec + (st.lyricShift || 0) + lyricOffset(), st.lyrics); // 歌詞は、実際に鳴っている音声に合わせた補正と、設定の微調整（秒）を足した位置で
     paintProgress(i, posSec);
     put(el.querySelector('.sv-np-pos'), posSec != null ? C.fmt(posSec) : i.position);
     put(el.querySelector('.sv-np-dur'), i.durationSec > 0 ? C.fmt(i.durationSec) : i.duration);

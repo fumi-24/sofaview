@@ -30,6 +30,7 @@
     { id: 'youtube.receiver', type: 'switch', label: 'キャスト待機：裏で開いておく', sub: 'スマホから送ると、自動で前面に出て再生します' },
     { group: 'Spotify' },
     { id: 'spotify.lyrics', type: 'switch', label: 'Spotify の歌詞を出す', sub: '再生中の画面のボタンでも切り替えられます' },
+    { id: 'spotify.lyricsOffset', type: 'select', label: '歌詞のタイミング', sub: '遅れるときは「＋」、早いときは「−」（0.1 秒きざみ）', options: Array.from({ length: 61 }, (_, i) => { const v = (i - 30) / 10; return [v, v === 0 ? '0 秒' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' 秒']; }), visible: (s) => s.spotify.lyrics },
     { id: 'spotify.standby', type: 'switch', label: '裏で開いておく（スマホから再生で再生中の画面）', sub: 'スマホの Spotify の再生先に「Web Player」を選びます' },
   ];
 

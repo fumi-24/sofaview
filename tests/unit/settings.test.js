@@ -81,3 +81,15 @@ test('save の replace: 指定したキーはマージせず置き換える（bi
   s = await settings.save({ bindings: { OK: ['x'] } }, { replace: ['bindings'] });
   assert.deepEqual(s.bindings, { OK: ['x'] });
 });
+
+test('歌詞のタイミングの微調整: 既定は 0。−3〜+3 秒に収め、0.1 秒に丸める。数でないものは 0', async () => {
+  assert.equal(settings.defaults().spotify.lyricsOffset, 0);
+  assert.equal(settings.sanitize({ spotify: { lyricsOffset: 0.34 } }).spotify.lyricsOffset, 0.3);
+  assert.equal(settings.sanitize({ spotify: { lyricsOffset: -0.26 } }).spotify.lyricsOffset, -0.3);
+  assert.equal(settings.sanitize({ spotify: { lyricsOffset: 99 } }).spotify.lyricsOffset, 3);
+  assert.equal(settings.sanitize({ spotify: { lyricsOffset: -99 } }).spotify.lyricsOffset, -3);
+  assert.equal(settings.sanitize({ spotify: { lyricsOffset: 'x' } }).spotify.lyricsOffset, 0);
+  assert.equal(Object.is(settings.sanitize({ spotify: { lyricsOffset: -0.01 } }).spotify.lyricsOffset, 0), true, '-0 にならない');
+  const s = await settings.save({ spotify: { lyricsOffset: 0.5 } });
+  assert.equal(s.spotify.lyricsOffset, 0.5);
+});

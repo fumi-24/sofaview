@@ -251,6 +251,23 @@ test('Spotify: 歌詞の位置は、実際に鳴っている音声に合わせ�
   assert.match(await root.locator('.sv-np-ver').innerText(), /歌詞を \+3\.\d秒補正/, '止まっても補正は保たれる');
 });
 
+test('Spotify: 設定の「歌詞のタイミングの微調整」が、歌詞の行の選び方に効く（＋で早く、−で遅く）。設定を変えるとすぐ反映される', async () => {
+  await setSp({ lyrics: true, lyricsOffset: 0 });
+  const page = await open({ fineLyrics: true, pos: 50000 });
+  const root = page.locator('#sv-np');
+  await until(async () => (await root.locator('.sv-np-line').count()) === 120, { timeout: 12000, message: '歌詞が出る' });
+  const cur = async () => Number(await root.locator('.sv-np-ly-track').evaluate((e) => e.style.getPropertyValue('--cur')));
+  await until(async () => (await cur()) === 50, { timeout: 5000, message: '調整なし: 位置 50 秒 → 50 行目' });
+  await setSp({ lyricsOffset: 0.5 }); // 少しの調整では、行は変わらない（50.5 秒）
+  await page.waitForTimeout(800);
+  assert.equal(await cur(), 50);
+  await setSp({ lyricsOffset: 3 });
+  await until(async () => (await cur()) === 53, { timeout: 5000, message: '+3 秒: 歌詞が早まり 53 行目' });
+  await until(async () => /微調整 \+3\.0秒/.test(await root.locator('.sv-np-ver').innerText()), { timeout: 8000, message: '右下に微調整が出る' });
+  await setSp({ lyricsOffset: -2 });
+  await until(async () => (await cur()) === 48, { timeout: 5000, message: '−2 秒: 歌詞が遅れて 48 行目' });
+});
+
 test('Spotify: Home でハブへ（Spotify のタブは動かさず、音楽が止まらない。ハブは新しいタブで前面に出る）。ハブの Spotify タイルは、開いている Spotify のタブを前面に出す', async () => {
   await setSp({ lyrics: false });
   const page = await open();

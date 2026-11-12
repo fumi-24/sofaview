@@ -43,6 +43,18 @@ test('小窓: 設定の項目が並び、スイッチで切り替えると保存
   await page.close();
 });
 
+test('小窓: Spotify の歌詞のタイミングを選べる（歌詞がオンのときだけ項目が出る）', async () => {
+  const page = await open();
+  await page.locator('.row[data-id="spotify.lyricsOffset"] select').selectOption('0.4');
+  await until(async () => (await stored())?.spotify?.lyricsOffset === 0.4, { message: '+0.4 秒' });
+  await page.locator('.row[data-id="spotify.lyricsOffset"] select').selectOption('-0.2');
+  await until(async () => (await stored())?.spotify?.lyricsOffset === -0.2, { message: '−0.2 秒' });
+  await page.locator('.row[data-id="spotify.lyrics"] .switch').click();
+  await until(async () => (await stored())?.spotify?.lyrics === false);
+  assert.equal(await page.locator('.row[data-id="spotify.lyricsOffset"]').count(), 0);
+  await page.close();
+});
+
 test('小窓: 画面倍率の 3 択。「固定」のときだけ倍率の選択が出る', async () => {
   const page = await open();
   assert.equal(await page.locator('.row[data-id="zoom.factor"]').count(), 0, '自動のときは出ない');

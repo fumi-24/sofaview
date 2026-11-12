@@ -11,6 +11,11 @@
   let confirmTimer = null;
 
   const onOff = [[true, 'オン'], [false, 'オフ']];
+  // 歌詞のタイミング: −3.0〜+3.0 秒を 0.1 秒きざみ（＋で歌詞が早く、−で遅く）
+  const lyricOffsets = Array.from({ length: 61 }, (_, i) => {
+    const v = Math.round((i - 30)) / 10;
+    return [v, v === 0 ? '0 秒（調整なし）' : (v > 0 ? '+' : '−') + Math.abs(v).toFixed(1) + ' 秒（歌詞を' + (v > 0 ? '早く' : '遅く') + '）'];
+  });
 
   const getPath = (o, p) => p.split('.').reduce((a, k) => (a == null ? a : a[k]), o);
   const patchFor = (p, v) => p.split('.').reduceRight((acc, k) => ({ [k]: acc }), v);
@@ -24,6 +29,7 @@
     { id: 'youtube.redirect', label: 'YouTube の通常 URL を /tv へ転送', sub: 'watch?v=… と youtu.be のリンクも /tv で開きます', options: onOff },
     { id: 'youtube.receiver', label: 'キャスト待機：YouTube を裏で開いておく', sub: 'スマホから YouTube を送る（キャスト）と、自動で前面に出て再生します', options: onOff },
     { id: 'spotify.lyrics', label: 'Spotify の再生中の画面に歌詞を出す', sub: '画面のボタンでも切り替えられます', options: onOff },
+    { id: 'spotify.lyricsOffset', label: '歌詞のタイミングの微調整', sub: 'スマホの歌詞より遅れるときは「＋」に、早いときは「−」に。← → で 0.1 秒ずつ', options: lyricOffsets, visible: (s) => s.spotify.lyrics },
     { id: 'spotify.standby', label: 'Spotify を裏で開いておく（スマホから再生すると自動で再生中の画面）', sub: 'スマホの Spotify で、再生先に「Web Player」を選んで使います', options: onOff },
     { id: 'holdBackToHome', label: '戻るキーの長押しでホームへ', sub: 'リモコンに Home がない場合の保険', options: onOff },
     { id: 'link:keys', label: 'キー割り当て（追加）', value: '›', href: 'keys.html' },

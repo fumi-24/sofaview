@@ -22,6 +22,7 @@
     spotify: {
       standby: false, // スマホの Spotify から再生を始めたとき、自動で再生中の画面を出せるよう、Spotify を裏のタブで開いておく（Spotify Connect）
       lyrics: true, // 再生中の画面に歌詞を出す（画面のボタンでも切り替えられる）
+      lyricsOffset: 0, // 歌詞のタイミングの微調整（秒。＋で歌詞が早く、−で遅く。0.1 秒きざみ）
     },
     youtube: {
       redirect: false, // youtube.com の通常URLを /tv に転送する
@@ -79,6 +80,7 @@
     const sp = isObj(s.spotify) ? s.spotify : {};
     out.spotify.standby = bool(sp.standby, d.spotify.standby);
     out.spotify.lyrics = bool(sp.lyrics, d.spotify.lyrics);
+    out.spotify.lyricsOffset = Math.round(num(sp.lyricsOffset, -3, 3, d.spotify.lyricsOffset) * 10) / 10 || 0;
 
     const y = isObj(s.youtube) ? s.youtube : {};
     out.youtube.redirect = bool(y.redirect, d.youtube.redirect);

@@ -103,6 +103,31 @@ test('設定: Enter / ← → で値を切り替え、保存される。Esc で�
   await page.close();
 });
 
+test('設定: Spotify の歌詞のタイミングを ← → で 0.1 秒ずつ微調整できる（歌詞がオンのときだけ項目が出る）', async () => {
+  const page = await open('settings.html');
+  for (let i = 0; i < 20 && (await active(page)).sv !== 'spotify.lyricsOffset'; i++) await press(page, 'ArrowDown', 60);
+  assert.equal((await active(page)).sv, 'spotify.lyricsOffset');
+  assert.match(await text(page, '[data-id="spotify.lyricsOffset"] .value'), /0 秒/);
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await until(async () => (await stored())?.spotify?.lyricsOffset === 0.3, { message: '+0.3 秒が保存された' });
+  assert.match(await text(page, '[data-id="spotify.lyricsOffset"] .value'), /\+0\.3 秒（歌詞を早く）/);
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await press(page, 'ArrowLeft');
+  await until(async () => (await stored())?.spotify?.lyricsOffset === -0.1, { message: '−0.1 秒が保存された' });
+  assert.match(await text(page, '[data-id="spotify.lyricsOffset"] .value'), /−0\.1 秒（歌詞を遅く）/);
+  // 歌詞をオフにすると、微調整の項目は出ない
+  await press(page, 'ArrowUp');
+  assert.equal((await active(page)).sv, 'spotify.lyrics');
+  await page.keyboard.press('Enter');
+  await until(async () => (await stored())?.spotify?.lyrics === false);
+  assert.equal(await page.locator('[data-id="spotify.lyricsOffset"]').count(), 0);
+  await page.close();
+});
+
 test('設定が TVer に反映される（ヘッダーを隠す → オフにすると検索・設定が現れる）', async () => {
   const tver = await env.ctx.newPage();
   await tver.goto('https://tver.jp/');
