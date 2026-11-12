@@ -67,6 +67,7 @@
     reader.command(cmd, arg);
     setTimeout(refresh, 300);
   }
+  let shownTitle = ''; // 曲が変わったとき、曲名・アーティストをふわっと出す
   const wantLyrics = () => !!ctl.settings.spotify.lyrics;
   /** 設定の「歌詞のタイミングの微調整」（秒。＋で歌詞が早く）。 */
   const lyricOffset = () => Number(ctl.settings.spotify.lyricsOffset) || 0;
@@ -162,8 +163,16 @@
     }
     if (ly.cur !== lyricCur) {
       const kids = track.children;
-      if (kids[lyricCur]) kids[lyricCur].classList.remove('is-current');
-      if (kids[ly.cur]) kids[ly.cur].classList.add('is-current');
+      // いまの行から離れるほど暗く（d1・d2）。変わるのは、前後 3 行ずつだけ（それ以外は、もとから暗い）
+      const mark = (c, prev) => {
+        for (let k = Math.max(0, c - 3); k <= Math.min(kids.length - 1, c + 3); k++) {
+          const d = Math.abs(k - Math.max(0, ly.cur));
+          const cls = k === ly.cur ? 'sv-np-line is-current' : d === 1 ? 'sv-np-line d1' : d === 2 ? 'sv-np-line d2' : 'sv-np-line';
+          if (kids[k].className !== cls) kids[k].className = cls;
+        }
+      };
+      if (lyricCur >= -1) mark(lyricCur); // 前のいまの行のまわり
+      mark(Math.max(0, ly.cur)); // 新しいいまの行のまわり
       track.style.setProperty('--cur', String(Math.max(0, ly.cur)));
       lyricCur = ly.cur;
     }
@@ -278,10 +287,23 @@
     const posSec = C.positionNow(st, now);
     el.setAttribute('data-state', i.playing ? 'playing' : 'paused');
     put(el.querySelector('.sv-np-state'), i.playing ? '▶ 再生中' : '⏸ 一時停止');
+    if (i.title !== shownTitle) {
+      shownTitle = i.title;
+      const inf = el.querySelector('.sv-np-info');
+      inf.classList.remove('fresh');
+      void inf.offsetWidth; // アニメーションを最初からやり直す
+      inf.classList.add('fresh');
+    }
     put(el.querySelector('.sv-np-title'), i.title);
     put(el.querySelector('.sv-np-artist'), i.artists);
     const cover = el.querySelector('.sv-np-cover');
-    if (i.cover && cover.getAttribute('src') !== i.cover) cover.setAttribute('src', i.cover); // 背景は、読み込みが終わったとき（load）に描く
+    if (i.cover && cover.getAttribute('src') !== i.cover) {
+      cover.style.transition = 'none';
+      cover.style.opacity = '0'; // 読み込めたら（load）、ふわっと出す
+      void cover.offsetWidth;
+      cover.style.transition = '';
+      cover.setAttribute('src', i.cover); // 背景も、読み込みが終わったとき（load）に描く
+    }
     cover.hidden = !i.cover;
     paintButtons(i);
     paintLyrics(i, posSec == null ? posSec : posSec + (st.lyricShift || 0) + lyricOffset(), st.lyrics); // 歌詞は、実際に鳴っている音声に合わせた補正と、設定の微調整（秒）を足した位置で
@@ -308,15 +330,27 @@
     const cover = mk('img', 'sv-np-cover');
     cover.alt = '';
     // 背景は、ジャケットを 16×16 に縮めて、画面いっぱいに引き伸ばす（補間でぼける）。大きなぼかし（filter: blur）は、弱い GPU で重いので使わない。曲が変わったときに 1 回だけ描く
-    const bgc = mk('canvas', 'sv-np-bg');
-    bgc.width = 16;
-    bgc.height = 16;
+    // 2 枚の canvas を交互に使い、前の絵から新しい絵へクロスフェードさせる（opacity だけ）
+    const bgs = [mk('canvas', 'sv-np-bg'), mk('canvas', 'sv-np-bg')];
+    bgs.forEach((c) => {
+      c.width = 16;
+      c.height = 16;
+    });
+    let bgNext = 0;
     cover.addEventListener('load', () => {
+      cover.style.opacity = '1'; // ジャケットは、読み込めてから、ふわっと出る
       try {
-        bgc.getContext('2d').drawImage(cover, 0, 0, 16, 16);
+        const c = bgs[bgNext];
+        bgNext ^= 1;
+        c.getContext('2d').drawImage(cover, 0, 0, 16, 16);
+        c.classList.add('on');
+        bgs[bgNext].classList.remove('on');
       } catch (e) {
-        /* 描けなければ、黒のまま */
+        /* 描けなければ、そのまま */
       }
+    });
+    cover.addEventListener('error', () => {
+      cover.style.opacity = '1';
     });
     body.append(cover, info);
     const status = mk('div', 'sv-np-status');
@@ -333,7 +367,7 @@
       btn.tabIndex = -1;
       controls.appendChild(btn);
     });
-    el.append(bgc, body, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
+    el.append(bgs[0], bgs[1], body, status, toastEl, controls, mk('div', 'sv-np-hint'), mk('div', 'sv-np-ver', 'SofaView v' + (SV.VERSION || '')));
     doc.body.appendChild(el);
   }
 

@@ -44,6 +44,11 @@ html.sv-sp #main {
   inset: 0;
   width: 100%;
   height: 100%;
+  opacity: 0;
+  transition: opacity 1.4s ease-in-out; /* 曲が変わると、前の絵から新しい絵へ、ゆっくり入れ替わる（2 枚の canvas のクロスフェード） */
+}
+
+#sv-np .sv-np-bg.on {
   opacity: 0.4;
 }
 
@@ -119,24 +124,36 @@ html.sv-sp #main {
 
 #sv-np .sv-np-ly-track {
   transform: translateY(calc(13vh - var(--cur, 0) * 5.2vh));
-  transition: transform 0.4s ease-out;
+  /* 長めの動き。最初は速く、目的の位置を約 8% 行き過ぎてから、ゆっくり落ち着く（にゅるっとした動き）。動かすのは transform だけ */
+  transition: transform 1s cubic-bezier(0.3, 1.5, 0.5, 1);
   will-change: transform;
 }
 
+/* 行の太さ・大きさは全部同じ（切り替えで文字の幅が変わると、再レイアウトが走ってカクつく）。いまの行を明るく、離れるほど段階的に暗くする（opacity だけ。ゆっくり変わる） */
 #sv-np .sv-np-line {
   width: 86%;
   height: 5.2vh;
   line-height: 5.2vh;
   font-size: 3.2vh;
+  font-weight: 700;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  color: rgba(255, 255, 255, 0.5);
+  color: #fff;
+  opacity: 0.22;
+  transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+#sv-np .sv-np-line.d2 {
+  opacity: 0.34;
+}
+
+#sv-np .sv-np-line.d1 {
+  opacity: 0.55;
 }
 
 #sv-np .sv-np-line.is-current {
-  color: #fff;
-  font-weight: 700;
+  opacity: 1;
 }
 
 /* 再生位置 */
@@ -255,7 +272,7 @@ html.sv-sp #main {
 #sv-np .sv-np-controls[data-show] {
   visibility: visible;
   opacity: 1;
-  transition: opacity 0.15s ease-out;
+  transition: opacity 0.35s ease-out;
 }
 
 #sv-np .sv-np-hint[hidden] {
@@ -304,4 +321,24 @@ html.sv-sp #main {
   bottom: 1.4vh;
   font-size: 1.8vh;
   color: #6f6f6f;
+}
+
+/* ---- 曲が変わったときの入れ替え（opacity だけ）---- */
+#sv-np .sv-np-cover {
+  opacity: 1;
+  transition: opacity 0.7s ease-out;
+}
+
+@keyframes sv-np-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+#sv-np .sv-np-info.fresh .sv-np-title,
+#sv-np .sv-np-info.fresh .sv-np-artist {
+  animation: sv-np-fade 0.9s ease-out;
 }
